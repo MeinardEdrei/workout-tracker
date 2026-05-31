@@ -1,7 +1,5 @@
 {
   "version": 2,
-  "outputDirectory": "client/dist",
-  "buildCommand": "cd client && npm install && npm run build",
   "routes": [
     { "src": "/api/(.*)", "dest": "server/index.js" },
     { "handle": "filesystem" },
