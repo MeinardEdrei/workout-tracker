@@ -31,8 +31,8 @@ app.use(async (_req, _res, next) => {
   }
 });
 
-app.use("/splits", splitsRouter);
-app.get("/health", (_req, res) => res.json({ status: "ok" }));
+app.use("/api/splits", splitsRouter);
+app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 
 if (process.env.NODE_ENV !== "production") {
   connectDB().then(() => {
