@@ -38,3 +38,11 @@ export const deleteExercise = (splitId, dayId, exId) =>
   req('DELETE', `/api/splits/${splitId}/days/${dayId}/exercises/${exId}`);
 export const toggleExercise = (splitId, dayId, exId) =>
   req('PATCH', `/api/splits/${splitId}/days/${dayId}/exercises/${exId}/toggle`);
+
+// Logs
+export const saveLog = (data) => req('POST', '/api/logs', data);
+export const getLogs = () => req('GET', '/api/logs');
+export const getWeekLogs = () => req('GET', '/api/logs/week');
+export const getLogByDate = (date) => req('GET', `/api/logs/${date}`);
+export const deleteLog = (id) => req('DELETE', `/api/logs/${id}`);
+export const clearLogs = () => req('DELETE', '/api/logs/clear');

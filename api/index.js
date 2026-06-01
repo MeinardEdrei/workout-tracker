@@ -4,6 +4,7 @@ const cors = require("cors");
 require("dotenv").config();
 
 const splitsRouter = require("./routes/splits");
+const logsRouter = require("./routes/logs");
 
 const app = express();
 
@@ -32,6 +33,7 @@ app.use(async (_req, _res, next) => {
 });
 
 app.use("/api/splits", splitsRouter);
+app.use("/api/logs", logsRouter);
 app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 
 if (process.env.NODE_ENV !== "production") {

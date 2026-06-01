@@ -3,10 +3,12 @@ import './index.css';
 import TodayPage from './pages/TodayPage';
 import SplitsPage from './pages/SplitsPage';
 import EditPage from './pages/EditPage';
+import StatsPage from './pages/StatsPage';
 
 const NAV = [
   { id: 'today', label: 'Today' },
   { id: 'splits', label: 'Splits' },
+  { id: 'stats', label: 'Stats' },
   { id: 'edit', label: 'Edit' },
 ];
 
@@ -35,6 +37,16 @@ function SplitsIcon({ active }) {
   );
 }
 
+function StatsIcon({ active }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.5 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="20" x2="18" y2="10" />
+      <line x1="12" y1="20" x2="12" y2="4" />
+      <line x1="6" y1="20" x2="6" y2="14" />
+    </svg>
+  );
+}
+
 function EditIcon({ active }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.5 : 1.8} strokeLinecap="round" strokeLinejoin="round">
@@ -44,7 +56,7 @@ function EditIcon({ active }) {
   );
 }
 
-const ICONS = { today: TodayIcon, splits: SplitsIcon, edit: EditIcon };
+const ICONS = { today: TodayIcon, splits: SplitsIcon, stats: StatsIcon, edit: EditIcon };
 
 export default function App() {
   const [tab, setTab] = useState('today');
@@ -54,6 +66,7 @@ export default function App() {
       <div className="page">
         {tab === 'today' && <TodayPage />}
         {tab === 'splits' && <SplitsPage />}
+        {tab === 'stats' && <StatsPage />}
         {tab === 'edit' && <EditPage />}
       </div>
       <nav className="bottom-nav">
