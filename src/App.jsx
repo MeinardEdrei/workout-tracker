@@ -162,13 +162,16 @@ function AuthCorner() {
             )}
           </>
         ) : (
-          <a
-            href={`${API}/api/auth/google`}
+          <button
+            onClick={() => {
+              console.log('[AuthCorner] login clicked, redirecting to', `${import.meta.env.VITE_API_URL}/api/auth/google`);
+              window.location.href = `${import.meta.env.VITE_API_URL}/api/auth/google`;
+            }}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
               padding: '5px 10px', borderRadius: 6,
               background: 'var(--bg2)', border: '1px solid var(--border2)',
-              color: 'var(--text2)', textDecoration: 'none',
+              color: 'var(--text2)', cursor: 'pointer',
               fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
               fontFamily: 'var(--font-display)',
             }}
@@ -177,7 +180,7 @@ function AuthCorner() {
               <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10,17 15,12 10,7"/><line x1="15" y1="12" x2="3" y2="12"/>
             </svg>
             Sign in
-          </a>
+          </button>
         )}
       </div>
     </>
