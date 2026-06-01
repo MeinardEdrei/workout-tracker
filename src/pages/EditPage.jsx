@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useStorage } from '../hooks/useStorage';
+import { MusclePill, MUSCLE_COLORS } from '../components/MusclePill';
 import {
   DndContext,
   closestCenter,
@@ -15,7 +16,13 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-// storage functions come from useStorage() hook inside each component
+
+/* ─── Constants ─── */
+const STANDARD_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday', 'Rest'];
+const DAY_SHORT = { Monday: 'MON', Tuesday: 'TUE', Wednesday: 'WED', Thursday: 'THU', Friday: 'FRI', Saturday: 'SAT', Sunday: 'SUN', Rest: 'REST' };
+const TAG_OPTIONS = ['Chest + Back', 'Shoulders + Back', 'Legs + Core', 'Push', 'Pull', 'Full Body', 'Rest', 'Cardio', 'Upper Body', 'Lower Body'];
+const MUSCLE_OPTIONS = Object.keys(MUSCLE_COLORS);
+const LABEL = { fontSize: 10, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 };
 
 /* ─── Icons ─── */
 function PlusIcon() {
@@ -56,6 +63,36 @@ function GripIcon() {
   );
 }
 
+/* ─── Shared pill button for pickers ─── */
+function PickerPill({ label, selected, disabled, onClick, small }) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      style={{
+        minHeight: small ? 36 : 44,
+        padding: small ? '6px 10px' : '10px 14px',
+        borderRadius: 22,
+        border: selected ? 'none' : '1px solid var(--border2)',
+        background: selected ? 'var(--accent)' : 'transparent',
+        color: selected ? '#0a0a0a' : (disabled ? 'var(--text3)' : 'var(--text2)'),
+        fontFamily: 'var(--font-display)',
+        fontSize: small ? 11 : 12,
+        fontWeight: 700,
+        letterSpacing: '0.04em',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.3 : 1,
+        transition: 'background 0.15s, color 0.15s, border 0.15s',
+        WebkitTapHighlightColor: 'transparent',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
 /* ─── Modals ─── */
 function TextModal({ title, initial = '', placeholder, onConfirm, onClose }) {
   const [value, setValue] = useState(initial);
@@ -91,29 +128,107 @@ function ConfirmModal({ message, onConfirm, onClose }) {
   );
 }
 
-function AddDayModal({ onConfirm, onClose }) {
-  const [name, setName] = useState('');
-  const [tag, setTag] = useState('');
-  const [isRest, setIsRest] = useState(false);
+function AddDayModal({ existingDays = [], onConfirm, onClose }) {
+  const [selectedDay, setSelectedDay] = useState(null);
+  const [customName, setCustomName] = useState('');
+  const [selectedTag, setSelectedTag] = useState(null);
+  const [customTag, setCustomTag] = useState('');
+
+  const usedNames = new Set(existingDays.map((d) => d.name.trim().toLowerCase()));
+
+  function handleDayClick(day) {
+    setSelectedDay(selectedDay === day ? null : day);
+    setCustomName(''); // picking a pill clears the custom input
+  }
+
+  function handleCustomNameChange(e) {
+    setCustomName(e.target.value);
+    setSelectedDay(null); // typing a name deselects any pill
+  }
+
+  const finalName = customName.trim() || selectedDay || '';
+  const finalIsRest = finalName.toLowerCase() === 'rest';
+  const showTagSection = finalName.length > 0 && !finalIsRest;
+  const canSubmit = finalName.length > 0;
+
   function submit(e) {
     e.preventDefault();
-    if (!name.trim()) return;
-    onConfirm({ name: name.trim(), tag: tag.trim(), isRest });
+    if (!canSubmit) return;
+    const tag = showTagSection ? (customTag.trim() || selectedTag || '') : '';
+    onConfirm({ name: finalName, tag, isRest: finalIsRest });
   }
+
   return (
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal">
+      <div className="modal" style={{ maxHeight: '88vh', overflowY: 'auto' }}>
         <div className="modal-title">New Day</div>
         <form onSubmit={submit}>
-          <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Day name (e.g. Monday)" autoFocus style={{ marginBottom: 8 }} />
-          <input className="input" value={tag} onChange={(e) => setTag(e.target.value)} placeholder="Tag (e.g. Chest + Back)" style={{ marginBottom: 12 }} />
-          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 4 }}>
-            <input type="checkbox" checked={isRest} onChange={(e) => setIsRest(e.target.checked)} style={{ width: 18, height: 18, accentColor: 'var(--accent)', cursor: 'pointer' }} />
-            <span style={{ fontSize: 14, color: 'var(--text2)', fontWeight: 600 }}>Mark as Rest Day</span>
-          </label>
-          <div className="modal-actions">
+
+          {/* Day picker */}
+          <div style={LABEL}>Day</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginBottom: 12 }}>
+            {STANDARD_DAYS.map((day) => (
+              <PickerPill
+                key={day}
+                label={DAY_SHORT[day]}
+                selected={selectedDay === day}
+                disabled={usedNames.has(day.toLowerCase())}
+                onClick={() => handleDayClick(day)}
+              />
+            ))}
+          </div>
+
+          {/* Custom name override */}
+          <div style={{ ...LABEL, marginBottom: 6 }}>
+            Custom name{' '}
+            <span style={{ color: 'var(--text3)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional — overrides selection)</span>
+          </div>
+          <input
+            className="input"
+            value={customName}
+            onChange={handleCustomNameChange}
+            placeholder="Upper A, Lower B…"
+            style={{ marginBottom: 16 }}
+          />
+
+          {/* Tag picker — hidden for rest days */}
+          {showTagSection && (
+            <>
+              <div style={LABEL}>Focus</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                {TAG_OPTIONS.map((tag) => (
+                  <PickerPill
+                    key={tag}
+                    label={tag}
+                    selected={selectedTag === tag}
+                    onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
+                  />
+                ))}
+              </div>
+
+              <div style={{ ...LABEL, marginBottom: 6 }}>
+                Custom tag{' '}
+                <span style={{ color: 'var(--text3)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span>
+              </div>
+              <input
+                className="input"
+                value={customTag}
+                onChange={(e) => { setCustomTag(e.target.value); if (e.target.value.trim()) setSelectedTag(null); }}
+                placeholder="e.g. Chest + Shoulders"
+                style={{ marginBottom: 4 }}
+              />
+            </>
+          )}
+
+          {finalIsRest && (
+            <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 12, textAlign: 'center' }}>
+              Rest days have no exercises or focus tags.
+            </div>
+          )}
+
+          <div className="modal-actions" style={{ marginTop: 16 }}>
             <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
-            <button type="submit" className="btn btn-accent">Add</button>
+            <button type="submit" className="btn btn-accent" disabled={!canSubmit}>Add Day</button>
           </div>
         </form>
       </div>
@@ -122,38 +237,61 @@ function AddDayModal({ onConfirm, onClose }) {
 }
 
 function AddExerciseModal({ onConfirm, onClose }) {
-  const [form, setForm] = useState({ name: '', sets: 3, reps: 10, weight: 0, weightUnit: 'kg' });
+  const [form, setForm] = useState({ name: '', sets: 3, reps: 10, weight: 0, weightUnit: 'kg', muscleTargets: [] });
   function set(k, v) { setForm((f) => ({ ...f, [k]: v })); }
+
+  function toggleTarget(target) {
+    set('muscleTargets',
+      form.muscleTargets.includes(target)
+        ? form.muscleTargets.filter((t) => t !== target)
+        : [...form.muscleTargets, target]
+    );
+  }
+
   function submit(e) {
     e.preventDefault();
     if (!form.name.trim()) return;
     onConfirm({ ...form, name: form.name.trim(), sets: +form.sets, reps: +form.reps, weight: +form.weight });
   }
+
   return (
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal">
+      <div className="modal" style={{ maxHeight: '88vh', overflowY: 'auto' }}>
         <div className="modal-title">New Exercise</div>
         <form onSubmit={submit}>
-          <input className="input" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Exercise name" autoFocus style={{ marginBottom: 8 }} />
+          <input className="input" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Exercise name" autoFocus style={{ marginBottom: 12 }} />
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>Sets</div>
-              <input className="input" type="number" min="0" value={form.sets} onChange={(e) => set('sets', e.target.value)} />
-            </div>
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>Reps</div>
-              <input className="input" type="number" min="0" value={form.reps} onChange={(e) => set('reps', e.target.value)} />
-            </div>
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>Weight</div>
-              <input className="input" type="number" min="0" step="0.5" value={form.weight} onChange={(e) => set('weight', e.target.value)} />
-            </div>
+            {['sets', 'reps', 'weight'].map((k) => (
+              <div key={k}>
+                <div style={{ ...LABEL, marginBottom: 4 }}>{k}</div>
+                <input className="input" type="number" min="0" step={k === 'weight' ? '0.5' : '1'} value={form[k]} onChange={(e) => set(k, e.target.value)} />
+              </div>
+            ))}
           </div>
-          <select className="select" style={{ width: '100%', marginBottom: 4 }} value={form.weightUnit} onChange={(e) => set('weightUnit', e.target.value)}>
+          <select className="select" style={{ width: '100%', marginBottom: 16 }} value={form.weightUnit} onChange={(e) => set('weightUnit', e.target.value)}>
             <option value="kg">kg</option>
             <option value="lbs">lbs</option>
           </select>
-          <div className="modal-actions">
+
+          {/* Muscle target picker */}
+          <div style={LABEL}>
+            Targets{' '}
+            <span style={{ color: 'var(--text3)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional — select all that apply)</span>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 4 }}>
+            {MUSCLE_OPTIONS.map((target) => (
+              <PickerPill
+                key={target}
+                label={target}
+                selected={form.muscleTargets.includes(target)}
+                onClick={() => toggleTarget(target)}
+                small
+              />
+            ))}
+          </div>
+
+          <div className="modal-actions" style={{ marginTop: 16 }}>
             <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
             <button type="submit" className="btn btn-accent">Add</button>
           </div>
@@ -169,10 +307,19 @@ function ExerciseEditRow({ ex, index, splitId, dayId, onUpdate, onDelete, dragHa
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
     name: ex.name, sets: ex.sets, reps: ex.reps, weight: ex.weight, weightUnit: ex.weightUnit,
+    muscleTargets: ex.muscleTargets || [],
   });
   const [saving, setSaving] = useState(false);
 
   function set(k, v) { setForm((f) => ({ ...f, [k]: v })); }
+
+  function toggleTarget(target) {
+    set('muscleTargets',
+      form.muscleTargets.includes(target)
+        ? form.muscleTargets.filter((t) => t !== target)
+        : [...form.muscleTargets, target]
+    );
+  }
 
   async function save() {
     setSaving(true);
@@ -198,10 +345,10 @@ function ExerciseEditRow({ ex, index, splitId, dayId, onUpdate, onDelete, dragHa
           autoFocus
         />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 80px', gap: 6, marginBottom: 8 }}>
-          {['sets','reps','weight'].map((k) => (
+          {['sets', 'reps', 'weight'].map((k) => (
             <div key={k}>
               <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 3 }}>{k}</div>
-              <input className="input" type="number" min="0" step={k==='weight'?'0.5':'1'} value={form[k]} onChange={(e) => set(k, e.target.value)} style={{ fontSize: 14, padding: '6px 8px' }} />
+              <input className="input" type="number" min="0" step={k === 'weight' ? '0.5' : '1'} value={form[k]} onChange={(e) => set(k, e.target.value)} style={{ fontSize: 14, padding: '6px 8px' }} />
             </div>
           ))}
           <div>
@@ -212,6 +359,21 @@ function ExerciseEditRow({ ex, index, splitId, dayId, onUpdate, onDelete, dragHa
             </select>
           </div>
         </div>
+
+        {/* Muscle target picker in inline editor */}
+        <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>Targets (optional)</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 10 }}>
+          {MUSCLE_OPTIONS.map((target) => (
+            <PickerPill
+              key={target}
+              label={target}
+              selected={form.muscleTargets.includes(target)}
+              onClick={() => toggleTarget(target)}
+              small
+            />
+          ))}
+        </div>
+
         <div style={{ display: 'flex', gap: 6 }}>
           <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setEditing(false)} disabled={saving}>Cancel</button>
           <button className="btn btn-accent" style={{ fontSize: 12 }} onClick={save} disabled={saving}>Save</button>
@@ -224,10 +386,10 @@ function ExerciseEditRow({ ex, index, splitId, dayId, onUpdate, onDelete, dragHa
   const repsLabel = ex.reps > 0 ? `${ex.reps} reps` : 'max reps';
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 14px', borderBottom: '1px solid var(--border)' }}>
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '11px 14px', borderBottom: '1px solid var(--border)' }}>
       <div
         {...dragHandleProps}
-        style={{ color: 'var(--text3)', cursor: 'grab', flexShrink: 0, display: 'flex', alignItems: 'center', touchAction: 'none', padding: '0 2px' }}
+        style={{ color: 'var(--text3)', cursor: 'grab', flexShrink: 0, display: 'flex', alignItems: 'center', touchAction: 'none', padding: '2px 2px', paddingTop: 4 }}
         title="Drag to reorder"
       >
         <GripIcon />
@@ -239,9 +401,14 @@ function ExerciseEditRow({ ex, index, splitId, dayId, onUpdate, onDelete, dragHa
         <div style={{ fontSize: 11, color: 'var(--text2)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
           {ex.sets}×{repsLabel}{weightLabel}
         </div>
+        {ex.muscleTargets?.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 5 }}>
+            {ex.muscleTargets.map((t) => <MusclePill key={t} target={t} />)}
+          </div>
+        )}
       </div>
-      <button className="btn-icon" onClick={() => setEditing(true)} title="Edit"><EditPencil /></button>
-      <button className="btn-icon" style={{ color: 'var(--red)' }} onClick={() => onDelete(ex._id)} title="Delete"><TrashIcon /></button>
+      <button className="btn-icon" style={{ flexShrink: 0 }} onClick={() => setEditing(true)} title="Edit"><EditPencil /></button>
+      <button className="btn-icon" style={{ color: 'var(--red)', flexShrink: 0 }} onClick={() => onDelete(ex._id)} title="Delete"><TrashIcon /></button>
     </div>
   );
 }
@@ -374,19 +541,10 @@ function DayEditor({ day, split, onBack, onDayUpdated }) {
 
       {reorderError && (
         <div style={{
-          position: 'fixed',
-          bottom: 80,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          background: 'var(--red)',
-          color: '#fff',
-          padding: '10px 16px',
-          borderRadius: 8,
-          fontSize: 13,
-          fontWeight: 600,
-          zIndex: 200,
-          maxWidth: 320,
-          textAlign: 'center',
+          position: 'fixed', bottom: 80, left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--red)', color: '#fff', padding: '10px 16px',
+          borderRadius: 8, fontSize: 13, fontWeight: 600, zIndex: 200,
+          maxWidth: 320, textAlign: 'center',
         }}>
           {reorderError}
         </div>
@@ -426,13 +584,7 @@ function DayEditor({ day, split, onBack, onDayUpdated }) {
       )}
 
       {modal === 'rename' && (
-        <TextModal
-          title="Rename Day"
-          initial={day.name}
-          placeholder="Day name…"
-          onConfirm={handleRenameSave}
-          onClose={() => setModal(null)}
-        />
+        <TextModal title="Rename Day" initial={day.name} placeholder="Day name…" onConfirm={handleRenameSave} onClose={() => setModal(null)} />
       )}
       {modal === 'addEx' && (
         <AddExerciseModal onConfirm={handleAddExercise} onClose={() => setModal(null)} />
@@ -445,7 +597,9 @@ function DayEditor({ day, split, onBack, onDayUpdated }) {
 function SplitEditor({ split, onBack, onSplitUpdated }) {
   const queryClient = useQueryClient();
   const { storage } = useStorage();
-  const [days, setDays] = useState(split.days || []);
+  const [days, setDays] = useState(
+    [...(split.days || [])].sort((a, b) => (a.dayOrder ?? 8) - (b.dayOrder ?? 8))
+  );
   const [activeDayId, setActiveDayId] = useState(null);
   const [modal, setModal] = useState(null);
 
@@ -460,7 +614,7 @@ function SplitEditor({ split, onBack, onSplitUpdated }) {
   async function handleAddDay(data) {
     setModal(null);
     const day = await storage.createDay(split._id, data);
-    setDays((prev) => [...prev, day]);
+    setDays((prev) => [...prev, day].sort((a, b) => (a.dayOrder ?? 8) - (b.dayOrder ?? 8)));
     queryClient.invalidateQueries({ queryKey: ['splits'] });
   }
 
@@ -502,15 +656,8 @@ function SplitEditor({ split, onBack, onSplitUpdated }) {
             <div
               key={day._id}
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                padding: '13px 14px',
-                marginBottom: 8,
-                borderRadius: 8,
-                border: '1px solid var(--border)',
-                background: 'var(--bg2)',
-                cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 10, padding: '13px 14px', marginBottom: 8,
+                borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg2)', cursor: 'pointer',
               }}
               onClick={() => setActiveDayId(day._id)}
             >
@@ -539,7 +686,7 @@ function SplitEditor({ split, onBack, onSplitUpdated }) {
       )}
 
       {modal === 'addDay' && (
-        <AddDayModal onConfirm={handleAddDay} onClose={() => setModal(null)} />
+        <AddDayModal existingDays={days} onConfirm={handleAddDay} onClose={() => setModal(null)} />
       )}
       {modal?.type === 'deleteDay' && (
         <ConfirmModal
@@ -564,8 +711,8 @@ export default function EditPage() {
 
   const activeSplit = splits.find((s) => s._id === activeSplitId);
 
-  function handleSplitUpdated(updated) {
-    // local state update handled inside SplitEditor; query will sync on next invalidation
+  function handleSplitUpdated() {
+    // local state update handled inside SplitEditor; query syncs on next invalidation
   }
 
   if (activeSplit) {
@@ -597,15 +744,9 @@ export default function EditPage() {
             <div
               key={split._id}
               style={{
-                padding: '14px 16px',
-                marginBottom: 8,
-                borderRadius: 8,
-                border: '1px solid var(--border)',
-                background: 'var(--bg2)',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
+                padding: '14px 16px', marginBottom: 8, borderRadius: 8,
+                border: '1px solid var(--border)', background: 'var(--bg2)',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               }}
               onClick={() => setActiveSplitId(split._id)}
             >

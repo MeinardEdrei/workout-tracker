@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useStorage } from '../hooks/useStorage';
 import DailyShareCard from '../components/DailyShareCard';
+import { MusclePill } from '../components/MusclePill';
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const TODAY_DOW = new Date().getDay();
@@ -102,6 +103,11 @@ function ExerciseRow({ ex, index, splitId, dayId, onToggle }) {
         <div style={{ fontSize: 12, color: 'var(--text2)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
           {ex.sets}×{repsLabel}{weightLabel ? ` · ${weightLabel}` : ''}
         </div>
+        {ex.muscleTargets?.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 5 }}>
+            {ex.muscleTargets.map((t) => <MusclePill key={t} target={t} />)}
+          </div>
+        )}
       </div>
     </div>
   );

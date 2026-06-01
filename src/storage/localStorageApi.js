@@ -6,6 +6,9 @@ const LOGS_KEY = 'wt_guest_logs';
 const TODAY = () => new Date().toISOString().slice(0, 10);
 const uid = () => crypto.randomUUID();
 
+const DAY_ORDER_MAP = { monday: 0, tuesday: 1, wednesday: 2, thursday: 3, friday: 4, saturday: 5, sunday: 6, rest: 7 };
+const getDayOrder = (name) => DAY_ORDER_MAP[name.trim().toLowerCase()] ?? 8;
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function readSplits() {
@@ -21,10 +24,12 @@ function writeLogs(l) { localStorage.setItem(LOGS_KEY, JSON.stringify(l)); }
 function sortExercisesInSplits(splits) {
   return splits.map((s) => ({
     ...s,
-    days: s.days.map((d) => ({
-      ...d,
-      exercises: [...(d.exercises || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
-    })),
+    days: s.days
+      .map((d) => ({
+        ...d,
+        exercises: [...(d.exercises || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+      }))
+      .sort((a, b) => (a.dayOrder ?? 8) - (b.dayOrder ?? 8)),
   }));
 }
 
@@ -85,6 +90,7 @@ export function createDay(splitId, data) {
     tag: data.tag || '',
     isRest: data.isRest || false,
     exercises: [],
+    dayOrder: getDayOrder(data.name),
   };
   split.days.push(day);
   writeSplits(splits);
@@ -140,6 +146,7 @@ export function createExercise(splitId, dayId, data) {
     checked: false,
     lastCheckedDate: '',
     order: maxOrder + 1,
+    muscleTargets: data.muscleTargets || [],
   };
   if (!day.exercises) day.exercises = [];
   day.exercises.push(ex);
@@ -155,7 +162,7 @@ export function updateExercise(splitId, dayId, exId, data) {
   if (!day) return Promise.reject(new Error('Day not found'));
   const ex = (day.exercises || []).find((e) => e._id === exId);
   if (!ex) return Promise.reject(new Error('Exercise not found'));
-  ['name', 'sets', 'reps', 'weight', 'weightUnit'].forEach((f) => {
+  ['name', 'sets', 'reps', 'weight', 'weightUnit', 'muscleTargets'].forEach((f) => {
     if (data[f] !== undefined) ex[f] = data[f];
   });
   writeSplits(splits);

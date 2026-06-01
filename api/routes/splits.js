@@ -5,8 +5,12 @@ const { requireAuth } = require('../middleware/auth');
 
 router.use(requireAuth);
 
+const DAY_ORDER_MAP = { monday: 0, tuesday: 1, wednesday: 2, thursday: 3, friday: 4, saturday: 5, sunday: 6, rest: 7 };
+function getDayOrder(name) { return DAY_ORDER_MAP[name.trim().toLowerCase()] ?? 8; }
+
 function sortExercises(split) {
   const obj = split.toObject();
+  obj.days.sort((a, b) => (a.dayOrder ?? 8) - (b.dayOrder ?? 8));
   obj.days.forEach((d) => d.exercises.sort((a, b) => (a.order ?? 0) - (b.order ?? 0)));
   return obj;
 }
@@ -83,7 +87,10 @@ router.get('/:id/days', async (req, res) => {
   try {
     const split = await Split.findOne({ _id: req.params.id, userId: req.userId });
     if (!split) return res.status(404).json({ error: 'Split not found' });
-    res.json(split.days.map(sortExercisesInDay));
+    const days = split.days
+      .map(sortExercisesInDay)
+      .sort((a, b) => (a.dayOrder ?? 8) - (b.dayOrder ?? 8));
+    res.json(days);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -93,7 +100,13 @@ router.post('/:id/days', async (req, res) => {
   try {
     const split = await Split.findOne({ _id: req.params.id, userId: req.userId });
     if (!split) return res.status(404).json({ error: 'Split not found' });
-    split.days.push({ name: req.body.name, tag: req.body.tag || '', isRest: req.body.isRest || false, exercises: [] });
+    split.days.push({
+      name: req.body.name,
+      tag: req.body.tag || '',
+      isRest: req.body.isRest || false,
+      exercises: [],
+      dayOrder: getDayOrder(req.body.name),
+    });
     await split.save();
     res.status(201).json(split.days[split.days.length - 1]);
   } catch (err) {
@@ -107,7 +120,7 @@ router.put('/:id/days/:dayId', async (req, res) => {
     if (!split) return res.status(404).json({ error: 'Split not found' });
     const day = split.days.id(req.params.dayId);
     if (!day) return res.status(404).json({ error: 'Day not found' });
-    if (req.body.name !== undefined) day.name = req.body.name;
+    if (req.body.name !== undefined) { day.name = req.body.name; day.dayOrder = getDayOrder(req.body.name); }
     if (req.body.tag !== undefined) day.tag = req.body.tag;
     if (req.body.isRest !== undefined) day.isRest = req.body.isRest;
     await split.save();
@@ -160,6 +173,7 @@ router.post('/:id/days/:dayId/exercises', async (req, res) => {
       checked: false,
       lastCheckedDate: '',
       order: maxOrder + 1,
+      muscleTargets: req.body.muscleTargets || [],
     });
     await split.save();
     res.status(201).json(day.exercises[day.exercises.length - 1]);
@@ -196,7 +210,7 @@ router.put('/:id/days/:dayId/exercises/:exId', async (req, res) => {
     if (!day) return res.status(404).json({ error: 'Day not found' });
     const ex = day.exercises.id(req.params.exId);
     if (!ex) return res.status(404).json({ error: 'Exercise not found' });
-    const fields = ['name', 'sets', 'reps', 'weight', 'weightUnit'];
+    const fields = ['name', 'sets', 'reps', 'weight', 'weightUnit', 'muscleTargets'];
     fields.forEach((f) => { if (req.body[f] !== undefined) ex[f] = req.body[f]; });
     await split.save();
     res.json(ex);

@@ -9,6 +9,7 @@ const ExerciseSchema = new mongoose.Schema({
   checked: { type: Boolean, default: false },
   lastCheckedDate: { type: String, default: '' },
   order: { type: Number, default: 0 },
+  muscleTargets: { type: [String], default: [] },
 });
 
 const DaySchema = new mongoose.Schema({
@@ -16,6 +17,7 @@ const DaySchema = new mongoose.Schema({
   tag: { type: String, default: '' },
   isRest: { type: Boolean, default: false },
   exercises: [ExerciseSchema],
+  dayOrder: { type: Number, default: 8 },
 });
 
 const SplitSchema = new mongoose.Schema(
