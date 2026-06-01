@@ -32,6 +32,9 @@ export default defineConfig({
           }
         ]
       },
+      devOptions: {
+        enabled: false,
+      },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png}'],
         runtimeCaching: [
