@@ -1,6 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useRef } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getLogs, getWeekLogs, deleteLog, clearLogs } from '../api';
 import WeeklyShareCard from '../components/WeeklyShareCard';
+
+const LOGS_STALE = 2 * 60 * 1000; // 2 minutes
 
 function ShareIcon() {
   return (
@@ -91,30 +94,17 @@ function LogCard({ log, onDelete }) {
         }}
       >
         <div style={{
-          width: 36,
-          height: 36,
-          borderRadius: 8,
+          width: 36, height: 36, borderRadius: 8,
           background: 'var(--accent)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexShrink: 0,
-          fontSize: 14,
-          fontWeight: 800,
-          color: '#0a0a0a',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          flexShrink: 0, fontSize: 14, fontWeight: 800, color: '#0a0a0a',
         }}>
           {date.getDate()}
         </div>
         <div style={{ flex: 1, textAlign: 'left', minWidth: 0 }}>
           <div style={{
-            fontSize: 16,
-            fontWeight: 800,
-            textTransform: 'uppercase',
-            letterSpacing: '0.01em',
-            color: 'var(--text)',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
+            fontSize: 16, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.01em',
+            color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
           }}>
             {log.dayName}
           </div>
@@ -126,7 +116,8 @@ function LogCard({ log, onDelete }) {
           {vol && <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>{vol}</div>}
           <div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>{log.exercises.length} ex</div>
         </div>
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--text3)" strokeWidth="2" strokeLinecap="round" style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: '0.15s', flexShrink: 0 }}>
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--text3)" strokeWidth="2" strokeLinecap="round"
+          style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: '0.15s', flexShrink: 0 }}>
           <polyline points="3,5 7,9 11,5"/>
         </svg>
       </button>
@@ -138,9 +129,7 @@ function LogCard({ log, onDelete }) {
             const rLabel = ex.reps > 0 ? `${ex.reps} reps` : 'max';
             return (
               <div key={i} style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                 padding: '9px 16px',
                 borderBottom: i < log.exercises.length - 1 ? '1px solid var(--border)' : 'none',
               }}>
@@ -152,11 +141,7 @@ function LogCard({ log, onDelete }) {
             );
           })}
           <div style={{ padding: '10px 16px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end' }}>
-            <button
-              className="btn-icon"
-              style={{ color: 'var(--red)' }}
-              onClick={() => onDelete(log._id)}
-            >
+            <button className="btn-icon" style={{ color: 'var(--red)' }} onClick={() => onDelete(log._id)}>
               <TrashIcon />
             </button>
           </div>
@@ -167,25 +152,37 @@ function LogCard({ log, onDelete }) {
 }
 
 export default function StatsPage() {
-  const [logs, setLogs] = useState([]);
-  const [weekLogs, setWeekLogs] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [sharing, setSharing] = useState(false);
   const [confirm, setConfirm] = useState(null);
   const weekCardRef = useRef(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [all, week] = await Promise.all([getLogs(), getWeekLogs()]);
-      setLogs(all);
-      setWeekLogs(week);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const { data: logs = [], isLoading: logsLoading } = useQuery({
+    queryKey: ['logs'],
+    queryFn: getLogs,
+    staleTime: LOGS_STALE,
+  });
 
-  useEffect(() => { load(); }, [load]);
+  const { data: weekLogs = [] } = useQuery({
+    queryKey: ['logs', 'week'],
+    queryFn: getWeekLogs,
+    staleTime: LOGS_STALE,
+  });
+
+  const invalidateLogs = () => {
+    queryClient.invalidateQueries({ queryKey: ['logs'] });
+    queryClient.invalidateQueries({ queryKey: ['logs', 'week'] });
+  };
+
+  const deleteMutation = useMutation({
+    mutationFn: (id) => deleteLog(id),
+    onSuccess: invalidateLogs,
+  });
+
+  const clearMutation = useMutation({
+    mutationFn: clearLogs,
+    onSuccess: invalidateLogs,
+  });
 
   async function handleShare() {
     setSharing(true);
@@ -197,16 +194,12 @@ export default function StatsPage() {
   }
 
   async function handleDelete(id) {
-    await deleteLog(id);
-    setLogs((prev) => prev.filter((l) => l._id !== id));
-    setWeekLogs((prev) => prev.filter((l) => l._id !== id));
+    await deleteMutation.mutateAsync(id);
   }
 
   async function handleClear() {
     setConfirm(null);
-    await clearLogs();
-    setLogs([]);
-    setWeekLogs([]);
+    await clearMutation.mutateAsync();
   }
 
   const totalVolume = weekLogs.reduce((s, l) => s + (l.totalVolume || 0), 0);
@@ -228,24 +221,17 @@ export default function StatsPage() {
         )}
       </div>
 
-      {loading ? (
+      {logsLoading ? (
         <div className="spinner" />
       ) : (
         <>
-          {/* Weekly summary card */}
           <div style={{ margin: '16px 16px 0' }}>
             <div style={{
-              borderRadius: 12,
-              border: '1px solid var(--border)',
-              background: 'var(--bg2)',
-              overflow: 'hidden',
+              borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg2)', overflow: 'hidden',
             }}>
               <div style={{
-                background: 'var(--accent)',
-                padding: '14px 16px 12px',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'flex-end',
+                background: 'var(--accent)', padding: '14px 16px 12px',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end',
               }}>
                 <div>
                   <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#0a0a0a', opacity: 0.6, marginBottom: 2 }}>This Week</div>
@@ -276,7 +262,6 @@ export default function StatsPage() {
             </div>
           </div>
 
-          {/* Log history */}
           <div style={{ padding: '20px 16px 0' }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 12 }}>
               History
@@ -292,7 +277,6 @@ export default function StatsPage() {
         </>
       )}
 
-      {/* Off-screen weekly share card */}
       <WeeklyShareCard logs={weekLogs} cardRef={weekCardRef} />
 
       {confirm === 'clear' && (

@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getSplits, createSplit, renameSplit, deleteSplit, activateSplit } from '../api';
 
 function PlusIcon() {
@@ -63,28 +64,39 @@ function ConfirmModal({ message, onConfirm, onClose }) {
 }
 
 export default function SplitsPage() {
-  const [splits, setSplits] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [modal, setModal] = useState(null); // { type: 'add'|'rename'|'delete', split? }
-  const [actionLoading, setActionLoading] = useState(null); // split id
+  const queryClient = useQueryClient();
+  const [modal, setModal] = useState(null);
+  const [actionLoading, setActionLoading] = useState(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      setSplits(await getSplits());
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const { data: splits = [], isLoading } = useQuery({
+    queryKey: ['splits'],
+    queryFn: getSplits,
+  });
 
-  useEffect(() => { load(); }, [load]);
+  const invalidateSplits = () => queryClient.invalidateQueries({ queryKey: ['splits'] });
+
+  const activateMutation = useMutation({
+    mutationFn: (id) => activateSplit(id),
+    onSuccess: invalidateSplits,
+  });
+  const createMutation = useMutation({
+    mutationFn: (name) => createSplit(name),
+    onSuccess: invalidateSplits,
+  });
+  const renameMutation = useMutation({
+    mutationFn: ({ id, name }) => renameSplit(id, name),
+    onSuccess: invalidateSplits,
+  });
+  const deleteMutation = useMutation({
+    mutationFn: (id) => deleteSplit(id),
+    onSuccess: invalidateSplits,
+  });
 
   async function handleActivate(split) {
-    if (split.isActive) return;
+    if (split.isActive || actionLoading) return;
     setActionLoading(split._id);
     try {
-      await activateSplit(split._id);
-      setSplits((prev) => prev.map((s) => ({ ...s, isActive: s._id === split._id })));
+      await activateMutation.mutateAsync(split._id);
     } finally {
       setActionLoading(null);
     }
@@ -92,22 +104,19 @@ export default function SplitsPage() {
 
   async function handleCreate(name) {
     setModal(null);
-    const created = await createSplit(name);
-    setSplits((prev) => [created, ...prev]);
+    await createMutation.mutateAsync(name);
   }
 
   async function handleRename(name) {
     const id = modal.split._id;
     setModal(null);
-    const updated = await renameSplit(id, name);
-    setSplits((prev) => prev.map((s) => (s._id === id ? updated : s)));
+    await renameMutation.mutateAsync({ id, name });
   }
 
   async function handleDelete() {
     const id = modal.split._id;
     setModal(null);
-    await deleteSplit(id);
-    setSplits((prev) => prev.filter((s) => s._id !== id));
+    await deleteMutation.mutateAsync(id);
   }
 
   return (
@@ -122,7 +131,7 @@ export default function SplitsPage() {
         </button>
       </div>
 
-      {loading ? (
+      {isLoading ? (
         <div className="spinner" />
       ) : splits.length === 0 ? (
         <div className="empty-state">No splits yet.<br />Tap New to create one.</div>
@@ -144,7 +153,6 @@ export default function SplitsPage() {
                 transition: 'opacity 0.15s',
               }}
             >
-              {/* Activate radio */}
               <button
                 onClick={() => handleActivate(split)}
                 style={{
@@ -164,7 +172,6 @@ export default function SplitsPage() {
                 {split.isActive && <CheckIcon />}
               </button>
 
-              {/* Name + day count */}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div
                   style={{
@@ -183,39 +190,20 @@ export default function SplitsPage() {
                 <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 2, fontWeight: 500 }}>
                   {split.days?.length || 0} days
                   {split.isActive && (
-                    <span
-                      style={{
-                        marginLeft: 8,
-                        color: 'var(--accent)',
-                        fontWeight: 700,
-                        letterSpacing: '0.05em',
-                        fontSize: 10,
-                        textTransform: 'uppercase',
-                      }}
-                    >
+                    <span style={{ marginLeft: 8, color: 'var(--accent)', fontWeight: 700, letterSpacing: '0.05em', fontSize: 10, textTransform: 'uppercase' }}>
                       ● Active
                     </span>
                   )}
                 </div>
               </div>
 
-              {/* Actions */}
               <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-                <button
-                  className="btn-icon"
-                  onClick={() => setModal({ type: 'rename', split })}
-                  title="Rename"
-                >
+                <button className="btn-icon" onClick={() => setModal({ type: 'rename', split })} title="Rename">
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M11.5 2.5a1.5 1.5 0 0 1 2.12 2.12L5 13.24l-3 .76.76-3L11.5 2.5Z" />
                   </svg>
                 </button>
-                <button
-                  className="btn-icon"
-                  style={{ color: 'var(--red)' }}
-                  onClick={() => setModal({ type: 'delete', split })}
-                  title="Delete"
-                >
+                <button className="btn-icon" style={{ color: 'var(--red)' }} onClick={() => setModal({ type: 'delete', split })} title="Delete">
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="2,4 14,4" />
                     <path d="M5 4V2h6v2" />

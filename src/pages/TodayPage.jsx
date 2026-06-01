@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useRef } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getSplits, toggleExercise, saveLog } from '../api';
 import DailyShareCard from '../components/DailyShareCard';
 
@@ -75,7 +76,6 @@ function CompletionScreen({ log, onClose, onShare, sharing }) {
         padding: '28px 24px 40px',
         animation: 'slideUp 0.25s ease',
       }}>
-        {/* Trophy */}
         <div style={{ textAlign: 'center', marginBottom: 20 }}>
           <div style={{ fontSize: 48, marginBottom: 8 }}>💪</div>
           <div style={{ fontSize: 26, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.02em', color: 'var(--accent)' }}>
@@ -86,31 +86,18 @@ function CompletionScreen({ log, onClose, onShare, sharing }) {
           </div>
         </div>
 
-        {/* Stats */}
-        <div style={{
-          display: 'flex',
-          gap: 10,
-          marginBottom: 24,
-        }}>
+        <div style={{ display: 'flex', gap: 10, marginBottom: 24 }}>
           <div style={{
-            flex: 1,
-            background: 'var(--bg3)',
-            borderRadius: 10,
-            padding: '14px 16px',
-            border: '1px solid var(--border)',
-            textAlign: 'center',
+            flex: 1, background: 'var(--bg3)', borderRadius: 10,
+            padding: '14px 16px', border: '1px solid var(--border)', textAlign: 'center',
           }}>
             <div style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>Exercises</div>
             <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--text)' }}>{log.exercises.length}</div>
           </div>
           {vol && (
             <div style={{
-              flex: 1,
-              background: 'var(--bg3)',
-              borderRadius: 10,
-              padding: '14px 16px',
-              border: '1px solid var(--border)',
-              textAlign: 'center',
+              flex: 1, background: 'var(--bg3)', borderRadius: 10,
+              padding: '14px 16px', border: '1px solid var(--border)', textAlign: 'center',
             }}>
               <div style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>Volume</div>
               <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--accent)' }}>{vol}</div>
@@ -118,21 +105,9 @@ function CompletionScreen({ log, onClose, onShare, sharing }) {
           )}
         </div>
 
-        {/* Actions */}
         <div style={{ display: 'flex', gap: 10 }}>
-          <button
-            className="btn btn-ghost"
-            style={{ flex: 1 }}
-            onClick={onClose}
-          >
-            Close
-          </button>
-          <button
-            className="btn btn-accent"
-            style={{ flex: 1, gap: 8 }}
-            onClick={onShare}
-            disabled={sharing}
-          >
+          <button className="btn btn-ghost" style={{ flex: 1 }} onClick={onClose}>Close</button>
+          <button className="btn btn-accent" style={{ flex: 1, gap: 8 }} onClick={onShare} disabled={sharing}>
             <ShareIcon />
             {sharing ? 'Sharing…' : 'Share Card'}
           </button>
@@ -143,20 +118,17 @@ function CompletionScreen({ log, onClose, onShare, sharing }) {
 }
 
 // ── Exercise row ────────────────────────────────────────────────────────────
-function ExerciseRow({ ex, splitId, dayId, onToggle }) {
-  const [loading, setLoading] = useState(false);
+function ExerciseRow({ ex, index, splitId, dayId, onToggle }) {
+  const queryClient = useQueryClient();
   const effectiveChecked = ex.lastCheckedDate === TODAY_STR ? ex.checked : false;
 
-  async function handleToggle() {
-    if (loading) return;
-    setLoading(true);
-    try {
-      const updated = await toggleExercise(splitId, dayId, ex._id);
+  const toggleMutation = useMutation({
+    mutationFn: () => toggleExercise(splitId, dayId, ex._id),
+    onSuccess: (updated) => {
       onToggle(updated);
-    } finally {
-      setLoading(false);
-    }
-  }
+      queryClient.invalidateQueries({ queryKey: ['splits'] });
+    },
+  });
 
   const weightLabel = ex.weight > 0 ? `${ex.weight}${ex.weightUnit}` : '';
   const repsLabel = ex.reps > 0 ? `${ex.reps} reps` : 'max reps';
@@ -168,10 +140,13 @@ function ExerciseRow({ ex, splitId, dayId, onToggle }) {
       gap: 12,
       padding: '12px 16px',
       borderBottom: '1px solid var(--border)',
-      opacity: loading ? 0.5 : 1,
+      opacity: toggleMutation.isPending ? 0.5 : 1,
       transition: 'opacity 0.15s',
     }}>
-      <label className={`checkbox-wrap ${effectiveChecked ? 'checked' : ''}`} onClick={handleToggle}>
+      <label
+        className={`checkbox-wrap ${effectiveChecked ? 'checked' : ''}`}
+        onClick={() => !toggleMutation.isPending && toggleMutation.mutate()}
+      >
         <div className="checkbox-box">{effectiveChecked && <CheckIcon />}</div>
       </label>
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -185,7 +160,7 @@ function ExerciseRow({ ex, splitId, dayId, onToggle }) {
           overflow: 'hidden',
           textOverflow: 'ellipsis',
         }}>
-          {ex.name}
+          {index + 1}. {ex.name}
         </div>
         <div style={{ fontSize: 12, color: 'var(--text2)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
           {ex.sets}×{repsLabel}{weightLabel ? ` · ${weightLabel}` : ''}
@@ -197,9 +172,9 @@ function ExerciseRow({ ex, splitId, dayId, onToggle }) {
 
 // ── Day card ────────────────────────────────────────────────────────────────
 function DayCard({ day, splitId, splitName, isToday, defaultOpen }) {
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(defaultOpen);
   const [exercises, setExercises] = useState(day.exercises || []);
-  const [saving, setSaving] = useState(false);
   const [completedLog, setCompletedLog] = useState(null);
   const [sharing, setSharing] = useState(false);
   const shareCardRef = useRef(null);
@@ -212,30 +187,33 @@ function DayCard({ day, splitId, splitName, isToday, defaultOpen }) {
   const total = exercises.length;
   const hasChecked = checkedCount > 0;
 
-  async function handleFinish() {
-    setSaving(true);
-    try {
-      const done = exercises.filter((e) => e.lastCheckedDate === TODAY_STR && e.checked);
-      const logData = {
-        date: TODAY_STR,
-        splitName,
-        dayName: day.name,
-        dayTag: day.tag || '',
-        exercises: done.map((e) => ({
-          name: e.name,
-          sets: e.sets,
-          reps: e.reps,
-          weight: e.weight,
-          weightUnit: e.weightUnit,
-        })),
-      };
-      const saved = await saveLog(logData);
+  const saveLogMutation = useMutation({
+    mutationFn: (logData) => saveLog(logData),
+    onSuccess: (saved) => {
       setCompletedLog(saved);
-    } catch (e) {
+      queryClient.invalidateQueries({ queryKey: ['logs'] });
+      queryClient.invalidateQueries({ queryKey: ['logs', 'week'] });
+    },
+    onError: (e) => {
       alert('Failed to save workout: ' + e.message);
-    } finally {
-      setSaving(false);
-    }
+    },
+  });
+
+  async function handleFinish() {
+    const done = exercises.filter((e) => e.lastCheckedDate === TODAY_STR && e.checked);
+    saveLogMutation.mutate({
+      date: TODAY_STR,
+      splitName,
+      dayName: day.name,
+      dayTag: day.tag || '',
+      exercises: done.map((e) => ({
+        name: e.name,
+        sets: e.sets,
+        reps: e.reps,
+        weight: e.weight,
+        weightUnit: e.weightUnit,
+      })),
+    });
   }
 
   async function handleShare() {
@@ -316,8 +294,8 @@ function DayCard({ day, splitId, splitName, isToday, defaultOpen }) {
             {exercises.length === 0 ? (
               <div className="empty-state" style={{ padding: '20px' }}>No exercises yet</div>
             ) : (
-              exercises.map((ex) => (
-                <ExerciseRow key={ex._id} ex={ex} splitId={splitId} dayId={day._id} onToggle={handleToggle} />
+              exercises.map((ex, i) => (
+                <ExerciseRow key={ex._id} ex={ex} index={i} splitId={splitId} dayId={day._id} onToggle={handleToggle} />
               ))
             )}
             {hasChecked && isToday && (
@@ -326,9 +304,9 @@ function DayCard({ day, splitId, splitName, isToday, defaultOpen }) {
                   className="btn btn-accent"
                   style={{ width: '100%', fontSize: 14, padding: '12px' }}
                   onClick={handleFinish}
-                  disabled={saving}
+                  disabled={saveLogMutation.isPending}
                 >
-                  {saving ? 'Saving…' : `✓ Finish Workout (${checkedCount} done)`}
+                  {saveLogMutation.isPending ? 'Saving…' : `✓ Finish Workout (${checkedCount} done)`}
                 </button>
               </div>
             )}
@@ -336,12 +314,10 @@ function DayCard({ day, splitId, splitName, isToday, defaultOpen }) {
         )}
       </div>
 
-      {/* Hidden share card */}
       {completedLog && (
         <DailyShareCard log={completedLog} cardRef={shareCardRef} />
       )}
 
-      {/* Completion screen */}
       {completedLog && (
         <CompletionScreen
           log={completedLog}
@@ -356,27 +332,16 @@ function DayCard({ day, splitId, splitName, isToday, defaultOpen }) {
 
 // ── Today page ──────────────────────────────────────────────────────────────
 export default function TodayPage() {
-  const [activeSplit, setActiveSplit] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const { data: splits = [], isLoading, error } = useQuery({
+    queryKey: ['splits'],
+    queryFn: getSplits,
+  });
 
-  const load = useCallback(async () => {
-    try {
-      setLoading(true);
-      const splits = await getSplits();
-      const active = splits.find((s) => s.isActive) || splits[0] || null;
-      setActiveSplit(active);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  if (isLoading) return <div className="spinner" />;
+  if (error) return <div className="empty-state">Error: {error.message}</div>;
 
-  useEffect(() => { load(); }, [load]);
+  const activeSplit = splits.find((s) => s.isActive) || splits[0] || null;
 
-  if (loading) return <div className="spinner" />;
-  if (error) return <div className="empty-state">Error: {error}</div>;
   if (!activeSplit) return (
     <div>
       <div className="page-header"><h1 className="page-title">Today</h1></div>
@@ -385,10 +350,9 @@ export default function TodayPage() {
   );
 
   const days = activeSplit.days || [];
-  const todayDow = TODAY_DOW;
-  const dayNameMatch = DAY_NAMES[todayDow].toLowerCase();
+  const dayNameMatch = DAY_NAMES[TODAY_DOW].toLowerCase();
   let todayIndex = days.findIndex((d) => d.name.toLowerCase().startsWith(dayNameMatch));
-  if (todayIndex === -1) todayIndex = todayDow % days.length;
+  if (todayIndex === -1) todayIndex = TODAY_DOW % days.length;
 
   return (
     <div>

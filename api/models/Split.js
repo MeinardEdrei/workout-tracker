@@ -8,6 +8,7 @@ const ExerciseSchema = new mongoose.Schema({
   weightUnit: { type: String, enum: ['kg', 'lbs'], default: 'kg' },
   checked: { type: Boolean, default: false },
   lastCheckedDate: { type: String, default: '' },
+  order: { type: Number, default: 0 },
 });
 
 const DaySchema = new mongoose.Schema({

@@ -38,6 +38,8 @@ export const deleteExercise = (splitId, dayId, exId) =>
   req('DELETE', `/api/splits/${splitId}/days/${dayId}/exercises/${exId}`);
 export const toggleExercise = (splitId, dayId, exId) =>
   req('PATCH', `/api/splits/${splitId}/days/${dayId}/exercises/${exId}/toggle`);
+export const reorderExercises = (splitId, dayId, exercises) =>
+  req('PATCH', `/api/splits/${splitId}/days/${dayId}/exercises/reorder`, { exercises });
 
 // Logs
 export const saveLog = (data) => req('POST', '/api/logs', data);

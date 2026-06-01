@@ -1,8 +1,23 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import {
   getSplits,
   createDay, updateDay, deleteDay,
-  createExercise, updateExercise, deleteExercise,
+  createExercise, updateExercise, deleteExercise, reorderExercises,
 } from '../api';
 
 /* ─── Icons ─── */
@@ -34,8 +49,17 @@ function EditPencil() {
     </svg>
   );
 }
+function GripIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+      <line x1="3" y1="4" x2="11" y2="4" />
+      <line x1="3" y1="7" x2="11" y2="7" />
+      <line x1="3" y1="10" x2="11" y2="10" />
+    </svg>
+  );
+}
 
-/* ─── Modal ─── */
+/* ─── Modals ─── */
 function TextModal({ title, initial = '', placeholder, onConfirm, onClose }) {
   const [value, setValue] = useState(initial);
   function submit(e) { e.preventDefault(); if (!value.trim()) return; onConfirm(value.trim()); }
@@ -70,7 +94,6 @@ function ConfirmModal({ message, onConfirm, onClose }) {
   );
 }
 
-/* ─── Add Day Modal ─── */
 function AddDayModal({ onConfirm, onClose }) {
   const [name, setName] = useState('');
   const [tag, setTag] = useState('');
@@ -101,7 +124,6 @@ function AddDayModal({ onConfirm, onClose }) {
   );
 }
 
-/* ─── Add Exercise Modal ─── */
 function AddExerciseModal({ onConfirm, onClose }) {
   const [form, setForm] = useState({ name: '', sets: 3, reps: 10, weight: 0, weightUnit: 'kg' });
   function set(k, v) { setForm((f) => ({ ...f, [k]: v })); }
@@ -145,7 +167,7 @@ function AddExerciseModal({ onConfirm, onClose }) {
 }
 
 /* ─── Inline exercise editor ─── */
-function ExerciseEditRow({ ex, splitId, dayId, onUpdate, onDelete }) {
+function ExerciseEditRow({ ex, index, splitId, dayId, onUpdate, onDelete, dragHandleProps }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
     name: ex.name, sets: ex.sets, reps: ex.reps, weight: ex.weight, weightUnit: ex.weightUnit,
@@ -205,8 +227,17 @@ function ExerciseEditRow({ ex, splitId, dayId, onUpdate, onDelete }) {
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 14px', borderBottom: '1px solid var(--border)' }}>
+      <div
+        {...dragHandleProps}
+        style={{ color: 'var(--text3)', cursor: 'grab', flexShrink: 0, display: 'flex', alignItems: 'center', touchAction: 'none', padding: '0 2px' }}
+        title="Drag to reorder"
+      >
+        <GripIcon />
+      </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 15, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ex.name}</div>
+        <div style={{ fontSize: 15, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {index + 1}. {ex.name}
+        </div>
         <div style={{ fontSize: 11, color: 'var(--text2)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
           {ex.sets}×{repsLabel}{weightLabel}
         </div>
@@ -217,25 +248,86 @@ function ExerciseEditRow({ ex, splitId, dayId, onUpdate, onDelete }) {
   );
 }
 
+/* ─── Sortable wrapper for exercise row ─── */
+function SortableExerciseEditRow({ ex, index, splitId, dayId, onUpdate, onDelete }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: ex._id });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+      }}
+    >
+      <ExerciseEditRow
+        ex={ex}
+        index={index}
+        splitId={splitId}
+        dayId={dayId}
+        onUpdate={onUpdate}
+        onDelete={onDelete}
+        dragHandleProps={{ ...attributes, ...listeners }}
+      />
+    </div>
+  );
+}
+
 /* ─── Day editor panel ─── */
 function DayEditor({ day, split, onBack, onDayUpdated }) {
+  const queryClient = useQueryClient();
   const [exercises, setExercises] = useState(day.exercises || []);
   const [modal, setModal] = useState(null);
   const [isRest, setIsRest] = useState(day.isRest);
+  const [reorderError, setReorderError] = useState(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+  );
+
+  async function handleDragEnd(event) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = exercises.findIndex((e) => e._id === active.id);
+    const newIndex = exercises.findIndex((e) => e._id === over.id);
+    const reordered = arrayMove(exercises, oldIndex, newIndex);
+    const prevExercises = exercises;
+
+    setExercises(reordered);
+    setReorderError(null);
+
+    try {
+      await reorderExercises(
+        split._id,
+        day._id,
+        reordered.map((e, i) => ({ _id: e._id, order: i }))
+      );
+      setExercises(reordered.map((e, i) => ({ ...e, order: i })));
+      queryClient.invalidateQueries({ queryKey: ['splits'] });
+    } catch {
+      setExercises(prevExercises);
+      setReorderError('Failed to reorder exercises. Changes reverted.');
+      setTimeout(() => setReorderError(null), 3000);
+    }
+  }
 
   async function handleAddExercise(data) {
     setModal(null);
     const ex = await createExercise(split._id, day._id, data);
     setExercises((prev) => [...prev, ex]);
+    queryClient.invalidateQueries({ queryKey: ['splits'] });
   }
 
-  async function handleUpdateExercise(updated) {
+  function handleUpdateExercise(updated) {
     setExercises((prev) => prev.map((e) => (e._id === updated._id ? updated : e)));
+    queryClient.invalidateQueries({ queryKey: ['splits'] });
   }
 
   async function handleDeleteExercise(exId) {
     await deleteExercise(split._id, day._id, exId);
     setExercises((prev) => prev.filter((e) => e._id !== exId));
+    queryClient.invalidateQueries({ queryKey: ['splits'] });
   }
 
   async function toggleRest() {
@@ -243,12 +335,14 @@ function DayEditor({ day, split, onBack, onDayUpdated }) {
     setIsRest(next);
     const updated = await updateDay(split._id, day._id, { isRest: next });
     onDayUpdated(updated);
+    queryClient.invalidateQueries({ queryKey: ['splits'] });
   }
 
   async function handleRenameSave(name) {
     setModal(null);
     const updated = await updateDay(split._id, day._id, { name });
     onDayUpdated(updated);
+    queryClient.invalidateQueries({ queryKey: ['splits'] });
   }
 
   return (
@@ -279,6 +373,26 @@ function DayEditor({ day, split, onBack, onDayUpdated }) {
         </div>
       </div>
 
+      {reorderError && (
+        <div style={{
+          position: 'fixed',
+          bottom: 80,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: 'var(--red)',
+          color: '#fff',
+          padding: '10px 16px',
+          borderRadius: 8,
+          fontSize: 13,
+          fontWeight: 600,
+          zIndex: 200,
+          maxWidth: 320,
+          textAlign: 'center',
+        }}>
+          {reorderError}
+        </div>
+      )}
+
       {isRest ? (
         <div className="empty-state">This is a rest day. Toggle off to add exercises.</div>
       ) : (
@@ -292,16 +406,21 @@ function DayEditor({ day, split, onBack, onDayUpdated }) {
             {exercises.length === 0 ? (
               <div className="empty-state">No exercises yet.</div>
             ) : (
-              exercises.map((ex) => (
-                <ExerciseEditRow
-                  key={ex._id}
-                  ex={ex}
-                  splitId={split._id}
-                  dayId={day._id}
-                  onUpdate={handleUpdateExercise}
-                  onDelete={handleDeleteExercise}
-                />
-              ))
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <SortableContext items={exercises.map((e) => e._id)} strategy={verticalListSortingStrategy}>
+                  {exercises.map((ex, i) => (
+                    <SortableExerciseEditRow
+                      key={ex._id}
+                      ex={ex}
+                      index={i}
+                      splitId={split._id}
+                      dayId={day._id}
+                      onUpdate={handleUpdateExercise}
+                      onDelete={handleDeleteExercise}
+                    />
+                  ))}
+                </SortableContext>
+              </DndContext>
             )}
           </div>
         </>
@@ -325,27 +444,31 @@ function DayEditor({ day, split, onBack, onDayUpdated }) {
 
 /* ─── Split editor panel ─── */
 function SplitEditor({ split, onBack, onSplitUpdated }) {
+  const queryClient = useQueryClient();
   const [days, setDays] = useState(split.days || []);
   const [activeDayId, setActiveDayId] = useState(null);
-  const [modal, setModal] = useState(null); // 'addDay' | { type:'deleteDay', day }
+  const [modal, setModal] = useState(null);
 
   const activeDay = days.find((d) => d._id === activeDayId);
 
   function handleDayUpdated(updated) {
-    setDays((prev) => prev.map((d) => (d._id === updated._id ? { ...d, ...updated } : d)));
-    onSplitUpdated({ ...split, days: days.map((d) => (d._id === updated._id ? { ...d, ...updated } : d)) });
+    const newDays = days.map((d) => (d._id === updated._id ? { ...d, ...updated } : d));
+    setDays(newDays);
+    onSplitUpdated({ ...split, days: newDays });
   }
 
   async function handleAddDay(data) {
     setModal(null);
     const day = await createDay(split._id, data);
     setDays((prev) => [...prev, day]);
+    queryClient.invalidateQueries({ queryKey: ['splits'] });
   }
 
   async function handleDeleteDay(day) {
     setModal(null);
     await deleteDay(split._id, day._id);
     setDays((prev) => prev.filter((d) => d._id !== day._id));
+    queryClient.invalidateQueries({ queryKey: ['splits'] });
   }
 
   if (activeDay) {
@@ -431,21 +554,17 @@ function SplitEditor({ split, onBack, onSplitUpdated }) {
 
 /* ─── Edit Page root ─── */
 export default function EditPage() {
-  const [splits, setSplits] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [activeSplitId, setActiveSplitId] = useState(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try { setSplits(await getSplits()); } finally { setLoading(false); }
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
+  const { data: splits = [], isLoading } = useQuery({
+    queryKey: ['splits'],
+    queryFn: getSplits,
+  });
 
   const activeSplit = splits.find((s) => s._id === activeSplitId);
 
   function handleSplitUpdated(updated) {
-    setSplits((prev) => prev.map((s) => (s._id === updated._id ? updated : s)));
+    // local state update handled inside SplitEditor; query will sync on next invalidation
   }
 
   if (activeSplit) {
@@ -467,7 +586,7 @@ export default function EditPage() {
         </div>
       </div>
 
-      {loading ? (
+      {isLoading ? (
         <div className="spinner" />
       ) : splits.length === 0 ? (
         <div className="empty-state">No splits. Create one in the Splits tab.</div>

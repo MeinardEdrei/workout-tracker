@@ -2,13 +2,25 @@ const express = require('express');
 const router = express.Router();
 const Split = require('../models/Split');
 
+function sortExercises(split) {
+  const obj = split.toObject();
+  obj.days.forEach((d) => d.exercises.sort((a, b) => (a.order ?? 0) - (b.order ?? 0)));
+  return obj;
+}
+
+function sortExercisesInDay(day) {
+  const obj = day.toObject ? day.toObject() : { ...day };
+  obj.exercises = [...(obj.exercises || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  return obj;
+}
+
 // ─── SPLITS ──────────────────────────────────────────────────────────────────
 
 // GET /api/splits
 router.get('/', async (_req, res) => {
   try {
     const splits = await Split.find().sort({ createdAt: -1 });
-    res.json(splits);
+    res.json(splits.map(sortExercises));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -34,7 +46,7 @@ router.put('/:id', async (req, res) => {
       { new: true, runValidators: true }
     );
     if (!split) return res.status(404).json({ error: 'Split not found' });
-    res.json(split);
+    res.json(sortExercises(split));
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -61,7 +73,7 @@ router.patch('/:id/activate', async (req, res) => {
       { new: true }
     );
     if (!split) return res.status(404).json({ error: 'Split not found' });
-    res.json(split);
+    res.json(sortExercises(split));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -74,7 +86,7 @@ router.get('/:id/days', async (req, res) => {
   try {
     const split = await Split.findById(req.params.id);
     if (!split) return res.status(404).json({ error: 'Split not found' });
-    res.json(split.days);
+    res.json(split.days.map(sortExercisesInDay));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -104,7 +116,7 @@ router.put('/:id/days/:dayId', async (req, res) => {
     if (req.body.tag !== undefined) day.tag = req.body.tag;
     if (req.body.isRest !== undefined) day.isRest = req.body.isRest;
     await split.save();
-    res.json(day);
+    res.json(sortExercisesInDay(day));
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -132,7 +144,8 @@ router.get('/:id/days/:dayId/exercises', async (req, res) => {
     if (!split) return res.status(404).json({ error: 'Split not found' });
     const day = split.days.id(req.params.dayId);
     if (!day) return res.status(404).json({ error: 'Day not found' });
-    res.json(day.exercises);
+    const exercises = day.exercises.map((e) => e.toObject()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    res.json(exercises);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -145,6 +158,7 @@ router.post('/:id/days/:dayId/exercises', async (req, res) => {
     if (!split) return res.status(404).json({ error: 'Split not found' });
     const day = split.days.id(req.params.dayId);
     if (!day) return res.status(404).json({ error: 'Day not found' });
+    const maxOrder = day.exercises.reduce((m, e) => Math.max(m, e.order ?? 0), -1);
     day.exercises.push({
       name: req.body.name,
       sets: req.body.sets || 3,
@@ -153,11 +167,32 @@ router.post('/:id/days/:dayId/exercises', async (req, res) => {
       weightUnit: req.body.weightUnit || 'kg',
       checked: false,
       lastCheckedDate: '',
+      order: maxOrder + 1,
     });
     await split.save();
     res.status(201).json(day.exercises[day.exercises.length - 1]);
   } catch (err) {
     res.status(400).json({ error: err.message });
+  }
+});
+
+// PATCH /api/splits/:id/days/:dayId/exercises/reorder  — must be before /:exId routes
+router.patch('/:id/days/:dayId/exercises/reorder', async (req, res) => {
+  try {
+    const split = await Split.findById(req.params.id);
+    if (!split) return res.status(404).json({ error: 'Split not found' });
+    const day = split.days.id(req.params.dayId);
+    if (!day) return res.status(404).json({ error: 'Day not found' });
+    const updates = req.body.exercises; // [{ _id, order }]
+    if (!Array.isArray(updates)) return res.status(400).json({ error: 'exercises must be an array' });
+    updates.forEach(({ _id, order }) => {
+      const ex = day.exercises.id(_id);
+      if (ex) ex.order = order;
+    });
+    await split.save();
+    res.json({ message: 'Reordered' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -205,7 +240,6 @@ router.patch('/:id/days/:dayId/exercises/:exId/toggle', async (req, res) => {
     if (!ex) return res.status(404).json({ error: 'Exercise not found' });
 
     const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-    // Auto-reset if last checked was a different day
     if (ex.lastCheckedDate !== today) {
       ex.checked = false;
       ex.lastCheckedDate = today;
