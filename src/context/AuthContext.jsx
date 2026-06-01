@@ -20,19 +20,41 @@ export function AuthProvider({ children }) {
   }, [queryClient]);
 
   useEffect(() => {
-    // Handle OAuth redirect params
     const params = new URLSearchParams(window.location.search);
     const token = params.get('token');
     const error = params.get('auth_error');
+    const code = params.get('code');
+    const state = params.get('state');
 
-    if (token || error) {
-      // Clean the URL immediately
+    // Clean the URL immediately for any recognized param
+    if (token || error || (code && state)) {
       window.history.replaceState({}, '', window.location.pathname);
     }
 
     if (error) {
       setAuthError(error);
       setLoading(false);
+      return;
+    }
+
+    // SW intercepted the OAuth callback and served index.html instead — exchange the
+    // code here in the client so sign-in works regardless of which SW version is active
+    if (code && state) {
+      fetch(`${API}/api/auth/google/exchange?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`)
+        .then((r) => (r.ok ? r.json() : Promise.reject(r.json())))
+        .then((data) => {
+          if (data.error) {
+            setAuthError(data.error);
+            return null;
+          }
+          localStorage.setItem('wt_token', data.token);
+          return fetch(`${API}/api/auth/me`, {
+            headers: { Authorization: `Bearer ${data.token}` },
+          }).then((r) => (r.ok ? r.json() : null));
+        })
+        .then((u) => { if (u) setUser(u); })
+        .catch(() => setAuthError('oauth_failed'))
+        .finally(() => setLoading(false));
       return;
     }
 
@@ -51,10 +73,7 @@ export function AuthProvider({ children }) {
       .then((r) => (r.ok ? r.json() : null))
       .then((u) => {
         if (u) setUser(u);
-        else {
-          // Token invalid or expired
-          localStorage.removeItem('wt_token');
-        }
+        else localStorage.removeItem('wt_token');
       })
       .catch(() => localStorage.removeItem('wt_token'))
       .finally(() => setLoading(false));

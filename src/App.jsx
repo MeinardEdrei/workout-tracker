@@ -164,8 +164,10 @@ function AuthCorner() {
         ) : (
           <button
             onClick={() => {
-              console.log('[AuthCorner] login clicked, redirecting to', `${import.meta.env.VITE_API_URL}/api/auth/google`);
-              window.location.href = `${import.meta.env.VITE_API_URL}/api/auth/google`;
+              fetch(`${API}/api/auth/google/url`)
+                .then((r) => r.json())
+                .then(({ url }) => { window.location.href = url; })
+                .catch(() => { window.location.href = `${API}/api/auth/google`; });
             }}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
