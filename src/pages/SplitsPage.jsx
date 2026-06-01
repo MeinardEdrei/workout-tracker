@@ -1,6 +1,9 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useStorage } from '../hooks/useStorage';
+import { useAuth } from '../context/AuthContext';
+
+const API = import.meta.env.VITE_API_URL || '';
 
 function PlusIcon() {
   return (
@@ -15,6 +18,15 @@ function CheckIcon() {
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
       <polyline points="2,7 6,11 12,3" stroke="#0a0a0a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
+  );
+}
+function InlineSpinner() {
+  return (
+    <span style={{
+      display: 'inline-block', width: 10, height: 10, flexShrink: 0,
+      border: '1.5px solid currentColor', borderTopColor: 'transparent',
+      borderRadius: '50%', animation: 'spin 0.6s linear infinite',
+    }} />
   );
 }
 
@@ -55,8 +67,13 @@ function ConfirmModal({ message, onConfirm, onClose }) {
 export default function SplitsPage() {
   const queryClient = useQueryClient();
   const { storage, storageKey } = useStorage();
+  const { user, isLoggedIn, logout } = useAuth();
   const [modal, setModal] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [signingIn, setSigningIn] = useState(false);
+  const [signInFailed, setSignInFailed] = useState(false);
+  const signInTimer = useRef(null);
 
   const { data: splits = [], isLoading } = useQuery({
     queryKey: ['splits', storageKey],
@@ -80,16 +97,171 @@ export default function SplitsPage() {
   async function handleRename(name) { const id = modal.split._id; setModal(null); await renameMutation.mutateAsync({ id, name }); }
   async function handleDelete() { const id = modal.split._id; setModal(null); await deleteMutation.mutateAsync(id); }
 
+  function handleSignIn() {
+    if (signingIn) return;
+    setSigningIn(true);
+    setSignInFailed(false);
+    signInTimer.current = setTimeout(() => {
+      setSigningIn(false);
+      setSignInFailed(true);
+    }, 5000);
+    fetch(`${API}/api/auth/google/url`)
+      .then((r) => r.json())
+      .then(({ url }) => {
+        clearTimeout(signInTimer.current);
+        window.location.href = url;
+      })
+      .catch(() => {
+        clearTimeout(signInTimer.current);
+        setSigningIn(false);
+        window.location.href = `${API}/api/auth/google`;
+      });
+  }
+
   return (
     <div>
-      <div className="page-header">
-        <div>
+      {/* Sign-in status toast */}
+      {signingIn && (
+        <div style={{
+          position: 'fixed', bottom: 76, left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--bg2)', border: '1px solid var(--border)',
+          color: 'var(--text3)', padding: '8px 14px', borderRadius: 20,
+          fontSize: 12, fontWeight: 500, zIndex: 200, whiteSpace: 'nowrap',
+          display: 'flex', alignItems: 'center', gap: 7,
+          animation: 'fadeIn 0.15s ease',
+        }}>
+          <InlineSpinner /> Opening Google Sign In…
+        </div>
+      )}
+
+      {/* Sign-in timeout error toast */}
+      {signInFailed && (
+        <div style={{
+          position: 'fixed', bottom: 76, left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--bg2)', border: '1px solid var(--red)',
+          color: 'var(--text)', padding: '10px 16px', borderRadius: 10,
+          fontSize: 13, fontWeight: 600, zIndex: 300, maxWidth: 300,
+          display: 'flex', alignItems: 'center', gap: 8,
+          animation: 'fadeIn 0.15s ease',
+        }}>
+          <span style={{ flex: 1 }}>Sign in failed. Please try again.</span>
+          <button onClick={() => setSignInFailed(false)} style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, flexShrink: 0 }}>✕</button>
+        </div>
+      )}
+
+      {/* ── Page header ─────────────────────────────────────────────────────── */}
+      {/* Override the global 80px right padding — auth lives inside this header */}
+      <div className="page-header" style={{ padding: '16px 20px' }}>
+        {/* Left: title + count */}
+        <div style={{ minWidth: 0 }}>
           <h1 className="page-title">Splits</h1>
           <div className="page-subtitle">{splits.length} programs</div>
         </div>
-        <button className="btn btn-accent" onClick={() => setModal({ type: 'add' })}>
-          <PlusIcon /> New
-        </button>
+
+        {/* Right: auth control + primary action */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+
+          {/* Auth: avatar (logged in) or ghost sign-in button (guest) */}
+          {isLoggedIn ? (
+            <div style={{ position: 'relative' }}>
+              {/* 44×44 tap target: 30px avatar + 7px padding on each side */}
+              <button
+                onClick={() => setShowUserMenu((v) => !v)}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  padding: 7, borderRadius: '50%', display: 'flex',
+                  WebkitTapHighlightColor: 'transparent',
+                }}
+                aria-label="Account menu"
+              >
+                {user.avatar ? (
+                  <img
+                    src={user.avatar}
+                    alt={user.name}
+                    style={{ width: 30, height: 30, borderRadius: '50%', border: '2px solid var(--accent)', objectFit: 'cover', display: 'block' }}
+                  />
+                ) : (
+                  <div style={{
+                    width: 30, height: 30, borderRadius: '50%', background: 'var(--accent)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 13, fontWeight: 800, color: '#0a0a0a',
+                  }}>
+                    {(user.name || user.email)[0].toUpperCase()}
+                  </div>
+                )}
+              </button>
+
+              {showUserMenu && (
+                <>
+                  <div
+                    style={{ position: 'fixed', inset: 0, zIndex: 149 }}
+                    onClick={() => setShowUserMenu(false)}
+                  />
+                  <div style={{
+                    position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 150,
+                    background: 'var(--bg2)', border: '1px solid var(--border)',
+                    borderRadius: 10, padding: '8px 0', minWidth: 180,
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                    animation: 'fadeIn 0.12s ease',
+                  }}>
+                    <div style={{ padding: '8px 16px 10px', borderBottom: '1px solid var(--border)' }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {user.name}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {user.email}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => { setShowUserMenu(false); logout(); }}
+                      style={{
+                        width: '100%', padding: '10px 16px', background: 'none', border: 'none',
+                        cursor: 'pointer', textAlign: 'left', color: 'var(--red)',
+                        fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700,
+                        letterSpacing: '0.06em', textTransform: 'uppercase',
+                      }}
+                    >
+                      Sign Out
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          ) : (
+            /* Ghost sign-in — intentionally secondary to + New */
+            <button
+              onClick={handleSignIn}
+              disabled={signingIn}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                padding: '6px 10px', borderRadius: 6,
+                background: 'transparent', border: '1px solid var(--border2)',
+                color: 'var(--text3)', cursor: signingIn ? 'default' : 'pointer',
+                fontSize: 11, fontWeight: 600, letterSpacing: '0.04em',
+                fontFamily: 'var(--font-display)', textTransform: 'uppercase',
+                opacity: signingIn ? 0.5 : 1, transition: 'opacity 0.15s',
+                whiteSpace: 'nowrap',
+                WebkitTapHighlightColor: 'transparent',
+              }}
+            >
+              {signingIn ? (
+                <><InlineSpinner /> Redirecting…</>
+              ) : (
+                <>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10,17 15,12 10,7"/><line x1="15" y1="12" x2="3" y2="12"/>
+                  </svg>
+                  Sign in
+                </>
+              )}
+            </button>
+          )}
+
+          {/* Primary action: always accent, always prominent */}
+          <button className="btn btn-accent" onClick={() => setModal({ type: 'add' })}>
+            <PlusIcon /> New
+          </button>
+        </div>
       </div>
 
       {isLoading ? (

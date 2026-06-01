@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import './index.css';
 import { useAuth } from './context/AuthContext';
 import TodayPage from './pages/TodayPage';
@@ -68,28 +68,100 @@ function AdminIcon({ active }) {
 
 const ICONS = { today: TodayIcon, splits: SplitsIcon, stats: StatsIcon, edit: EditIcon, admin: AdminIcon };
 
-// ── Auth corner ────────────────────────────────────────────────────────────────
+// Small spinner for inline use in buttons
+function InlineSpinner() {
+  return (
+    <span style={{
+      display: 'inline-block', width: 10, height: 10, flexShrink: 0,
+      border: '1.5px solid currentColor', borderTopColor: 'transparent',
+      borderRadius: '50%', animation: 'spin 0.6s linear infinite',
+    }} />
+  );
+}
+
+// ── Global auth error toast — shown on all tabs ─────────────────────────────
+function AuthErrorToast() {
+  const { authError, dismissAuthError } = useAuth();
+  if (!authError) return null;
+  return (
+    <div style={{
+      position: 'fixed', bottom: 76, left: '50%', transform: 'translateX(-50%)',
+      background: 'var(--bg2)', border: '1px solid var(--red)',
+      color: 'var(--text)', padding: '12px 16px', borderRadius: 10,
+      fontSize: 13, fontWeight: 600, zIndex: 300, maxWidth: 320, textAlign: 'center',
+      display: 'flex', alignItems: 'center', gap: 8,
+      animation: 'fadeIn 0.15s ease',
+    }}>
+      <span style={{ flex: 1 }}>
+        {authError === 'not_allowed'
+          ? 'Access restricted. You are not on the allowed list.'
+          : 'Sign-in failed. Please try again.'}
+      </span>
+      <button
+        onClick={dismissAuthError}
+        style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, flexShrink: 0 }}
+      >✕</button>
+    </div>
+  );
+}
+
+// ── Auth corner — floating, shown on all tabs except Splits ────────────────
 function AuthCorner() {
-  const { user, isLoggedIn, isAdmin, authError, dismissAuthError, logout } = useAuth();
+  const { user, isLoggedIn, isAdmin, logout } = useAuth();
   const [showMenu, setShowMenu] = useState(false);
+  const [signingIn, setSigningIn] = useState(false);
+  const [signInFailed, setSignInFailed] = useState(false);
+  const signInTimer = useRef(null);
+
+  function handleSignIn() {
+    if (signingIn) return;
+    setSigningIn(true);
+    setSignInFailed(false);
+    signInTimer.current = setTimeout(() => {
+      setSigningIn(false);
+      setSignInFailed(true);
+    }, 5000);
+    fetch(`${API}/api/auth/google/url`)
+      .then((r) => r.json())
+      .then(({ url }) => {
+        clearTimeout(signInTimer.current);
+        window.location.href = url;
+      })
+      .catch(() => {
+        clearTimeout(signInTimer.current);
+        setSigningIn(false);
+        window.location.href = `${API}/api/auth/google`;
+      });
+  }
 
   return (
     <>
-      {/* Auth error toast */}
-      {authError && (
+      {/* Sign-in status toast */}
+      {signingIn && (
         <div style={{
-          position: 'fixed', bottom: 80, left: '50%', transform: 'translateX(-50%)',
-          background: 'var(--bg2)', border: '1px solid var(--red)',
-          color: 'var(--text)', padding: '12px 16px', borderRadius: 10,
-          fontSize: 13, fontWeight: 600, zIndex: 300, maxWidth: 320, textAlign: 'center',
+          position: 'fixed', bottom: 76, left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--bg2)', border: '1px solid var(--border)',
+          color: 'var(--text3)', padding: '8px 14px', borderRadius: 20,
+          fontSize: 12, fontWeight: 500, zIndex: 200, whiteSpace: 'nowrap',
+          display: 'flex', alignItems: 'center', gap: 7,
+          animation: 'fadeIn 0.15s ease',
         }}>
-          {authError === 'not_allowed'
-            ? 'Access restricted. You are not on the allowed list.'
-            : 'Sign-in failed. Please try again.'}
-          <button
-            onClick={dismissAuthError}
-            style={{ marginLeft: 10, color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14 }}
-          >✕</button>
+          <InlineSpinner /> Opening Google Sign In…
+        </div>
+      )}
+
+      {/* Sign-in timeout error toast */}
+      {signInFailed && (
+        <div style={{
+          position: 'fixed', bottom: 76, left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--bg2)', border: '1px solid var(--red)',
+          color: 'var(--text)', padding: '10px 16px', borderRadius: 10,
+          fontSize: 13, fontWeight: 600, zIndex: 300, maxWidth: 300,
+          display: 'flex', alignItems: 'center', gap: 8,
+          animation: 'fadeIn 0.15s ease',
+        }}>
+          <span style={{ flex: 1 }}>Sign in failed. Please try again.</span>
+          <button onClick={() => setSignInFailed(false)} style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, flexShrink: 0 }}>✕</button>
         </div>
       )}
 
@@ -132,6 +204,7 @@ function AuthCorner() {
                   background: 'var(--bg2)', border: '1px solid var(--border)',
                   borderRadius: 10, padding: '8px 0', minWidth: 180,
                   boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                  animation: 'fadeIn 0.12s ease',
                 }}>
                   <div style={{ padding: '8px 16px 10px', borderBottom: '1px solid var(--border)' }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -163,25 +236,28 @@ function AuthCorner() {
           </>
         ) : (
           <button
-            onClick={() => {
-              fetch(`${API}/api/auth/google/url`)
-                .then((r) => r.json())
-                .then(({ url }) => { window.location.href = url; })
-                .catch(() => { window.location.href = `${API}/api/auth/google`; });
-            }}
+            onClick={handleSignIn}
+            disabled={signingIn}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
               padding: '5px 10px', borderRadius: 6,
               background: 'var(--bg2)', border: '1px solid var(--border2)',
-              color: 'var(--text2)', cursor: 'pointer',
+              color: 'var(--text2)', cursor: signingIn ? 'default' : 'pointer',
               fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
-              fontFamily: 'var(--font-display)',
+              fontFamily: 'var(--font-display)', opacity: signingIn ? 0.6 : 1,
+              transition: 'opacity 0.15s',
             }}
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10,17 15,12 10,7"/><line x1="15" y1="12" x2="3" y2="12"/>
-            </svg>
-            Sign in
+            {signingIn ? (
+              <><InlineSpinner /> Redirecting…</>
+            ) : (
+              <>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10,17 15,12 10,7"/><line x1="15" y1="12" x2="3" y2="12"/>
+                </svg>
+                Sign in
+              </>
+            )}
           </button>
         )}
       </div>
@@ -205,7 +281,10 @@ export default function App() {
 
   return (
     <>
-      <AuthCorner />
+      {/* Auth error toast is global — shows on every tab */}
+      <AuthErrorToast />
+      {/* AuthCorner floats over all tabs except Splits, which owns its header */}
+      {tab !== 'splits' && <AuthCorner />}
       <div className="page">
         {tab === 'today' && <TodayPage />}
         {tab === 'splits' && <SplitsPage />}
