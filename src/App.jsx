@@ -1,9 +1,13 @@
 import { useState } from 'react';
 import './index.css';
+import { useAuth } from './context/AuthContext';
 import TodayPage from './pages/TodayPage';
 import SplitsPage from './pages/SplitsPage';
 import EditPage from './pages/EditPage';
 import StatsPage from './pages/StatsPage';
+import AdminPage from './pages/AdminPage';
+
+const API = import.meta.env.VITE_API_URL || '';
 
 const NAV = [
   { id: 'today', label: 'Today' },
@@ -23,7 +27,6 @@ function TodayIcon({ active }) {
     </svg>
   );
 }
-
 function SplitsIcon({ active }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.5 : 1.8} strokeLinecap="round" strokeLinejoin="round">
@@ -36,7 +39,6 @@ function SplitsIcon({ active }) {
     </svg>
   );
 }
-
 function StatsIcon({ active }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.5 : 1.8} strokeLinecap="round" strokeLinejoin="round">
@@ -46,7 +48,6 @@ function StatsIcon({ active }) {
     </svg>
   );
 }
-
 function EditIcon({ active }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.5 : 1.8} strokeLinecap="round" strokeLinejoin="round">
@@ -55,22 +56,160 @@ function EditIcon({ active }) {
     </svg>
   );
 }
+function AdminIcon({ active }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.5 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+      <polyline points="16,11 17.5,13 21,10" />
+    </svg>
+  );
+}
 
-const ICONS = { today: TodayIcon, splits: SplitsIcon, stats: StatsIcon, edit: EditIcon };
+const ICONS = { today: TodayIcon, splits: SplitsIcon, stats: StatsIcon, edit: EditIcon, admin: AdminIcon };
 
-export default function App() {
-  const [tab, setTab] = useState('today');
+// ── Auth corner ────────────────────────────────────────────────────────────────
+function AuthCorner() {
+  const { user, isLoggedIn, isAdmin, authError, dismissAuthError, logout } = useAuth();
+  const [showMenu, setShowMenu] = useState(false);
 
   return (
     <>
+      {/* Auth error toast */}
+      {authError && (
+        <div style={{
+          position: 'fixed', bottom: 80, left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--bg2)', border: '1px solid var(--red)',
+          color: 'var(--text)', padding: '12px 16px', borderRadius: 10,
+          fontSize: 13, fontWeight: 600, zIndex: 300, maxWidth: 320, textAlign: 'center',
+        }}>
+          {authError === 'not_allowed'
+            ? 'Access restricted. You are not on the allowed list.'
+            : 'Sign-in failed. Please try again.'}
+          <button
+            onClick={dismissAuthError}
+            style={{ marginLeft: 10, color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14 }}
+          >✕</button>
+        </div>
+      )}
+
+      {/* Sign in button or avatar */}
+      <div style={{ position: 'absolute', top: 12, right: 14, zIndex: 50 }}>
+        {isLoggedIn ? (
+          <>
+            <button
+              onClick={() => setShowMenu((v) => !v)}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                display: 'flex', alignItems: 'center', gap: 6,
+              }}
+            >
+              {user.avatar ? (
+                <img
+                  src={user.avatar}
+                  alt={user.name}
+                  style={{ width: 30, height: 30, borderRadius: '50%', border: '2px solid var(--accent)', objectFit: 'cover' }}
+                />
+              ) : (
+                <div style={{
+                  width: 30, height: 30, borderRadius: '50%', background: 'var(--accent)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 13, fontWeight: 800, color: '#0a0a0a',
+                }}>
+                  {(user.name || user.email)[0].toUpperCase()}
+                </div>
+              )}
+            </button>
+
+            {showMenu && (
+              <>
+                <div
+                  style={{ position: 'fixed', inset: 0, zIndex: 149 }}
+                  onClick={() => setShowMenu(false)}
+                />
+                <div style={{
+                  position: 'absolute', top: 38, right: 0, zIndex: 150,
+                  background: 'var(--bg2)', border: '1px solid var(--border)',
+                  borderRadius: 10, padding: '8px 0', minWidth: 180,
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                }}>
+                  <div style={{ padding: '8px 16px 10px', borderBottom: '1px solid var(--border)' }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {user.name}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {user.email}
+                    </div>
+                    {isAdmin && (
+                      <div style={{ fontSize: 9, fontWeight: 800, color: 'var(--accent)', letterSpacing: '0.1em', textTransform: 'uppercase', marginTop: 4 }}>
+                        Admin
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => { setShowMenu(false); logout(); }}
+                    style={{
+                      width: '100%', padding: '10px 16px', background: 'none', border: 'none',
+                      cursor: 'pointer', textAlign: 'left', color: 'var(--red)',
+                      fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700,
+                      letterSpacing: '0.06em', textTransform: 'uppercase',
+                    }}
+                  >
+                    Sign Out
+                  </button>
+                </div>
+              </>
+            )}
+          </>
+        ) : (
+          <a
+            href={`${API}/api/auth/google`}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '5px 10px', borderRadius: 6,
+              background: 'var(--bg2)', border: '1px solid var(--border2)',
+              color: 'var(--text2)', textDecoration: 'none',
+              fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+              fontFamily: 'var(--font-display)',
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10,17 15,12 10,7"/><line x1="15" y1="12" x2="3" y2="12"/>
+            </svg>
+            Sign in
+          </a>
+        )}
+      </div>
+    </>
+  );
+}
+
+export default function App() {
+  const { loading, isAdmin } = useAuth();
+  const [tab, setTab] = useState('today');
+
+  const nav = isAdmin ? [...NAV, { id: 'admin', label: 'Admin' }] : NAV;
+
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+        <div className="spinner" />
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <AuthCorner />
       <div className="page">
         {tab === 'today' && <TodayPage />}
         {tab === 'splits' && <SplitsPage />}
         {tab === 'stats' && <StatsPage />}
         {tab === 'edit' && <EditPage />}
+        {tab === 'admin' && isAdmin && <AdminPage />}
       </div>
       <nav className="bottom-nav">
-        {NAV.map((n) => {
+        {nav.map((n) => {
           const Icon = ICONS[n.id];
           const active = tab === n.id;
           return (

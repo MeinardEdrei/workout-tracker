@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getSplits, createSplit, renameSplit, deleteSplit, activateSplit } from '../api';
+import { useStorage } from '../hooks/useStorage';
 
 function PlusIcon() {
   return (
@@ -10,7 +10,6 @@ function PlusIcon() {
     </svg>
   );
 }
-
 function CheckIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -21,23 +20,13 @@ function CheckIcon() {
 
 function SplitModal({ title, initial = '', onConfirm, onClose }) {
   const [value, setValue] = useState(initial);
-  function submit(e) {
-    e.preventDefault();
-    if (!value.trim()) return;
-    onConfirm(value.trim());
-  }
+  function submit(e) { e.preventDefault(); if (!value.trim()) return; onConfirm(value.trim()); }
   return (
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal">
         <div className="modal-title">{title}</div>
         <form onSubmit={submit}>
-          <input
-            className="input"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            placeholder="Split name…"
-            autoFocus
-          />
+          <input className="input" value={value} onChange={(e) => setValue(e.target.value)} placeholder="Split name…" autoFocus />
           <div className="modal-actions">
             <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
             <button type="submit" className="btn btn-accent">Save</button>
@@ -65,59 +54,31 @@ function ConfirmModal({ message, onConfirm, onClose }) {
 
 export default function SplitsPage() {
   const queryClient = useQueryClient();
+  const { storage, storageKey } = useStorage();
   const [modal, setModal] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
 
   const { data: splits = [], isLoading } = useQuery({
-    queryKey: ['splits'],
-    queryFn: getSplits,
+    queryKey: ['splits', storageKey],
+    queryFn: storage.getSplits,
   });
 
-  const invalidateSplits = () => queryClient.invalidateQueries({ queryKey: ['splits'] });
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['splits'] });
 
-  const activateMutation = useMutation({
-    mutationFn: (id) => activateSplit(id),
-    onSuccess: invalidateSplits,
-  });
-  const createMutation = useMutation({
-    mutationFn: (name) => createSplit(name),
-    onSuccess: invalidateSplits,
-  });
-  const renameMutation = useMutation({
-    mutationFn: ({ id, name }) => renameSplit(id, name),
-    onSuccess: invalidateSplits,
-  });
-  const deleteMutation = useMutation({
-    mutationFn: (id) => deleteSplit(id),
-    onSuccess: invalidateSplits,
-  });
+  const activateMutation = useMutation({ mutationFn: (id) => storage.activateSplit(id), onSuccess: invalidate });
+  const createMutation = useMutation({ mutationFn: (name) => storage.createSplit(name), onSuccess: invalidate });
+  const renameMutation = useMutation({ mutationFn: ({ id, name }) => storage.renameSplit(id, name), onSuccess: invalidate });
+  const deleteMutation = useMutation({ mutationFn: (id) => storage.deleteSplit(id), onSuccess: invalidate });
 
   async function handleActivate(split) {
     if (split.isActive || actionLoading) return;
     setActionLoading(split._id);
-    try {
-      await activateMutation.mutateAsync(split._id);
-    } finally {
-      setActionLoading(null);
-    }
+    try { await activateMutation.mutateAsync(split._id); }
+    finally { setActionLoading(null); }
   }
-
-  async function handleCreate(name) {
-    setModal(null);
-    await createMutation.mutateAsync(name);
-  }
-
-  async function handleRename(name) {
-    const id = modal.split._id;
-    setModal(null);
-    await renameMutation.mutateAsync({ id, name });
-  }
-
-  async function handleDelete() {
-    const id = modal.split._id;
-    setModal(null);
-    await deleteMutation.mutateAsync(id);
-  }
+  async function handleCreate(name) { setModal(null); await createMutation.mutateAsync(name); }
+  async function handleRename(name) { const id = modal.split._id; setModal(null); await renameMutation.mutateAsync({ id, name }); }
+  async function handleDelete() { const id = modal.split._id; setModal(null); await deleteMutation.mutateAsync(id); }
 
   return (
     <div>
@@ -141,62 +102,37 @@ export default function SplitsPage() {
             <div
               key={split._id}
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                padding: '14px 16px',
-                marginBottom: 10,
-                borderRadius: 10,
-                border: `1px solid ${split.isActive ? 'var(--accent)' : 'var(--border)'}`,
+                display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', marginBottom: 10,
+                borderRadius: 10, border: `1px solid ${split.isActive ? 'var(--accent)' : 'var(--border)'}`,
                 background: split.isActive ? 'rgba(232,255,90,0.04)' : 'var(--bg2)',
-                opacity: actionLoading === split._id ? 0.5 : 1,
-                transition: 'opacity 0.15s',
+                opacity: actionLoading === split._id ? 0.5 : 1, transition: 'opacity 0.15s',
               }}
             >
               <button
                 onClick={() => handleActivate(split)}
                 style={{
-                  width: 24,
-                  height: 24,
-                  borderRadius: '50%',
+                  width: 24, height: 24, borderRadius: '50%',
                   border: `2px solid ${split.isActive ? 'var(--accent)' : 'var(--border2)'}`,
                   background: split.isActive ? 'var(--accent)' : 'transparent',
-                  flexShrink: 0,
-                  cursor: split.isActive ? 'default' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  transition: 'all 0.15s',
+                  flexShrink: 0, cursor: split.isActive ? 'default' : 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s',
                 }}
               >
                 {split.isActive && <CheckIcon />}
               </button>
-
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div
-                  style={{
-                    fontSize: 18,
-                    fontWeight: 800,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.01em',
-                    color: split.isActive ? 'var(--accent)' : 'var(--text)',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                  }}
-                >
+                <div style={{
+                  fontSize: 18, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.01em',
+                  color: split.isActive ? 'var(--accent)' : 'var(--text)',
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                }}>
                   {split.name}
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 2, fontWeight: 500 }}>
                   {split.days?.length || 0} days
-                  {split.isActive && (
-                    <span style={{ marginLeft: 8, color: 'var(--accent)', fontWeight: 700, letterSpacing: '0.05em', fontSize: 10, textTransform: 'uppercase' }}>
-                      ● Active
-                    </span>
-                  )}
+                  {split.isActive && <span style={{ marginLeft: 8, color: 'var(--accent)', fontWeight: 700, letterSpacing: '0.05em', fontSize: 10, textTransform: 'uppercase' }}>● Active</span>}
                 </div>
               </div>
-
               <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
                 <button className="btn-icon" onClick={() => setModal({ type: 'rename', split })} title="Rename">
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -205,11 +141,8 @@ export default function SplitsPage() {
                 </button>
                 <button className="btn-icon" style={{ color: 'var(--red)' }} onClick={() => setModal({ type: 'delete', split })} title="Delete">
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="2,4 14,4" />
-                    <path d="M5 4V2h6v2" />
-                    <path d="M3 4l1 10h8l1-10" />
-                    <line x1="6.5" y1="7" x2="6.5" y2="11" />
-                    <line x1="9.5" y1="7" x2="9.5" y2="11" />
+                    <polyline points="2,4 14,4" /><path d="M5 4V2h6v2" /><path d="M3 4l1 10h8l1-10" />
+                    <line x1="6.5" y1="7" x2="6.5" y2="11" /><line x1="9.5" y1="7" x2="9.5" y2="11" />
                   </svg>
                 </button>
               </div>
@@ -218,24 +151,9 @@ export default function SplitsPage() {
         </div>
       )}
 
-      {modal?.type === 'add' && (
-        <SplitModal title="New Split" onConfirm={handleCreate} onClose={() => setModal(null)} />
-      )}
-      {modal?.type === 'rename' && (
-        <SplitModal
-          title="Rename Split"
-          initial={modal.split.name}
-          onConfirm={handleRename}
-          onClose={() => setModal(null)}
-        />
-      )}
-      {modal?.type === 'delete' && (
-        <ConfirmModal
-          message={`Delete "${modal.split.name}"? This cannot be undone.`}
-          onConfirm={handleDelete}
-          onClose={() => setModal(null)}
-        />
-      )}
+      {modal?.type === 'add' && <SplitModal title="New Split" onConfirm={handleCreate} onClose={() => setModal(null)} />}
+      {modal?.type === 'rename' && <SplitModal title="Rename Split" initial={modal.split.name} onConfirm={handleRename} onClose={() => setModal(null)} />}
+      {modal?.type === 'delete' && <ConfirmModal message={`Delete "${modal.split.name}"? This cannot be undone.`} onConfirm={handleDelete} onClose={() => setModal(null)} />}
     </div>
   );
 }

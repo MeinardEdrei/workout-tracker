@@ -1,6 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const Split = require('../models/Split');
+const { requireAuth } = require('../middleware/auth');
+
+router.use(requireAuth);
 
 function sortExercises(split) {
   const obj = split.toObject();
@@ -16,20 +19,18 @@ function sortExercisesInDay(day) {
 
 // ─── SPLITS ──────────────────────────────────────────────────────────────────
 
-// GET /api/splits
-router.get('/', async (_req, res) => {
+router.get('/', async (req, res) => {
   try {
-    const splits = await Split.find().sort({ createdAt: -1 });
+    const splits = await Split.find({ userId: req.userId }).sort({ createdAt: -1 });
     res.json(splits.map(sortExercises));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// POST /api/splits
 router.post('/', async (req, res) => {
   try {
-    const split = new Split({ name: req.body.name, days: [] });
+    const split = new Split({ name: req.body.name, days: [], userId: req.userId });
     await split.save();
     res.status(201).json(split);
   } catch (err) {
@@ -37,11 +38,10 @@ router.post('/', async (req, res) => {
   }
 });
 
-// PUT /api/splits/:id  (rename)
 router.put('/:id', async (req, res) => {
   try {
-    const split = await Split.findByIdAndUpdate(
-      req.params.id,
+    const split = await Split.findOneAndUpdate(
+      { _id: req.params.id, userId: req.userId },
       { name: req.body.name },
       { new: true, runValidators: true }
     );
@@ -52,10 +52,9 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/splits/:id
 router.delete('/:id', async (req, res) => {
   try {
-    const split = await Split.findByIdAndDelete(req.params.id);
+    const split = await Split.findOneAndDelete({ _id: req.params.id, userId: req.userId });
     if (!split) return res.status(404).json({ error: 'Split not found' });
     res.json({ message: 'Deleted' });
   } catch (err) {
@@ -63,12 +62,11 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// PATCH /api/splits/:id/activate
 router.patch('/:id/activate', async (req, res) => {
   try {
-    await Split.updateMany({}, { isActive: false });
-    const split = await Split.findByIdAndUpdate(
-      req.params.id,
+    await Split.updateMany({ userId: req.userId }, { isActive: false });
+    const split = await Split.findOneAndUpdate(
+      { _id: req.params.id, userId: req.userId },
       { isActive: true },
       { new: true }
     );
@@ -81,10 +79,9 @@ router.patch('/:id/activate', async (req, res) => {
 
 // ─── DAYS ─────────────────────────────────────────────────────────────────────
 
-// GET /api/splits/:id/days
 router.get('/:id/days', async (req, res) => {
   try {
-    const split = await Split.findById(req.params.id);
+    const split = await Split.findOne({ _id: req.params.id, userId: req.userId });
     if (!split) return res.status(404).json({ error: 'Split not found' });
     res.json(split.days.map(sortExercisesInDay));
   } catch (err) {
@@ -92,10 +89,9 @@ router.get('/:id/days', async (req, res) => {
   }
 });
 
-// POST /api/splits/:id/days
 router.post('/:id/days', async (req, res) => {
   try {
-    const split = await Split.findById(req.params.id);
+    const split = await Split.findOne({ _id: req.params.id, userId: req.userId });
     if (!split) return res.status(404).json({ error: 'Split not found' });
     split.days.push({ name: req.body.name, tag: req.body.tag || '', isRest: req.body.isRest || false, exercises: [] });
     await split.save();
@@ -105,10 +101,9 @@ router.post('/:id/days', async (req, res) => {
   }
 });
 
-// PUT /api/splits/:id/days/:dayId
 router.put('/:id/days/:dayId', async (req, res) => {
   try {
-    const split = await Split.findById(req.params.id);
+    const split = await Split.findOne({ _id: req.params.id, userId: req.userId });
     if (!split) return res.status(404).json({ error: 'Split not found' });
     const day = split.days.id(req.params.dayId);
     if (!day) return res.status(404).json({ error: 'Day not found' });
@@ -122,10 +117,9 @@ router.put('/:id/days/:dayId', async (req, res) => {
   }
 });
 
-// DELETE /api/splits/:id/days/:dayId
 router.delete('/:id/days/:dayId', async (req, res) => {
   try {
-    const split = await Split.findById(req.params.id);
+    const split = await Split.findOne({ _id: req.params.id, userId: req.userId });
     if (!split) return res.status(404).json({ error: 'Split not found' });
     split.days.pull(req.params.dayId);
     await split.save();
@@ -137,10 +131,9 @@ router.delete('/:id/days/:dayId', async (req, res) => {
 
 // ─── EXERCISES ────────────────────────────────────────────────────────────────
 
-// GET /api/splits/:id/days/:dayId/exercises
 router.get('/:id/days/:dayId/exercises', async (req, res) => {
   try {
-    const split = await Split.findById(req.params.id);
+    const split = await Split.findOne({ _id: req.params.id, userId: req.userId });
     if (!split) return res.status(404).json({ error: 'Split not found' });
     const day = split.days.id(req.params.dayId);
     if (!day) return res.status(404).json({ error: 'Day not found' });
@@ -151,10 +144,9 @@ router.get('/:id/days/:dayId/exercises', async (req, res) => {
   }
 });
 
-// POST /api/splits/:id/days/:dayId/exercises
 router.post('/:id/days/:dayId/exercises', async (req, res) => {
   try {
-    const split = await Split.findById(req.params.id);
+    const split = await Split.findOne({ _id: req.params.id, userId: req.userId });
     if (!split) return res.status(404).json({ error: 'Split not found' });
     const day = split.days.id(req.params.dayId);
     if (!day) return res.status(404).json({ error: 'Day not found' });
@@ -176,14 +168,14 @@ router.post('/:id/days/:dayId/exercises', async (req, res) => {
   }
 });
 
-// PATCH /api/splits/:id/days/:dayId/exercises/reorder  — must be before /:exId routes
+// PATCH reorder must come before /:exId routes
 router.patch('/:id/days/:dayId/exercises/reorder', async (req, res) => {
   try {
-    const split = await Split.findById(req.params.id);
+    const split = await Split.findOne({ _id: req.params.id, userId: req.userId });
     if (!split) return res.status(404).json({ error: 'Split not found' });
     const day = split.days.id(req.params.dayId);
     if (!day) return res.status(404).json({ error: 'Day not found' });
-    const updates = req.body.exercises; // [{ _id, order }]
+    const updates = req.body.exercises;
     if (!Array.isArray(updates)) return res.status(400).json({ error: 'exercises must be an array' });
     updates.forEach(({ _id, order }) => {
       const ex = day.exercises.id(_id);
@@ -196,10 +188,9 @@ router.patch('/:id/days/:dayId/exercises/reorder', async (req, res) => {
   }
 });
 
-// PUT /api/splits/:id/days/:dayId/exercises/:exId
 router.put('/:id/days/:dayId/exercises/:exId', async (req, res) => {
   try {
-    const split = await Split.findById(req.params.id);
+    const split = await Split.findOne({ _id: req.params.id, userId: req.userId });
     if (!split) return res.status(404).json({ error: 'Split not found' });
     const day = split.days.id(req.params.dayId);
     if (!day) return res.status(404).json({ error: 'Day not found' });
@@ -214,10 +205,9 @@ router.put('/:id/days/:dayId/exercises/:exId', async (req, res) => {
   }
 });
 
-// DELETE /api/splits/:id/days/:dayId/exercises/:exId
 router.delete('/:id/days/:dayId/exercises/:exId', async (req, res) => {
   try {
-    const split = await Split.findById(req.params.id);
+    const split = await Split.findOne({ _id: req.params.id, userId: req.userId });
     if (!split) return res.status(404).json({ error: 'Split not found' });
     const day = split.days.id(req.params.dayId);
     if (!day) return res.status(404).json({ error: 'Day not found' });
@@ -229,17 +219,16 @@ router.delete('/:id/days/:dayId/exercises/:exId', async (req, res) => {
   }
 });
 
-// PATCH /api/splits/:id/days/:dayId/exercises/:exId/toggle
 router.patch('/:id/days/:dayId/exercises/:exId/toggle', async (req, res) => {
   try {
-    const split = await Split.findById(req.params.id);
+    const split = await Split.findOne({ _id: req.params.id, userId: req.userId });
     if (!split) return res.status(404).json({ error: 'Split not found' });
     const day = split.days.id(req.params.dayId);
     if (!day) return res.status(404).json({ error: 'Day not found' });
     const ex = day.exercises.id(req.params.exId);
     if (!ex) return res.status(404).json({ error: 'Exercise not found' });
 
-    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const today = new Date().toISOString().slice(0, 10);
     if (ex.lastCheckedDate !== today) {
       ex.checked = false;
       ex.lastCheckedDate = today;

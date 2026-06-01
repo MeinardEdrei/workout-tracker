@@ -1,0 +1,86 @@
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+
+const AuthContext = createContext(null);
+
+const API = import.meta.env.VITE_API_URL || '';
+
+export function AuthProvider({ children }) {
+  const queryClient = useQueryClient();
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState(null); // 'not_allowed' | 'oauth_failed' | 'server_error'
+
+  const logout = useCallback(() => {
+    localStorage.removeItem('wt_token');
+    setUser(null);
+    queryClient.clear();
+    // Notify API layer
+    window.dispatchEvent(new Event('auth:logout'));
+  }, [queryClient]);
+
+  useEffect(() => {
+    // Handle OAuth redirect params
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+    const error = params.get('auth_error');
+
+    if (token || error) {
+      // Clean the URL immediately
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+
+    if (error) {
+      setAuthError(error);
+      setLoading(false);
+      return;
+    }
+
+    const storedToken = token || localStorage.getItem('wt_token');
+    if (token) localStorage.setItem('wt_token', token);
+
+    if (!storedToken) {
+      setLoading(false);
+      return;
+    }
+
+    // Validate token by fetching /api/auth/me
+    fetch(`${API}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${storedToken}` },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((u) => {
+        if (u) setUser(u);
+        else {
+          // Token invalid or expired
+          localStorage.removeItem('wt_token');
+        }
+      })
+      .catch(() => localStorage.removeItem('wt_token'))
+      .finally(() => setLoading(false));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Listen for 401 events from the API layer
+  useEffect(() => {
+    window.addEventListener('auth:logout', logout);
+    return () => window.removeEventListener('auth:logout', logout);
+  }, [logout]);
+
+  const isLoggedIn = !!user;
+  const isAdmin = isLoggedIn && user.email === import.meta.env.VITE_ADMIN_EMAIL;
+
+  const value = {
+    user,
+    loading,
+    isLoggedIn,
+    isGuest: !isLoggedIn,
+    isAdmin,
+    authError,
+    dismissAuthError: () => setAuthError(null),
+    logout,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export const useAuth = () => useContext(AuthContext);

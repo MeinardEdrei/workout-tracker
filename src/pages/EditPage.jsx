@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useStorage } from '../hooks/useStorage';
 import {
   DndContext,
   closestCenter,
@@ -14,11 +15,7 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import {
-  getSplits,
-  createDay, updateDay, deleteDay,
-  createExercise, updateExercise, deleteExercise, reorderExercises,
-} from '../api';
+// storage functions come from useStorage() hook inside each component
 
 /* ─── Icons ─── */
 function PlusIcon() {
@@ -168,6 +165,7 @@ function AddExerciseModal({ onConfirm, onClose }) {
 
 /* ─── Inline exercise editor ─── */
 function ExerciseEditRow({ ex, index, splitId, dayId, onUpdate, onDelete, dragHandleProps }) {
+  const { storage } = useStorage();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
     name: ex.name, sets: ex.sets, reps: ex.reps, weight: ex.weight, weightUnit: ex.weightUnit,
@@ -179,7 +177,7 @@ function ExerciseEditRow({ ex, index, splitId, dayId, onUpdate, onDelete, dragHa
   async function save() {
     setSaving(true);
     try {
-      const updated = await updateExercise(splitId, dayId, ex._id, {
+      const updated = await storage.updateExercise(splitId, dayId, ex._id, {
         ...form, sets: +form.sets, reps: +form.reps, weight: +form.weight,
       });
       onUpdate(updated);
@@ -276,6 +274,7 @@ function SortableExerciseEditRow({ ex, index, splitId, dayId, onUpdate, onDelete
 /* ─── Day editor panel ─── */
 function DayEditor({ day, split, onBack, onDayUpdated }) {
   const queryClient = useQueryClient();
+  const { storage } = useStorage();
   const [exercises, setExercises] = useState(day.exercises || []);
   const [modal, setModal] = useState(null);
   const [isRest, setIsRest] = useState(day.isRest);
@@ -298,7 +297,7 @@ function DayEditor({ day, split, onBack, onDayUpdated }) {
     setReorderError(null);
 
     try {
-      await reorderExercises(
+      await storage.reorderExercises(
         split._id,
         day._id,
         reordered.map((e, i) => ({ _id: e._id, order: i }))
@@ -314,7 +313,7 @@ function DayEditor({ day, split, onBack, onDayUpdated }) {
 
   async function handleAddExercise(data) {
     setModal(null);
-    const ex = await createExercise(split._id, day._id, data);
+    const ex = await storage.createExercise(split._id, day._id, data);
     setExercises((prev) => [...prev, ex]);
     queryClient.invalidateQueries({ queryKey: ['splits'] });
   }
@@ -325,7 +324,7 @@ function DayEditor({ day, split, onBack, onDayUpdated }) {
   }
 
   async function handleDeleteExercise(exId) {
-    await deleteExercise(split._id, day._id, exId);
+    await storage.deleteExercise(split._id, day._id, exId);
     setExercises((prev) => prev.filter((e) => e._id !== exId));
     queryClient.invalidateQueries({ queryKey: ['splits'] });
   }
@@ -333,14 +332,14 @@ function DayEditor({ day, split, onBack, onDayUpdated }) {
   async function toggleRest() {
     const next = !isRest;
     setIsRest(next);
-    const updated = await updateDay(split._id, day._id, { isRest: next });
+    const updated = await storage.updateDay(split._id, day._id, { isRest: next });
     onDayUpdated(updated);
     queryClient.invalidateQueries({ queryKey: ['splits'] });
   }
 
   async function handleRenameSave(name) {
     setModal(null);
-    const updated = await updateDay(split._id, day._id, { name });
+    const updated = await storage.updateDay(split._id, day._id, { name });
     onDayUpdated(updated);
     queryClient.invalidateQueries({ queryKey: ['splits'] });
   }
@@ -445,6 +444,7 @@ function DayEditor({ day, split, onBack, onDayUpdated }) {
 /* ─── Split editor panel ─── */
 function SplitEditor({ split, onBack, onSplitUpdated }) {
   const queryClient = useQueryClient();
+  const { storage } = useStorage();
   const [days, setDays] = useState(split.days || []);
   const [activeDayId, setActiveDayId] = useState(null);
   const [modal, setModal] = useState(null);
@@ -459,14 +459,14 @@ function SplitEditor({ split, onBack, onSplitUpdated }) {
 
   async function handleAddDay(data) {
     setModal(null);
-    const day = await createDay(split._id, data);
+    const day = await storage.createDay(split._id, data);
     setDays((prev) => [...prev, day]);
     queryClient.invalidateQueries({ queryKey: ['splits'] });
   }
 
   async function handleDeleteDay(day) {
     setModal(null);
-    await deleteDay(split._id, day._id);
+    await storage.deleteDay(split._id, day._id);
     setDays((prev) => prev.filter((d) => d._id !== day._id));
     queryClient.invalidateQueries({ queryKey: ['splits'] });
   }
@@ -554,11 +554,12 @@ function SplitEditor({ split, onBack, onSplitUpdated }) {
 
 /* ─── Edit Page root ─── */
 export default function EditPage() {
+  const { storage, storageKey } = useStorage();
   const [activeSplitId, setActiveSplitId] = useState(null);
 
   const { data: splits = [], isLoading } = useQuery({
-    queryKey: ['splits'],
-    queryFn: getSplits,
+    queryKey: ['splits', storageKey],
+    queryFn: storage.getSplits,
   });
 
   const activeSplit = splits.find((s) => s._id === activeSplitId);
