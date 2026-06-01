@@ -26,9 +26,9 @@ export function AuthProvider({ children }) {
     const code = params.get('code');
     const state = params.get('state');
 
-    // Clean the URL immediately for any recognized param
-    if (token || error || (code && state)) {
-      window.history.replaceState({}, '', window.location.pathname);
+    // Clean the URL for token/error params — safe because these come from our own redirect
+    if (token || error) {
+      try { window.history.replaceState({}, '', window.location.pathname); } catch {}
     }
 
     if (error) {
@@ -38,23 +38,22 @@ export function AuthProvider({ children }) {
     }
 
     // SW intercepted the OAuth callback and served index.html instead — exchange the
-    // code here in the client so sign-in works regardless of which SW version is active
+    // code here in the client so sign-in works regardless of which SW version is active.
+    // Do NOT call history.replaceState before the fetch — Firefox throws SecurityError
+    // after cross-origin redirects, which would halt the effect and leave loading=true.
     if (code && state) {
       fetch(`${API}/api/auth/google/exchange?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`)
-        .then((r) => (r.ok ? r.json() : Promise.reject(r.json())))
+        .then((r) => (r.ok ? r.json() : Promise.reject()))
         .then((data) => {
-          if (data.error) {
-            setAuthError(data.error);
-            return null;
-          }
           localStorage.setItem('wt_token', data.token);
-          return fetch(`${API}/api/auth/me`, {
-            headers: { Authorization: `Bearer ${data.token}` },
-          }).then((r) => (r.ok ? r.json() : null));
+          // Navigate to root: cleans the URL and lets the normal token path handle login
+          window.location.replace('/');
         })
-        .then((u) => { if (u) setUser(u); })
-        .catch(() => setAuthError('oauth_failed'))
-        .finally(() => setLoading(false));
+        .catch(() => {
+          try { window.history.replaceState({}, '', '/'); } catch {}
+          setAuthError('oauth_failed');
+          setLoading(false);
+        });
       return;
     }
 
