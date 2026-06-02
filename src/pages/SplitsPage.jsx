@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useStorage } from '../hooks/useStorage';
 import { useAuth } from '../context/AuthContext';
+import SplitShareModal from '../components/SplitShareModal';
 
 const API = import.meta.env.VITE_API_URL || '';
 
@@ -27,6 +28,15 @@ function InlineSpinner() {
       border: '1.5px solid currentColor', borderTopColor: 'transparent',
       borderRadius: '50%', animation: 'spin 0.6s linear infinite',
     }} />
+  );
+}
+function ShareIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+      <polyline points="16 6 12 2 8 6" />
+      <line x1="12" y1="2" x2="12" y2="15" />
+    </svg>
   );
 }
 
@@ -73,6 +83,7 @@ export default function SplitsPage() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
   const [signInFailed, setSignInFailed] = useState(false);
+  const [shareModal, setShareModal] = useState(null);
   const signInTimer = useRef(null);
 
   const { data: splits = [], isLoading } = useQuery({
@@ -311,6 +322,9 @@ export default function SplitsPage() {
                     <path d="M11.5 2.5a1.5 1.5 0 0 1 2.12 2.12L5 13.24l-3 .76.76-3L11.5 2.5Z" />
                   </svg>
                 </button>
+                <button className="btn-icon" onClick={() => setShareModal(split)} title="Share">
+                  <ShareIcon />
+                </button>
                 <button className="btn-icon" style={{ color: 'var(--red)' }} onClick={() => setModal({ type: 'delete', split })} title="Delete">
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="2,4 14,4" /><path d="M5 4V2h6v2" /><path d="M3 4l1 10h8l1-10" />
@@ -326,6 +340,7 @@ export default function SplitsPage() {
       {modal?.type === 'add' && <SplitModal title="New Split" onConfirm={handleCreate} onClose={() => setModal(null)} />}
       {modal?.type === 'rename' && <SplitModal title="Rename Split" initial={modal.split.name} onConfirm={handleRename} onClose={() => setModal(null)} />}
       {modal?.type === 'delete' && <ConfirmModal message={`Delete "${modal.split.name}"? This cannot be undone.`} onConfirm={handleDelete} onClose={() => setModal(null)} />}
+      {shareModal && <SplitShareModal split={shareModal} onClose={() => setShareModal(null)} />}
     </div>
   );
 }
