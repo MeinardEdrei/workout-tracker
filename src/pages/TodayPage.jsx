@@ -220,7 +220,7 @@ export default function TodayPage() {
     </div>
   );
 
-  const days = activeSplit.days || [];
+  const days = [...(activeSplit.days || [])].sort((a, b) => (a.dayOrder ?? 8) - (b.dayOrder ?? 8));
   const dayNameMatch = DAY_NAMES[TODAY_DOW].toLowerCase();
   let todayIndex = days.findIndex((d) => d.name.toLowerCase().startsWith(dayNameMatch));
   if (todayIndex === -1) todayIndex = TODAY_DOW % days.length;
