@@ -23,7 +23,7 @@ router.post('/fetch-image', async (req, res) => {
 
   try {
     const encoded = encodeURIComponent(exerciseName.toLowerCase().trim());
-    const url = `https://${apiHost}/exercises/name/${encoded}?limit=1&offset=0`;
+    const url = `https://${apiHost}/exercises/name/${encoded}?limit=10&offset=0`;
     console.log('[fetch-image] searching:', exerciseName, '→', url);
 
     const response = await fetch(url, {
@@ -51,14 +51,13 @@ router.post('/fetch-image', async (req, res) => {
       return res.json({ success: false, usePlaceholder: true });
     }
 
-    const exercise = data[0];
-    const imageUrl = exercise.gifUrl || (exercise.images && exercise.images[0]) || null;
-    console.log('[fetch-image] first result name:', exercise.name, '| gifUrl:', exercise.gifUrl ? 'present' : 'missing');
-
-    if (!imageUrl) {
+    const match = data.find(e => e.gifUrl || (e.images && e.images[0]));
+    console.log('[fetch-image] match with image:', match ? match.name : 'none');
+    if (!match) {
       return res.json({ success: false, usePlaceholder: true });
     }
 
+    const imageUrl = match.gifUrl || match.images[0];
     return res.json({ success: true, imageUrl });
   } catch (err) {
     console.error('[fetch-image] error:', err.message);
