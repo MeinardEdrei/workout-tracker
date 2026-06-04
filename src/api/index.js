@@ -58,6 +58,14 @@ export const toggleExercise = (splitId, dayId, exId) =>
 export const reorderExercises = (splitId, dayId, exercises) =>
   req('PATCH', `/api/splits/${splitId}/days/${dayId}/exercises/reorder`, { exercises });
 
+// ─── Exercise Images ──────────────────────────────────────────────────────────
+export const fetchExerciseImage = (exerciseName) =>
+  req('POST', '/api/exercises/fetch-image', { exerciseName });
+export const uploadExerciseImage = (splitId, dayId, exId, imageData) =>
+  req('POST', `/api/splits/${splitId}/days/${dayId}/exercises/${exId}/upload-image`, { imageData });
+export const clearExerciseImage = (splitId, dayId, exId) =>
+  req('PUT', `/api/splits/${splitId}/days/${dayId}/exercises/${exId}`, { imageUrl: '', imageSource: '', placeholderUsed: false });
+
 // ─── Logs ─────────────────────────────────────────────────────────────────────
 export const saveLog = (data) => req('POST', '/api/logs', data);
 export const getLogs = () => req('GET', '/api/logs');

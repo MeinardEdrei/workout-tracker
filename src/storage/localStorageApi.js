@@ -162,7 +162,7 @@ export function updateExercise(splitId, dayId, exId, data) {
   if (!day) return Promise.reject(new Error('Day not found'));
   const ex = (day.exercises || []).find((e) => e._id === exId);
   if (!ex) return Promise.reject(new Error('Exercise not found'));
-  ['name', 'sets', 'reps', 'weight', 'weightUnit', 'muscleTargets'].forEach((f) => {
+  ['name', 'sets', 'reps', 'weight', 'weightUnit', 'muscleTargets', 'untilFailure', 'imageUrl', 'imageSource', 'placeholderUsed'].forEach((f) => {
     if (data[f] !== undefined) ex[f] = data[f];
   });
   writeSplits(splits);
@@ -270,4 +270,15 @@ export function deleteLog(id) {
 export function clearLogs() {
   writeLogs([]);
   return Promise.resolve({ message: 'Cleared' });
+}
+
+// ─── Exercise Images (guest stubs — image features require sign-in) ──────────
+export function fetchExerciseImage() {
+  return Promise.resolve({ success: false, usePlaceholder: true });
+}
+export function uploadExerciseImage(splitId, dayId, exId, imageData) {
+  return updateExercise(splitId, dayId, exId, { imageUrl: imageData, imageSource: 'custom', placeholderUsed: false });
+}
+export function clearExerciseImage(splitId, dayId, exId) {
+  return updateExercise(splitId, dayId, exId, { imageUrl: '', imageSource: '', placeholderUsed: false });
 }

@@ -212,13 +212,44 @@ router.put('/:id/days/:dayId/exercises/:exId', async (req, res) => {
     if (!day) return res.status(404).json({ error: 'Day not found' });
     const ex = day.exercises.id(req.params.exId);
     if (!ex) return res.status(404).json({ error: 'Exercise not found' });
-    const fields = ['name', 'sets', 'reps', 'weight', 'weightUnit', 'muscleTargets', 'untilFailure'];
+    const fields = ['name', 'sets', 'reps', 'weight', 'weightUnit', 'muscleTargets', 'untilFailure', 'imageUrl', 'imageSource', 'placeholderUsed'];
     fields.forEach((f) => { if (req.body[f] !== undefined) ex[f] = req.body[f]; });
     if (req.body.untilFailure === true) ex.reps = null;
     await split.save();
     res.json(ex);
   } catch (err) {
     res.status(400).json({ error: err.message });
+  }
+});
+
+router.post('/:id/days/:dayId/exercises/:exId/upload-image', async (req, res) => {
+  try {
+    const { imageData } = req.body;
+    if (!imageData || typeof imageData !== 'string') {
+      return res.status(400).json({ error: 'imageData is required' });
+    }
+    if (!imageData.startsWith('data:image/')) {
+      return res.status(400).json({ error: 'Invalid image format. Must be a data URL.' });
+    }
+    // ~300 000 chars ≈ 225 KB decoded — keeps split documents manageable
+    if (imageData.length > 300000) {
+      return res.status(400).json({ error: 'Image too large. Max ~200KB.' });
+    }
+
+    const split = await Split.findOne({ _id: req.params.id, userId: req.userId });
+    if (!split) return res.status(404).json({ error: 'Split not found' });
+    const day = split.days.id(req.params.dayId);
+    if (!day) return res.status(404).json({ error: 'Day not found' });
+    const ex = day.exercises.id(req.params.exId);
+    if (!ex) return res.status(404).json({ error: 'Exercise not found' });
+
+    ex.imageUrl = imageData;
+    ex.imageSource = 'custom';
+    ex.placeholderUsed = false;
+    await split.save();
+    res.json(ex);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

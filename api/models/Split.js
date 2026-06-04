@@ -11,6 +11,9 @@ const ExerciseSchema = new mongoose.Schema({
   lastCheckedDate: { type: String, default: '' },
   order: { type: Number, default: 0 },
   muscleTargets: { type: [String], default: [] },
+  imageUrl: { type: String, default: '' },
+  imageSource: { type: String, enum: ['auto', 'custom', ''], default: '' },
+  placeholderUsed: { type: Boolean, default: false },
 });
 
 const DaySchema = new mongoose.Schema({

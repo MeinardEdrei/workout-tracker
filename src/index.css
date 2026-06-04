@@ -285,6 +285,7 @@ html, body, #root {
   margin: 40px auto;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+@keyframes scaleIn { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
 
 .back-row {
   display: flex;

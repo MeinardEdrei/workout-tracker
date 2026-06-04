@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useStorage } from '../hooks/useStorage';
 import { MusclePill, MUSCLE_COLORS } from '../components/MusclePill';
 import { capitalizeWords } from '../utils/textFormat';
+import ExerciseThumbnail from '../components/ExerciseThumbnail';
+import * as api from '../api/index.js';
 import {
   DndContext,
   closestCenter,
@@ -61,6 +63,47 @@ function GripIcon() {
       <line x1="3" y1="7" x2="11" y2="7" />
       <line x1="3" y1="10" x2="11" y2="10" />
     </svg>
+  );
+}
+
+function UploadIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 12H2a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-2"/>
+      <polyline points="8,2 8,10"/><polyline points="5,5 8,2 11,5"/>
+    </svg>
+  );
+}
+function SearchImageIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="6.5" cy="6.5" r="4.5"/><line x1="10" y1="10" x2="14" y2="14"/>
+      <line x1="5" y1="6.5" x2="8" y2="6.5"/><line x1="6.5" y1="5" x2="6.5" y2="8"/>
+    </svg>
+  );
+}
+function XSmallIcon() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/>
+    </svg>
+  );
+}
+
+/* ─── Toast notification ─── */
+function Toast({ message, type = 'error' }) {
+  if (!message) return null;
+  return (
+    <div style={{
+      position: 'fixed', bottom: 90, left: '50%', transform: 'translateX(-50%)',
+      background: type === 'error' ? 'var(--red)' : '#1e3a0f',
+      color: '#fff', padding: '10px 16px', borderRadius: 8,
+      fontSize: 13, fontWeight: 600, zIndex: 400, maxWidth: 300,
+      textAlign: 'center', pointerEvents: 'none',
+      animation: 'fadeIn 0.15s ease',
+    }}>
+      {message}
+    </div>
   );
 }
 
@@ -342,8 +385,18 @@ function ExerciseEditRow({ ex, index, splitId, dayId, onUpdate, onDelete, dragHa
     untilFailure: ex.untilFailure || false,
   });
   const [saving, setSaving] = useState(false);
+  const [imgFetching, setImgFetching] = useState(false);
+  const [imgUploading, setImgUploading] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [currentImageUrl, setCurrentImageUrl] = useState(ex.imageUrl || '');
+  const fileInputRef = useRef(null);
 
   function set(k, v) { setForm((f) => ({ ...f, [k]: v })); }
+
+  function showToast(msg, type = 'error') {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  }
 
   function toggleTarget(target) {
     set('muscleTargets',
@@ -366,6 +419,78 @@ function ExerciseEditRow({ ex, index, splitId, dayId, onUpdate, onDelete, dragHa
       setEditing(false);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleFetchImage() {
+    if (!form.name.trim()) return;
+    setImgFetching(true);
+    try {
+      const result = await api.fetchExerciseImage(form.name.trim());
+      if (result.success && result.imageUrl) {
+        const updated = await storage.updateExercise(splitId, dayId, ex._id, {
+          imageUrl: result.imageUrl, imageSource: 'auto', placeholderUsed: false,
+        });
+        setCurrentImageUrl(result.imageUrl);
+        onUpdate(updated);
+      } else {
+        showToast('No image found for this exercise');
+        await storage.updateExercise(splitId, dayId, ex._id, { placeholderUsed: true });
+      }
+    } catch {
+      showToast('Could not fetch image');
+    } finally {
+      setImgFetching(false);
+    }
+  }
+
+  async function handleFileUpload(e) {
+    const file = e.target.files?.[0];
+    if (!fileInputRef.current) return;
+    fileInputRef.current.value = '';
+    if (!file) return;
+
+    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowed.includes(file.type)) {
+      showToast('JPG, PNG, or WebP only');
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      showToast('Max file size is 2MB');
+      return;
+    }
+
+    setImgUploading(true);
+    try {
+      const imageData = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => resolve(ev.target.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      if (imageData.length > 300000) {
+        showToast('Image too large after encoding. Try a smaller image.');
+        return;
+      }
+
+      const updated = await api.uploadExerciseImage(splitId, dayId, ex._id, imageData);
+      setCurrentImageUrl(imageData);
+      onUpdate(updated);
+    } catch {
+      showToast('Upload failed. Try again.');
+    } finally {
+      setImgUploading(false);
+    }
+  }
+
+  async function handleClearImage() {
+    try {
+      const updated = await api.clearExerciseImage(splitId, dayId, ex._id);
+      setCurrentImageUrl('');
+      onUpdate(updated);
+    } catch {
+      showToast('Failed to remove image');
     }
   }
 
@@ -414,7 +539,7 @@ function ExerciseEditRow({ ex, index, splitId, dayId, onUpdate, onDelete, dragHa
 
           {/* Muscle target picker in inline editor */}
           <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>Targets (optional)</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 10 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 12 }}>
             {MUSCLE_OPTIONS.map((target) => (
               <PickerPill
                 key={target}
@@ -425,7 +550,71 @@ function ExerciseEditRow({ ex, index, splitId, dayId, onUpdate, onDelete, dragHa
               />
             ))}
           </div>
+
+          {/* Image manager */}
+          <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Exercise Image</div>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 10 }}>
+            <div style={{ position: 'relative', flexShrink: 0 }}>
+              <ExerciseThumbnail imageUrl={currentImageUrl} name={form.name} size={72} />
+              {currentImageUrl && (
+                <button
+                  type="button"
+                  onClick={handleClearImage}
+                  title="Remove image"
+                  style={{
+                    position: 'absolute', top: -6, right: -6,
+                    width: 20, height: 20, borderRadius: '50%',
+                    background: 'var(--red)', border: 'none',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer', color: '#fff',
+                  }}
+                >
+                  <XSmallIcon />
+                </button>
+              )}
+              {(imgFetching || imgUploading) && (
+                <div style={{
+                  position: 'absolute', inset: 0, borderRadius: 8,
+                  background: 'rgba(0,0,0,0.6)', display: 'flex',
+                  alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <span style={{ width: 20, height: 20, border: '2px solid var(--accent)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.6s linear infinite', display: 'inline-block' }} />
+                </div>
+              )}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 5, justifyContent: 'center' }}
+                onClick={handleFetchImage}
+                disabled={imgFetching || imgUploading}
+              >
+                <SearchImageIcon />
+                {imgFetching ? 'Searching…' : 'Fetch from library'}
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 5, justifyContent: 'center' }}
+                onClick={() => fileInputRef.current?.click()}
+                disabled={imgFetching || imgUploading}
+              >
+                <UploadIcon />
+                {imgUploading ? 'Uploading…' : currentImageUrl ? 'Replace image' : 'Upload custom'}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handleFileUpload}
+                style={{ display: 'none' }}
+              />
+            </div>
+          </div>
         </div>
+
+        {toast && <Toast message={toast.msg} type={toast.type} />}
 
         <div style={{ display: 'flex', gap: 6, padding: '10px 14px', borderTop: '1px solid var(--border)', position: 'sticky', bottom: 0, background: 'var(--bg3)' }}>
           <button className="btn btn-ghost" style={{ fontSize: 12, flex: 1 }} onClick={() => setEditing(false)} disabled={saving}>Cancel</button>
@@ -439,14 +628,15 @@ function ExerciseEditRow({ ex, index, splitId, dayId, onUpdate, onDelete, dragHa
   const repsLabel = ex.untilFailure ? 'Until Failure' : ex.reps > 0 ? `${ex.reps} reps` : 'max reps';
 
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '11px 14px', borderBottom: '1px solid var(--border)' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 14px', borderBottom: '1px solid var(--border)' }}>
       <div
         {...dragHandleProps}
-        style={{ color: 'var(--text3)', cursor: 'grab', flexShrink: 0, display: 'flex', alignItems: 'center', touchAction: 'none', padding: '2px 2px', paddingTop: 4 }}
+        style={{ color: 'var(--text3)', cursor: 'grab', flexShrink: 0, display: 'flex', alignItems: 'center', touchAction: 'none', padding: '2px 2px' }}
         title="Drag to reorder"
       >
         <GripIcon />
       </div>
+      <ExerciseThumbnail imageUrl={currentImageUrl} name={ex.name} size={48} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 15, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {index + 1}. {ex.name}

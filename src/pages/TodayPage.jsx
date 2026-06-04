@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useStorage } from '../hooks/useStorage';
 import DailyShareCard from '../components/DailyShareCard';
 import { MusclePill } from '../components/MusclePill';
+import ExerciseThumbnail from '../components/ExerciseThumbnail';
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const TODAY_DOW = new Date().getDay();
@@ -96,6 +97,7 @@ function ExerciseRow({ ex, index, splitId, dayId, onToggle }) {
       <label className={`checkbox-wrap ${effectiveChecked ? 'checked' : ''}`} onClick={() => !toggleMutation.isPending && toggleMutation.mutate()}>
         <div className="checkbox-box">{effectiveChecked && <CheckIcon />}</div>
       </label>
+      <ExerciseThumbnail imageUrl={ex.imageUrl} name={ex.name} size={56} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: '0.01em', textDecoration: effectiveChecked ? 'line-through' : 'none', color: effectiveChecked ? 'var(--text3)' : 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {index + 1}. {ex.name}

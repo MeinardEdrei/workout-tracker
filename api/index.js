@@ -7,6 +7,7 @@ const splitsRouter = require('./routes/splits');
 const logsRouter = require('./routes/logs');
 const authRouter = require('./routes/auth');
 const adminRouter = require('./routes/admin');
+const exercisesRouter = require('./routes/exercises');
 
 const app = express();
 
@@ -40,6 +41,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/splits', splitsRouter);
 app.use('/api/logs', logsRouter);
+app.use('/api/exercises', exercisesRouter);
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 
 if (process.env.NODE_ENV !== 'production') {
