@@ -1,6 +1,7 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useStorage } from '../hooks/useStorage';
+import * as api from '../api/index.js';
 import DailyShareCard from '../components/DailyShareCard';
 import { MusclePill } from '../components/MusclePill';
 import ExerciseThumbnail from '../components/ExerciseThumbnail';
@@ -123,6 +124,27 @@ function DayCard({ day, splitId, splitName, isToday, defaultOpen }) {
   const [completedLog, setCompletedLog] = useState(null);
   const [sharing, setSharing] = useState(false);
   const shareCardRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const needsImage = exercises.filter(e => !e.imageUrl && !e.placeholderUsed && e.name);
+    if (!needsImage.length) return;
+    (async () => {
+      for (const ex of needsImage) {
+        try {
+          const result = await api.fetchExerciseImage(ex.name.trim());
+          if (result.success && result.imageUrl) {
+            await storage.updateExercise(splitId, day._id, ex._id, {
+              imageUrl: result.imageUrl, imageSource: 'auto', placeholderUsed: false,
+            });
+            setExercises(prev => prev.map(e => e._id === ex._id ? { ...e, imageUrl: result.imageUrl } : e));
+          } else {
+            await storage.updateExercise(splitId, day._id, ex._id, { placeholderUsed: true });
+          }
+        } catch { /* silently skip */ }
+      }
+    })();
+  }, [open]);
 
   function handleToggle(updated) {
     setExercises((prev) => prev.map((e) => (e._id === updated._id ? updated : e)));
