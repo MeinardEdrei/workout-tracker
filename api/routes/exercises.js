@@ -24,6 +24,7 @@ router.post('/fetch-image', async (req, res) => {
   try {
     const encoded = encodeURIComponent(exerciseName.toLowerCase().trim());
     const url = `https://${apiHost}/exercises/name/${encoded}?limit=1&offset=0`;
+    console.log('[fetch-image] searching:', exerciseName, '→', url);
 
     const response = await fetch(url, {
       headers: {
@@ -32,20 +33,27 @@ router.post('/fetch-image', async (req, res) => {
       },
     });
 
+    console.log('[fetch-image] status:', response.status);
+
     if (response.status === 429) {
+      console.error('[fetch-image] rate limit hit');
       return res.json({ success: false, usePlaceholder: true, reason: 'rate_limit' });
     }
     if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      console.error('[fetch-image] non-ok response:', response.status, body.slice(0, 200));
       return res.json({ success: false, usePlaceholder: true });
     }
 
     const data = await response.json();
+    console.log('[fetch-image] results count:', Array.isArray(data) ? data.length : typeof data);
     if (!Array.isArray(data) || data.length === 0) {
       return res.json({ success: false, usePlaceholder: true });
     }
 
     const exercise = data[0];
     const imageUrl = exercise.gifUrl || (exercise.images && exercise.images[0]) || null;
+    console.log('[fetch-image] first result name:', exercise.name, '| gifUrl:', exercise.gifUrl ? 'present' : 'missing');
 
     if (!imageUrl) {
       return res.json({ success: false, usePlaceholder: true });
