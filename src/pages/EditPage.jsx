@@ -389,7 +389,20 @@ function ExerciseEditRow({ ex, index, splitId, dayId, onUpdate, onDelete, dragHa
   const [imgUploading, setImgUploading] = useState(false);
   const [toast, setToast] = useState(null);
   const [currentImageUrl, setCurrentImageUrl] = useState(ex.imageUrl || '');
+  const [suggestions, setSuggestions] = useState([]);
   const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    const q = form.name.trim();
+    if (q.length < 2) { setSuggestions([]); return; }
+    const timer = setTimeout(async () => {
+      try {
+        const results = await api.suggestExercises(q);
+        setSuggestions(results);
+      } catch { setSuggestions([]); }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [form.name]);
 
   useEffect(() => {
     if (!currentImageUrl && !ex.placeholderUsed && ex.name) {
@@ -504,13 +517,36 @@ function ExerciseEditRow({ ex, index, splitId, dayId, onUpdate, onDelete, dragHa
     return (
       <div style={{ background: 'var(--bg3)' }}>
         <div style={{ padding: '12px 14px 0' }}>
-          <input
-            className="input"
-            value={form.name}
-            onChange={(e) => set('name', capitalizeWords(e.target.value))}
-            style={{ marginBottom: 8, fontSize: 14 }}
-            autoFocus
-          />
+          <div style={{ position: 'relative', marginBottom: 8 }}>
+            <input
+              className="input"
+              value={form.name}
+              onChange={(e) => set('name', capitalizeWords(e.target.value))}
+              style={{ fontSize: 14, width: '100%' }}
+              autoFocus
+              autoComplete="off"
+            />
+            {suggestions.length > 0 && (
+              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, zIndex: 50, overflow: 'hidden', marginTop: 2 }}>
+                {suggestions.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      set('name', s);
+                      setSuggestions([]);
+                    }}
+                    style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: 13, background: 'none', border: 'none', color: 'var(--text)', cursor: 'pointer', borderBottom: '1px solid var(--border)' }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg3)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 80px', gap: 6, marginBottom: 6 }}>
             <div>
               <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 3 }}>sets</div>

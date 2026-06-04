@@ -61,6 +61,8 @@ export const reorderExercises = (splitId, dayId, exercises) =>
 // ─── Exercise Images ──────────────────────────────────────────────────────────
 export const fetchExerciseImage = (exerciseName) =>
   req('POST', '/api/exercises/fetch-image', { exerciseName });
+export const suggestExercises = (q) =>
+  req('GET', `/api/exercises/suggest?q=${encodeURIComponent(q)}`);
 export const uploadExerciseImage = (splitId, dayId, exId, imageData) =>
   req('POST', `/api/splits/${splitId}/days/${dayId}/exercises/${exId}/upload-image`, { imageData });
 export const clearExerciseImage = (splitId, dayId, exId) =>

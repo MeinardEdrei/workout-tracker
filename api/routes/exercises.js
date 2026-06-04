@@ -10,6 +10,32 @@ router.use(requireAuth);
 const FREE_EXERCISE_DB = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/dist/exercises.json';
 const FREE_EXERCISE_IMAGES = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises';
 
+let _exerciseCache = null;
+async function getExercises() {
+  if (_exerciseCache) return _exerciseCache;
+  const res = await fetch(FREE_EXERCISE_DB);
+  if (!res.ok) throw new Error('Failed to fetch exercise db');
+  _exerciseCache = await res.json();
+  return _exerciseCache;
+}
+
+// GET /api/exercises/suggest?q=bench
+router.get('/suggest', async (req, res) => {
+  const q = (req.query.q || '').toLowerCase().trim();
+  if (!q || q.length < 2) return res.json([]);
+  try {
+    const exercises = await getExercises();
+    const matches = exercises
+      .filter(e => e.name.toLowerCase().includes(q))
+      .slice(0, 8)
+      .map(e => e.name);
+    return res.json(matches);
+  } catch (err) {
+    console.error('[suggest] error:', err.message);
+    return res.json([]);
+  }
+});
+
 router.post('/fetch-image', async (req, res) => {
   const { exerciseName } = req.body;
   if (!exerciseName || typeof exerciseName !== 'string') {
@@ -19,13 +45,7 @@ router.post('/fetch-image', async (req, res) => {
   try {
     const query = exerciseName.toLowerCase().trim();
 
-    const dbRes = await fetch(FREE_EXERCISE_DB);
-    if (!dbRes.ok) {
-      console.error('[fetch-image] failed to fetch exercise db:', dbRes.status);
-      return res.json({ success: false, usePlaceholder: true });
-    }
-
-    const exercises = await dbRes.json();
+    const exercises = await getExercises();
 
     // Prefer exact name match, fall back to contains
     const exact = exercises.find(e => e.name.toLowerCase() === query);
