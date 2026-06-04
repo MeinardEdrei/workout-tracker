@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useStorage } from '../hooks/useStorage';
 import { MusclePill, MUSCLE_COLORS } from '../components/MusclePill';
@@ -390,6 +390,12 @@ function ExerciseEditRow({ ex, index, splitId, dayId, onUpdate, onDelete, dragHa
   const [toast, setToast] = useState(null);
   const [currentImageUrl, setCurrentImageUrl] = useState(ex.imageUrl || '');
   const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    if (!currentImageUrl && !ex.placeholderUsed && ex.name) {
+      handleFetchImage();
+    }
+  }, []);
 
   function set(k, v) { setForm((f) => ({ ...f, [k]: v })); }
 
