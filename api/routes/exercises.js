@@ -51,6 +51,8 @@ router.post('/fetch-image', async (req, res) => {
       return res.json({ success: false, usePlaceholder: true });
     }
 
+    console.log('[fetch-image] first result fields:', Object.keys(data[0]).join(', '));
+    console.log('[fetch-image] first result gifUrl value:', JSON.stringify(data[0].gifUrl));
     const match = data.find(e => e.gifUrl || (e.images && e.images[0]));
     console.log('[fetch-image] match with image:', match ? match.name : 'none');
     if (!match) {
