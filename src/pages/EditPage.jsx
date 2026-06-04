@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useStorage } from '../hooks/useStorage';
 import { MusclePill, MUSCLE_COLORS } from '../components/MusclePill';
+import { capitalizeWords } from '../utils/textFormat';
 import {
   DndContext,
   closestCenter,
@@ -237,7 +238,7 @@ function AddDayModal({ existingDays = [], onConfirm, onClose }) {
 }
 
 function AddExerciseModal({ onConfirm, onClose }) {
-  const [form, setForm] = useState({ name: '', sets: 3, reps: 10, weight: 0, weightUnit: 'kg', muscleTargets: [] });
+  const [form, setForm] = useState({ name: '', sets: 3, reps: 10, weight: 0, weightUnit: 'kg', muscleTargets: [], untilFailure: false });
   function set(k, v) { setForm((f) => ({ ...f, [k]: v })); }
 
   function toggleTarget(target) {
@@ -251,7 +252,13 @@ function AddExerciseModal({ onConfirm, onClose }) {
   function submit(e) {
     e.preventDefault();
     if (!form.name.trim()) return;
-    onConfirm({ ...form, name: form.name.trim(), sets: +form.sets, reps: +form.reps, weight: +form.weight });
+    onConfirm({
+      ...form,
+      name: form.name.trim(),
+      sets: +form.sets,
+      reps: form.untilFailure ? null : +form.reps,
+      weight: +form.weight,
+    });
   }
 
   return (
@@ -259,16 +266,40 @@ function AddExerciseModal({ onConfirm, onClose }) {
       <div className="modal" style={{ maxHeight: '88vh', overflowY: 'auto' }}>
         <div className="modal-title">New Exercise</div>
         <form onSubmit={submit}>
-          <input className="input" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Exercise name" autoFocus style={{ marginBottom: 12 }} />
+          <input
+            className="input"
+            value={form.name}
+            onChange={(e) => set('name', capitalizeWords(e.target.value))}
+            placeholder="Exercise name"
+            autoFocus
+            style={{ marginBottom: 12 }}
+          />
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
-            {['sets', 'reps', 'weight'].map((k) => (
-              <div key={k}>
-                <div style={{ ...LABEL, marginBottom: 4 }}>{k}</div>
-                <input className="input" type="number" min="0" step={k === 'weight' ? '0.5' : '1'} value={form[k]} onChange={(e) => set(k, e.target.value)} />
-              </div>
-            ))}
+            <div>
+              <div style={{ ...LABEL, marginBottom: 4 }}>sets</div>
+              <input className="input" type="number" min="0" step="1" value={form.sets} onChange={(e) => set('sets', e.target.value)} />
+            </div>
+            <div>
+              <div style={{ ...LABEL, marginBottom: 4 }}>reps</div>
+              {form.untilFailure ? (
+                <div style={{ height: 44, display: 'flex', alignItems: 'center', padding: '0 10px', borderRadius: 8, border: '1px solid var(--border2)', fontSize: 11, fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.05em' }}>TO FAILURE</div>
+              ) : (
+                <input className="input" type="number" min="0" step="1" value={form.reps} onChange={(e) => set('reps', e.target.value)} />
+              )}
+            </div>
+            <div>
+              <div style={{ ...LABEL, marginBottom: 4 }}>weight</div>
+              <input className="input" type="number" min="0" step="0.5" value={form.weight} onChange={(e) => set('weight', e.target.value)} />
+            </div>
           </div>
+
+          {/* Until failure toggle */}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+            <PickerPill label="Specific reps" selected={!form.untilFailure} onClick={() => set('untilFailure', false)} small />
+            <PickerPill label="Until failure" selected={form.untilFailure} onClick={() => set('untilFailure', true)} small />
+          </div>
+
           <select className="select" style={{ width: '100%', marginBottom: 16 }} value={form.weightUnit} onChange={(e) => set('weightUnit', e.target.value)}>
             <option value="kg">kg</option>
             <option value="lbs">lbs</option>
@@ -306,8 +337,9 @@ function ExerciseEditRow({ ex, index, splitId, dayId, onUpdate, onDelete, dragHa
   const { storage } = useStorage();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
-    name: ex.name, sets: ex.sets, reps: ex.reps, weight: ex.weight, weightUnit: ex.weightUnit,
+    name: ex.name, sets: ex.sets, reps: ex.reps ?? 10, weight: ex.weight, weightUnit: ex.weightUnit,
     muscleTargets: ex.muscleTargets || [],
+    untilFailure: ex.untilFailure || false,
   });
   const [saving, setSaving] = useState(false);
 
@@ -325,7 +357,10 @@ function ExerciseEditRow({ ex, index, splitId, dayId, onUpdate, onDelete, dragHa
     setSaving(true);
     try {
       const updated = await storage.updateExercise(splitId, dayId, ex._id, {
-        ...form, sets: +form.sets, reps: +form.reps, weight: +form.weight,
+        ...form,
+        sets: +form.sets,
+        reps: form.untilFailure ? null : +form.reps,
+        weight: +form.weight,
       });
       onUpdate(updated);
       setEditing(false);
@@ -336,54 +371,72 @@ function ExerciseEditRow({ ex, index, splitId, dayId, onUpdate, onDelete, dragHa
 
   if (editing) {
     return (
-      <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', background: 'var(--bg3)' }}>
-        <input
-          className="input"
-          value={form.name}
-          onChange={(e) => set('name', e.target.value)}
-          style={{ marginBottom: 8, fontSize: 14 }}
-          autoFocus
-        />
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 80px', gap: 6, marginBottom: 8 }}>
-          {['sets', 'reps', 'weight'].map((k) => (
-            <div key={k}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 3 }}>{k}</div>
-              <input className="input" type="number" min="0" step={k === 'weight' ? '0.5' : '1'} value={form[k]} onChange={(e) => set(k, e.target.value)} style={{ fontSize: 14, padding: '6px 8px' }} />
+      <div style={{ background: 'var(--bg3)' }}>
+        <div style={{ padding: '12px 14px 0' }}>
+          <input
+            className="input"
+            value={form.name}
+            onChange={(e) => set('name', capitalizeWords(e.target.value))}
+            style={{ marginBottom: 8, fontSize: 14 }}
+            autoFocus
+          />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 80px', gap: 6, marginBottom: 6 }}>
+            <div>
+              <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 3 }}>sets</div>
+              <input className="input" type="number" min="0" step="1" value={form.sets} onChange={(e) => set('sets', e.target.value)} style={{ fontSize: 14, padding: '6px 8px' }} />
             </div>
-          ))}
-          <div>
-            <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 3 }}>Unit</div>
-            <select className="select" value={form.weightUnit} onChange={(e) => set('weightUnit', e.target.value)} style={{ width: '100%', fontSize: 14, padding: '6px 8px' }}>
-              <option value="kg">kg</option>
-              <option value="lbs">lbs</option>
-            </select>
+            <div>
+              <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 3 }}>reps</div>
+              {form.untilFailure ? (
+                <div style={{ height: 36, display: 'flex', alignItems: 'center', padding: '0 8px', borderRadius: 8, border: '1px solid var(--border2)', fontSize: 10, fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.05em' }}>TO FAILURE</div>
+              ) : (
+                <input className="input" type="number" min="0" step="1" value={form.reps} onChange={(e) => set('reps', e.target.value)} style={{ fontSize: 14, padding: '6px 8px' }} />
+              )}
+            </div>
+            <div>
+              <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 3 }}>weight</div>
+              <input className="input" type="number" min="0" step="0.5" value={form.weight} onChange={(e) => set('weight', e.target.value)} style={{ fontSize: 14, padding: '6px 8px' }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 3 }}>Unit</div>
+              <select className="select" value={form.weightUnit} onChange={(e) => set('weightUnit', e.target.value)} style={{ width: '100%', fontSize: 14, padding: '6px 8px' }}>
+                <option value="kg">kg</option>
+                <option value="lbs">lbs</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Until failure toggle */}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+            <PickerPill label="Specific reps" selected={!form.untilFailure} onClick={() => set('untilFailure', false)} small />
+            <PickerPill label="Until failure" selected={form.untilFailure} onClick={() => set('untilFailure', true)} small />
+          </div>
+
+          {/* Muscle target picker in inline editor */}
+          <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>Targets (optional)</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 10 }}>
+            {MUSCLE_OPTIONS.map((target) => (
+              <PickerPill
+                key={target}
+                label={target}
+                selected={form.muscleTargets.includes(target)}
+                onClick={() => toggleTarget(target)}
+                small
+              />
+            ))}
           </div>
         </div>
 
-        {/* Muscle target picker in inline editor */}
-        <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>Targets (optional)</div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 10 }}>
-          {MUSCLE_OPTIONS.map((target) => (
-            <PickerPill
-              key={target}
-              label={target}
-              selected={form.muscleTargets.includes(target)}
-              onClick={() => toggleTarget(target)}
-              small
-            />
-          ))}
-        </div>
-
-        <div style={{ display: 'flex', gap: 6 }}>
-          <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setEditing(false)} disabled={saving}>Cancel</button>
-          <button className="btn btn-accent" style={{ fontSize: 12 }} onClick={save} disabled={saving}>Save</button>
+        <div style={{ display: 'flex', gap: 6, padding: '10px 14px', borderTop: '1px solid var(--border)', position: 'sticky', bottom: 0, background: 'var(--bg3)' }}>
+          <button className="btn btn-ghost" style={{ fontSize: 12, flex: 1 }} onClick={() => setEditing(false)} disabled={saving}>Cancel</button>
+          <button className="btn btn-accent" style={{ fontSize: 12, flex: 1 }} onClick={save} disabled={saving}>Save</button>
         </div>
       </div>
     );
   }
 
   const weightLabel = ex.weight > 0 ? ` · ${ex.weight}${ex.weightUnit}` : '';
-  const repsLabel = ex.reps > 0 ? `${ex.reps} reps` : 'max reps';
+  const repsLabel = ex.untilFailure ? 'Until Failure' : ex.reps > 0 ? `${ex.reps} reps` : 'max reps';
 
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '11px 14px', borderBottom: '1px solid var(--border)' }}>

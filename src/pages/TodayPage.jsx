@@ -89,7 +89,7 @@ function ExerciseRow({ ex, index, splitId, dayId, onToggle }) {
   });
 
   const weightLabel = ex.weight > 0 ? `${ex.weight}${ex.weightUnit}` : '';
-  const repsLabel = ex.reps > 0 ? `${ex.reps} reps` : 'max reps';
+  const repsLabel = ex.untilFailure ? 'Until Failure' : ex.reps > 0 ? `${ex.reps} reps` : 'max reps';
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: '1px solid var(--border)', opacity: toggleMutation.isPending ? 0.5 : 1, transition: 'opacity 0.15s' }}>

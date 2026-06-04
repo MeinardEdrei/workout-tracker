@@ -164,10 +164,12 @@ router.post('/:id/days/:dayId/exercises', async (req, res) => {
     const day = split.days.id(req.params.dayId);
     if (!day) return res.status(404).json({ error: 'Day not found' });
     const maxOrder = day.exercises.reduce((m, e) => Math.max(m, e.order ?? 0), -1);
+    const untilFailure = req.body.untilFailure === true;
     day.exercises.push({
       name: req.body.name,
       sets: req.body.sets || 3,
-      reps: req.body.reps || 10,
+      reps: untilFailure ? null : (req.body.reps ?? 10),
+      untilFailure,
       weight: req.body.weight || 0,
       weightUnit: req.body.weightUnit || 'kg',
       checked: false,
@@ -210,8 +212,9 @@ router.put('/:id/days/:dayId/exercises/:exId', async (req, res) => {
     if (!day) return res.status(404).json({ error: 'Day not found' });
     const ex = day.exercises.id(req.params.exId);
     if (!ex) return res.status(404).json({ error: 'Exercise not found' });
-    const fields = ['name', 'sets', 'reps', 'weight', 'weightUnit', 'muscleTargets'];
+    const fields = ['name', 'sets', 'reps', 'weight', 'weightUnit', 'muscleTargets', 'untilFailure'];
     fields.forEach((f) => { if (req.body[f] !== undefined) ex[f] = req.body[f]; });
+    if (req.body.untilFailure === true) ex.reps = null;
     await split.save();
     res.json(ex);
   } catch (err) {

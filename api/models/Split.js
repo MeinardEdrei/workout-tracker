@@ -4,6 +4,7 @@ const ExerciseSchema = new mongoose.Schema({
   name: { type: String, required: true },
   sets: { type: Number, default: 3 },
   reps: { type: Number, default: 10 },
+  untilFailure: { type: Boolean, default: false },
   weight: { type: Number, default: 0 },
   weightUnit: { type: String, enum: ['kg', 'lbs'], default: 'kg' },
   checked: { type: Boolean, default: false },
