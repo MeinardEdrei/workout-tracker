@@ -13,54 +13,46 @@ router.post('/fetch-image', async (req, res) => {
     return res.status(400).json({ error: 'exerciseName is required' });
   }
 
-  const apiKey = process.env.RAPIDAPI_KEY;
-  const apiHost = process.env.RAPIDAPI_HOST || 'exercisedb.p.rapidapi.com';
-
-  if (!apiKey) {
-    console.error('[fetch-image] RAPIDAPI_KEY not configured');
-    return res.json({ success: false, usePlaceholder: true });
-  }
-
   try {
-    const encoded = encodeURIComponent(exerciseName.toLowerCase().trim());
-    const url = `https://${apiHost}/exercises/name/${encoded}?limit=10&offset=0`;
-    console.log('[fetch-image] searching:', exerciseName, '→', url);
+    const term = encodeURIComponent(exerciseName.trim());
 
-    const response = await fetch(url, {
-      headers: {
-        'x-rapidapi-key': apiKey,
-        'x-rapidapi-host': apiHost,
-      },
-    });
-
-    console.log('[fetch-image] status:', response.status);
-
-    if (response.status === 429) {
-      console.error('[fetch-image] rate limit hit');
-      return res.json({ success: false, usePlaceholder: true, reason: 'rate_limit' });
-    }
-    if (!response.ok) {
-      const body = await response.text().catch(() => '');
-      console.error('[fetch-image] non-ok response:', response.status, body.slice(0, 200));
+    // Step 1: search wger for the exercise to get its base_id
+    const searchRes = await fetch(
+      `https://wger.de/api/v2/exercise/search/?term=${term}&language=english&format=json`
+    );
+    if (!searchRes.ok) {
+      console.error('[fetch-image] wger search failed:', searchRes.status);
       return res.json({ success: false, usePlaceholder: true });
     }
 
-    const data = await response.json();
-    console.log('[fetch-image] results count:', Array.isArray(data) ? data.length : typeof data);
-    if (!Array.isArray(data) || data.length === 0) {
+    const searchData = await searchRes.json();
+    const suggestions = searchData.suggestions || [];
+    console.log('[fetch-image] wger suggestions for', exerciseName, ':', suggestions.length);
+    if (!suggestions.length) {
       return res.json({ success: false, usePlaceholder: true });
     }
 
-    console.log('[fetch-image] first result fields:', Object.keys(data[0]).join(', '));
-    console.log('[fetch-image] first result gifUrl value:', JSON.stringify(data[0].gifUrl));
-    const match = data.find(e => e.gifUrl || (e.images && e.images[0]));
-    console.log('[fetch-image] match with image:', match ? match.name : 'none');
-    if (!match) {
-      return res.json({ success: false, usePlaceholder: true });
+    // Step 2: find first suggestion that has images
+    for (const suggestion of suggestions) {
+      const baseId = suggestion.data && suggestion.data.base_id;
+      if (!baseId) continue;
+
+      const imgRes = await fetch(
+        `https://wger.de/api/v2/exerciseimage/?exercise_base=${baseId}&format=json`
+      );
+      if (!imgRes.ok) continue;
+
+      const imgData = await imgRes.json();
+      const images = imgData.results || [];
+      if (!images.length) continue;
+
+      const imageUrl = images[0].image;
+      console.log('[fetch-image] found image for', suggestion.value, ':', imageUrl);
+      return res.json({ success: true, imageUrl });
     }
 
-    const imageUrl = match.gifUrl || match.images[0];
-    return res.json({ success: true, imageUrl });
+    console.log('[fetch-image] no images found across', suggestions.length, 'suggestions');
+    return res.json({ success: false, usePlaceholder: true });
   } catch (err) {
     console.error('[fetch-image] error:', err.message);
     return res.json({ success: false, usePlaceholder: true });
