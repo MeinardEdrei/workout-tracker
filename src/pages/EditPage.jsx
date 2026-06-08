@@ -23,7 +23,7 @@ import { CSS } from '@dnd-kit/utilities';
 /* ─── Constants ─── */
 const STANDARD_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday', 'Rest'];
 const DAY_SHORT = { Monday: 'MON', Tuesday: 'TUE', Wednesday: 'WED', Thursday: 'THU', Friday: 'FRI', Saturday: 'SAT', Sunday: 'SUN', Rest: 'REST' };
-const TAG_OPTIONS = ['Chest + Back', 'Shoulders + Back', 'Legs + Core', 'Push', 'Pull', 'Full Body', 'Rest', 'Cardio', 'Upper Body', 'Lower Body'];
+const TAG_OPTIONS = ['Chest + Back', 'Shoulders + Back', 'Legs + Core', 'Push', 'Pull', 'Full Body', 'Rest', 'Cardio', 'Upper Body', 'Lower Body', 'Upper A', 'Upper B', 'Lower A', 'Lower B'];
 const MUSCLE_OPTIONS = Object.keys(MUSCLE_COLORS);
 const LABEL = { fontSize: 10, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 };
 
@@ -167,6 +167,81 @@ function ConfirmModal({ message, onConfirm, onClose }) {
           <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
           <button className="btn btn-danger" onClick={onConfirm}>Delete</button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function EditDayModal({ initialName = '', initialTag = '', onConfirm, onClose }) {
+  const [name, setName] = useState(initialName);
+  const [selectedTag, setSelectedTag] = useState(TAG_OPTIONS.includes(initialTag) ? initialTag : null);
+  const [customTag, setCustomTag] = useState(TAG_OPTIONS.includes(initialTag) ? '' : initialTag);
+
+  const showTagSection = name.trim().toLowerCase() !== 'rest';
+
+  function submit(e) {
+    e.preventDefault();
+    if (!name.trim()) return;
+    const finalTag = showTagSection ? (customTag.trim() || selectedTag || '') : '';
+    onConfirm({ name: name.trim(), tag: finalTag });
+  }
+
+  return (
+    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxHeight: '88vh', overflowY: 'auto' }}>
+        <div className="modal-title">Edit Day</div>
+        <form onSubmit={submit}>
+          {/* Day Name */}
+          <div style={LABEL}>Name</div>
+          <input
+            className="input"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Day name…"
+            style={{ marginBottom: 16 }}
+            autoFocus
+          />
+
+          {/* Tag picker */}
+          {showTagSection && (
+            <>
+              <div style={LABEL}>Focus / Tag</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                {TAG_OPTIONS.map((tag) => (
+                  <PickerPill
+                    key={tag}
+                    label={tag}
+                    selected={selectedTag === tag}
+                    onClick={() => {
+                      setSelectedTag(selectedTag === tag ? null : tag);
+                      setCustomTag('');
+                    }}
+                  />
+                ))}
+              </div>
+
+              <div style={{ ...LABEL, marginBottom: 6 }}>
+                Custom focus tag{' '}
+                <span style={{ color: 'var(--text3)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span>
+              </div>
+              <input
+                className="input"
+                value={customTag}
+                onChange={(e) => {
+                  setCustomTag(e.target.value);
+                  setSelectedTag(null);
+                }}
+                placeholder="e.g. Quads & Calves"
+                style={{ marginBottom: 16 }}
+              />
+            </>
+          )}
+
+          <div className="modal-actions">
+            <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
+            <button type="submit" className="btn btn-accent" disabled={!name.trim()}>Save</button>
+          </div>
+        </form>
       </div>
     </div>
   );
@@ -789,9 +864,9 @@ function DayEditor({ day, split, onBack, onDayUpdated }) {
     queryClient.invalidateQueries({ queryKey: ['splits'] });
   }
 
-  async function handleRenameSave(name) {
+  async function handleEditDaySave({ name, tag }) {
     setModal(null);
-    const updated = await storage.updateDay(split._id, day._id, { name });
+    const updated = await storage.updateDay(split._id, day._id, { name, tag });
     onDayUpdated(updated);
     queryClient.invalidateQueries({ queryKey: ['splits'] });
   }
@@ -806,7 +881,7 @@ function DayEditor({ day, split, onBack, onDayUpdated }) {
             {day.tag && <div className="page-subtitle" style={{ marginTop: 2 }}>{day.tag}</div>}
           </div>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <button className="btn-icon" onClick={() => setModal('rename')} title="Rename day"><EditPencil /></button>
+            <button className="btn-icon" onClick={() => setModal('rename')} title="Edit day"><EditPencil /></button>
             <button
               className="btn"
               style={{
@@ -869,7 +944,7 @@ function DayEditor({ day, split, onBack, onDayUpdated }) {
       )}
 
       {modal === 'rename' && (
-        <TextModal title="Rename Day" initial={day.name} placeholder="Day name…" onConfirm={handleRenameSave} onClose={() => setModal(null)} />
+        <EditDayModal initialName={day.name} initialTag={day.tag} onConfirm={handleEditDaySave} onClose={() => setModal(null)} />
       )}
       {modal === 'addEx' && (
         <AddExerciseModal onConfirm={handleAddExercise} onClose={() => setModal(null)} />
