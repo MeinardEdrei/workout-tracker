@@ -113,8 +113,8 @@ function generateOnDeviceCritique(log, allLogs) {
   const pastLogs = (allLogs || []).filter(l => l._id !== log._id && l.date < log.date);
   
   let primaryFocus = "general fitness";
-  const lowerName = log.dayName.toLowerCase();
-  const lowerTag = log.dayTag.toLowerCase();
+  const lowerName = log.dayName ? log.dayName.toLowerCase() : log.name.toLowerCase();
+  const lowerTag = log.dayTag ? log.dayTag.toLowerCase() : (log.tag ? log.tag.toLowerCase() : '');
   if (lowerName.includes("push") || lowerTag.includes("chest") || lowerTag.includes("push")) {
     primaryFocus = "push muscles (chest, shoulders, triceps)";
   } else if (lowerName.includes("pull") || lowerTag.includes("back") || lowerTag.includes("pull")) {
@@ -153,7 +153,7 @@ function generateOnDeviceCritique(log, allLogs) {
     }
   });
 
-  const previousLog = pastLogs.find(l => l.dayName.toLowerCase() === log.dayName.toLowerCase());
+  const previousLog = pastLogs.find(l => (l.dayName || '').toLowerCase() === (log.dayName || log.name || '').toLowerCase());
   let volumeComparison = "";
   if (previousLog && previousLog.totalVolume) {
     const diff = totalVolume - previousLog.totalVolume;
@@ -174,7 +174,7 @@ function generateOnDeviceCritique(log, allLogs) {
   }
 
   return `### Workout Workload
-You trained **${primaryFocus}** doing **${numEx} exercises** with a total volume of **${totalVolume} kg**. ${volumeComparison}
+You trained **${primaryFocus}** doing **${numEx} exercises**${totalVolume > 0 ? ` with a total volume of **${totalVolume} kg**` : ''}. ${volumeComparison}
 
 ### Progression Highlights
 ${progressionTips.length > 0 ? progressionTips.map(tip => `- ${tip}`).join('\n') : '- No historical data found for these exercises yet. Keep logging to track your progression!'}
@@ -193,7 +193,7 @@ function generateLocalCoachResponse(query, log, allLogs) {
   if (q.includes("too much") || q.includes("volume") || q.includes("heavy") || q.includes("excessive")) {
     if (numEx > 5) {
       return `### Split Volume Critique
-Your split **${log.splitName}** has **${numEx} exercises** logged today. If you run this split 5-6 times a week, it borders on high volume.
+Your split **${log.splitName || 'workout'}** has **${numEx} exercises** logged today. If you run this split 5-6 times a week, it borders on high volume.
 - **Is it too much?** For most natural lifters, yes, if every single set is taken to absolute failure.
 - **Recommendation:** Reduce to 4-5 high-quality compound movements and focus on lifting heavier with intense effort on fewer sets.
 - **Tip:** Limit total working sets to 12-18 sets per workout to prevent central nervous system fatigue.`;
@@ -206,7 +206,7 @@ Your workout today is **${numEx} exercises**, which is a highly balanced volume!
   }
   
   if (q.includes("better") || q.includes("alternative") || q.includes("change") || q.includes("improve") || q.includes("optimize")) {
-    const splitName = log.splitName.toLowerCase();
+    const splitName = (log.splitName || '').toLowerCase();
     if (splitName.includes("ppl") || splitName.includes("push")) {
       return `### Better Alternatives for PPL
 Push/Pull/Legs is one of the best splits, but it requires high commitment (6 days/week to hit muscles 2x).
@@ -295,11 +295,11 @@ function DayCard({ day, splitId, splitName, isToday, defaultOpen, dateStr, logFo
   const shareCardRef = useRef(null);
 
   // AI-related state
-  const [critique, setCritique] = useState(() => logForDate ? (localStorage.getItem('ai_critique_' + logForDate._id) || '') : '');
+  const cacheKey = logForDate ? logForDate._id : day._id;
+  const [critique, setCritique] = useState(() => localStorage.getItem('ai_critique_' + cacheKey) || '');
   const [loadingAi, setLoadingAi] = useState(false);
   const [chatHistory, setChatHistory] = useState(() => {
-    if (!logForDate) return [];
-    const saved = localStorage.getItem('ai_chat_history_' + logForDate._id);
+    const saved = localStorage.getItem('ai_chat_history_' + cacheKey);
     return saved ? JSON.parse(saved) : [];
   });
   const [inputText, setInputText] = useState('');
@@ -310,17 +310,12 @@ function DayCard({ day, splitId, splitName, isToday, defaultOpen, dateStr, logFo
     setExercises(day.exercises || []);
   }, [day.exercises]);
 
-  // Sync critique and chat history when logForDate changes
+  // Sync critique and chat history when logForDate or day._id changes
   useEffect(() => {
-    if (logForDate) {
-      setCritique(localStorage.getItem('ai_critique_' + logForDate._id) || '');
-      const saved = localStorage.getItem('ai_chat_history_' + logForDate._id);
-      setChatHistory(saved ? JSON.parse(saved) : []);
-    } else {
-      setCritique('');
-      setChatHistory([]);
-    }
-  }, [logForDate]);
+    setCritique(localStorage.getItem('ai_critique_' + cacheKey) || '');
+    const saved = localStorage.getItem('ai_chat_history_' + cacheKey);
+    setChatHistory(saved ? JSON.parse(saved) : []);
+  }, [logForDate, day._id]);
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -398,15 +393,15 @@ function DayCard({ day, splitId, splitName, isToday, defaultOpen, dateStr, logFo
   }
 
   async function handleAiCritique() {
-    if (!logForDate) return;
     setLoadingAi(true);
 
-    const promptText = `You are a professional strength coach. Analyze the user's workout and provide a brief critique and actionable recommendation for their next workout. Keep it under 100 words and format with clear markdown bullet points.
+    const targetExs = logForDate ? logForDate.exercises : (day.exercises || []);
+    const promptText = `You are a professional strength coach. Analyze the user's ${logForDate ? 'completed' : 'planned'} workout split and today's day, and provide a brief critique and actionable recommendation for this session. Keep it under 100 words and format with clear markdown bullet points.
 
-Workout split: ${logForDate.splitName}
-Workout day: ${logForDate.dayName} (${logForDate.dayTag})
-Exercises completed:
-${logForDate.exercises.map(e => `- ${e.name}: ${e.sets} sets x ${e.reps} reps @ ${e.weight}${e.weightUnit}`).join('\n')}`;
+Workout split: ${splitName}
+Workout day: ${day.name} (${day.tag || 'No tag'})
+Exercises ${logForDate ? 'completed' : 'planned'}:
+${targetExs.map(e => `- ${e.name}: ${e.sets} sets x ${e.reps} reps ${e.weight ? `@ ${e.weight}${e.weightUnit}` : ''}`).join('\n')}`;
 
     try {
       let result = '';
@@ -432,17 +427,17 @@ ${logForDate.exercises.map(e => `- ${e.name}: ${e.sets} sets x ${e.reps} reps @ 
 
       if (result && result.trim()) {
         const withTag = result.trim() + '\n\n*✨ Powered by Gemini Nano (Offline)*';
-        localStorage.setItem('ai_critique_' + logForDate._id, withTag);
+        localStorage.setItem('ai_critique_' + cacheKey, withTag);
         setCritique(withTag);
       } else {
-        const localResult = generateOnDeviceCritique(logForDate, logs) + '\n\n*✨ Powered by Local Analysis Engine*';
-        localStorage.setItem('ai_critique_' + logForDate._id, localResult);
+        const localResult = generateOnDeviceCritique(logForDate || { ...day, date: dateStr, splitName }, logs) + '\n\n*✨ Powered by Local Analysis Engine*';
+        localStorage.setItem('ai_critique_' + cacheKey, localResult);
         setCritique(localResult);
       }
     } catch (err) {
       console.error("Local AI failed, falling back to local analysis:", err);
-      const localResult = generateOnDeviceCritique(logForDate, logs) + '\n\n*✨ Powered by Local Analysis Engine*';
-      localStorage.setItem('ai_critique_' + logForDate._id, localResult);
+      const localResult = generateOnDeviceCritique(logForDate || { ...day, date: dateStr, splitName }, logs) + '\n\n*✨ Powered by Local Analysis Engine*';
+      localStorage.setItem('ai_critique_' + cacheKey, localResult);
       setCritique(localResult);
     } finally {
       setLoadingAi(false);
@@ -451,7 +446,7 @@ ${logForDate.exercises.map(e => `- ${e.name}: ${e.sets} sets x ${e.reps} reps @ 
 
   async function handleSendReply(textToSend) {
     const text = textToSend || inputText;
-    if (!text.trim() || !logForDate || loadingAi) return;
+    if (!text.trim() || loadingAi) return;
 
     const updatedHistory = [...chatHistory, { sender: 'user', text: text.trim() }];
     setChatHistory(updatedHistory);
@@ -459,6 +454,7 @@ ${logForDate.exercises.map(e => `- ${e.name}: ${e.sets} sets x ${e.reps} reps @ 
     setLoadingAi(true);
 
     const isLocalEngine = critique.includes('Local Analysis Engine');
+    const targetExs = logForDate ? logForDate.exercises : (day.exercises || []);
 
     try {
       let reply = '';
@@ -466,9 +462,9 @@ ${logForDate.exercises.map(e => `- ${e.name}: ${e.sets} sets x ${e.reps} reps @ 
         // Chat using Chrome Gemini Nano Prompt API
         const promptText = `You are a professional strength coach. Answer the user's question about their workout or split. Keep your answer under 120 words and format with clear markdown bullet points.
 
-Workout split: ${logForDate.splitName}
-Workout day: ${logForDate.dayName} (${logForDate.dayTag})
-Exercises done: ${logForDate.exercises.map(e => e.name).join(', ')}
+Workout split: ${splitName}
+Workout day: ${day.name} (${day.tag || 'No tag'})
+Exercises: ${targetExs.map(e => e.name).join(', ')}
 
 Chat History:
 Coach: ${critique.replace(/\*✨.*\*/, '')}
@@ -494,20 +490,20 @@ Coach:`;
       if (reply && reply.trim()) {
         const finalHistory = [...updatedHistory, { sender: 'coach', text: reply.trim() }];
         setChatHistory(finalHistory);
-        localStorage.setItem('ai_chat_history_' + logForDate._id, JSON.stringify(finalHistory));
+        localStorage.setItem('ai_chat_history_' + cacheKey, JSON.stringify(finalHistory));
       } else {
         // Fallback to local heuristic responder
-        const localReply = generateLocalCoachResponse(text.trim(), logForDate, logs);
+        const localReply = generateLocalCoachResponse(text.trim(), logForDate || { ...day, date: dateStr, splitName }, logs);
         const finalHistory = [...updatedHistory, { sender: 'coach', text: localReply }];
         setChatHistory(finalHistory);
-        localStorage.setItem('ai_chat_history_' + logForDate._id, JSON.stringify(finalHistory));
+        localStorage.setItem('ai_chat_history_' + cacheKey, JSON.stringify(finalHistory));
       }
     } catch (err) {
       console.error(err);
-      const localReply = generateLocalCoachResponse(text.trim(), logForDate, logs);
+      const localReply = generateLocalCoachResponse(text.trim(), logForDate || { ...day, date: dateStr, splitName }, logs);
       const finalHistory = [...updatedHistory, { sender: 'coach', text: localReply }];
       setChatHistory(finalHistory);
-      localStorage.setItem('ai_chat_history_' + logForDate._id, JSON.stringify(finalHistory));
+      localStorage.setItem('ai_chat_history_' + cacheKey, JSON.stringify(finalHistory));
     } finally {
       setLoadingAi(false);
     }
@@ -572,230 +568,227 @@ Coach:`;
               </div>
             )}
             
-            {/* Completed Workout section details */}
-            {isCompleted && (
-              <>
-                {/* AI Chat / Critique block */}
-                {critique ? (
-                  <div style={{
-                    margin: '12px 16px',
-                    padding: '16px',
-                    background: 'linear-gradient(135deg, rgba(232,255,90,0.03) 0%, rgba(0,0,0,0.4) 100%)',
-                    border: '1px solid rgba(232,255,90,0.15)',
-                    borderRadius: 8,
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-                    position: 'relative'
-                  }}>
-                    <div style={{
-                      position: 'absolute',
-                      top: -20,
-                      right: -20,
-                      width: 60,
-                      height: 60,
-                      background: 'var(--accent)',
-                      opacity: 0.05,
-                      filter: 'blur(20px)',
-                      borderRadius: '50%',
-                      pointerEvents: 'none'
-                    }} />
+            {/* AI Chat / Critique block */}
+            {critique ? (
+              <div style={{
+                margin: '12px 16px',
+                padding: '16px',
+                background: 'linear-gradient(135deg, rgba(232,255,90,0.03) 0%, rgba(0,0,0,0.4) 100%)',
+                border: '1px solid rgba(232,255,90,0.15)',
+                borderRadius: 8,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                position: 'relative'
+              }}>
+                <div style={{
+                  position: 'absolute',
+                  top: -20,
+                  right: -20,
+                  width: 60,
+                  height: 60,
+                  background: 'var(--accent)',
+                  opacity: 0.05,
+                  filter: 'blur(20px)',
+                  borderRadius: '50%',
+                  pointerEvents: 'none'
+                }} />
 
-                    {/* Chat Header */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, borderBottom: '1px solid rgba(232,255,90,0.1)', paddingBottom: 6 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ fontSize: 16 }}>✨</span>
-                        <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>AI Coach Chat</span>
-                      </div>
-                      <button 
-                        onClick={handleAiCritique} 
-                        disabled={loadingAi}
-                        style={{ background: 'none', border: 'none', color: 'var(--text3)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', cursor: 'pointer', transition: 'color 0.15s' }}
-                        onMouseEnter={(e) => e.target.style.color = 'var(--accent)'}
-                        onMouseLeave={(e) => e.target.style.color = 'var(--text3)'}
-                      >
-                        {loadingAi ? 'Analyzing…' : '🔄 Restart'}
-                      </button>
-                    </div>
-
-                    {/* Messages list */}
-                    <div style={{ maxHeight: 300, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 12, paddingRight: 4 }}>
-                      {chatMessages.map((msg, idx) => {
-                        const isUser = msg.sender === 'user';
-                        return (
-                          <div 
-                            key={idx}
-                            style={{
-                              alignSelf: isUser ? 'flex-end' : 'flex-start',
-                              background: isUser ? 'var(--bg4)' : 'rgba(255,255,255,0.01)',
-                              border: isUser ? '1px solid var(--border2)' : '1px solid rgba(255,255,255,0.04)',
-                              padding: '10px 14px',
-                              borderRadius: isUser ? '12px 12px 0 12px' : '12px 12px 12px 0',
-                              maxWidth: '88%',
-                              fontSize: 13,
-                              boxShadow: '0 2px 6px rgba(0,0,0,0.1)'
-                            }}
-                          >
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                              {renderMarkdown(msg.text)}
-                            </div>
-                          </div>
-                        );
-                      })}
-                      
-                      {loadingAi && (
-                        <div style={{
-                          alignSelf: 'flex-start',
-                          background: 'rgba(255,255,255,0.01)',
-                          border: '1px solid rgba(255,255,255,0.04)',
-                          padding: '10px 14px',
-                          borderRadius: '12px 12px 12px 0',
-                          fontSize: 13,
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 8,
-                          color: 'var(--text3)'
-                        }}>
-                          <span style={{
-                            display: 'inline-block', width: 8, height: 8,
-                            border: '1.5px solid var(--text3)', borderTopColor: 'transparent',
-                            borderRadius: '50%', animation: 'spin 0.6s linear infinite'
-                          }} />
-                          Coach is writing...
-                        </div>
-                      )}
-                      
-                      <div ref={messagesEndRef} />
-                    </div>
-
-                    {/* Quick Replies presets */}
-                    {!loadingAi && (
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-                        <button 
-                          onClick={() => handleSendReply("Is my split too much volume?")}
-                          style={{ background: 'rgba(232,255,90,0.05)', border: '1px solid rgba(232,255,90,0.15)', borderRadius: 12, padding: '4px 10px', fontSize: 11, color: 'var(--accent)', cursor: 'pointer', transition: 'all 0.15s' }}
-                          onMouseEnter={(e) => { e.target.style.background = 'rgba(232,255,90,0.1)'; }}
-                          onMouseLeave={(e) => { e.target.style.background = 'rgba(232,255,90,0.05)'; }}
-                        >
-                          Is this split too much?
-                        </button>
-                        <button 
-                          onClick={() => handleSendReply("What is a better alternative for this split?")}
-                          style={{ background: 'rgba(232,255,90,0.05)', border: '1px solid rgba(232,255,90,0.15)', borderRadius: 12, padding: '4px 10px', fontSize: 11, color: 'var(--accent)', cursor: 'pointer', transition: 'all 0.15s' }}
-                          onMouseEnter={(e) => { e.target.style.background = 'rgba(232,255,90,0.1)'; }}
-                          onMouseLeave={(e) => { e.target.style.background = 'rgba(232,255,90,0.05)'; }}
-                        >
-                          What's a better split?
-                        </button>
-                        <button 
-                          onClick={() => handleSendReply("What do others usually do for this type of split?")}
-                          style={{ background: 'rgba(232,255,90,0.05)', border: '1px solid rgba(232,255,90,0.15)', borderRadius: 12, padding: '4px 10px', fontSize: 11, color: 'var(--accent)', cursor: 'pointer', transition: 'all 0.15s' }}
-                          onMouseEnter={(e) => { e.target.style.background = 'rgba(232,255,90,0.1)'; }}
-                          onMouseLeave={(e) => { e.target.style.background = 'rgba(232,255,90,0.05)'; }}
-                        >
-                          What do others do?
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Chat Input Field */}
-                    <form 
-                      onSubmit={(e) => { e.preventDefault(); handleSendReply(); }}
-                      style={{ display: 'flex', gap: 6 }}
-                    >
-                      <input 
-                        type="text"
-                        value={inputText}
-                        onChange={(e) => setInputText(e.target.value)}
-                        placeholder="Ask follow-up questions..."
-                        style={{
-                          flex: 1,
-                          background: 'var(--bg3)',
-                          border: '1px solid var(--border)',
-                          borderRadius: 6,
-                          color: 'var(--text)',
-                          padding: '8px 12px',
-                          fontSize: 13,
-                          outline: 'none'
-                        }}
-                      />
-                      <button 
-                        type="submit" 
-                        disabled={!inputText.trim() || loadingAi}
-                        style={{
-                          padding: '8px 14px',
-                          background: 'var(--accent)',
-                          border: 'none',
-                          borderRadius: 6,
-                          color: '#0a0a0a',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          fontSize: 13,
-                          opacity: (!inputText.trim() || loadingAi) ? 0.5 : 1
-                        }}
-                      >
-                        Send
-                      </button>
-                    </form>
+                {/* Chat Header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, borderBottom: '1px solid rgba(232,255,90,0.1)', paddingBottom: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 16 }}>✨</span>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>AI Coach Chat</span>
                   </div>
-                ) : (
-                  <div style={{ padding: '12px 16px 0' }}>
+                  <button 
+                    onClick={handleAiCritique} 
+                    disabled={loadingAi}
+                    style={{ background: 'none', border: 'none', color: 'var(--text3)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', cursor: 'pointer', transition: 'color 0.15s' }}
+                    onMouseEnter={(e) => e.target.style.color = 'var(--accent)'}
+                    onMouseLeave={(e) => e.target.style.color = 'var(--text3)'}
+                  >
+                    {loadingAi ? 'Analyzing…' : '🔄 Restart'}
+                  </button>
+                </div>
+
+                {/* Messages list */}
+                <div style={{ maxHeight: 300, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 12, paddingRight: 4 }}>
+                  {chatMessages.map((msg, idx) => {
+                    const isUser = msg.sender === 'user';
+                    return (
+                      <div 
+                        key={idx}
+                        style={{
+                          alignSelf: isUser ? 'flex-end' : 'flex-start',
+                          background: isUser ? 'var(--bg4)' : 'rgba(255,255,255,0.01)',
+                          border: isUser ? '1px solid var(--border2)' : '1px solid rgba(255,255,255,0.04)',
+                          padding: '10px 14px',
+                          borderRadius: isUser ? '12px 12px 0 12px' : '12px 12px 12px 0',
+                          maxWidth: '88%',
+                          fontSize: 13,
+                          boxShadow: '0 2px 6px rgba(0,0,0,0.1)'
+                        }}
+                      >
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          {renderMarkdown(msg.text)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  
+                  {loadingAi && (
+                    <div style={{
+                      alignSelf: 'flex-start',
+                      background: 'rgba(255,255,255,0.01)',
+                      border: '1px solid rgba(255,255,255,0.04)',
+                      padding: '10px 14px',
+                      borderRadius: '12px 12px 12px 0',
+                      fontSize: 13,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      color: 'var(--text3)'
+                    }}>
+                      <span style={{
+                        display: 'inline-block', width: 8, height: 8,
+                        border: '1.5px solid var(--text3)', borderTopColor: 'transparent',
+                        borderRadius: '50%', animation: 'spin 0.6s linear infinite'
+                      }} />
+                      Coach is writing...
+                    </div>
+                  )}
+                  
+                  <div ref={messagesEndRef} />
+                </div>
+
+                {/* Quick Replies presets */}
+                {!loadingAi && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
                     <button 
-                      className="btn" 
-                      onClick={handleAiCritique}
-                      disabled={loadingAi}
-                      style={{
-                        width: '100%',
-                        background: 'rgba(232,255,90,0.08)',
-                        color: 'var(--accent)',
-                        border: '1px solid rgba(232,255,90,0.2)',
-                        fontSize: 13,
-                        padding: '10px 12px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 6,
-                        cursor: 'pointer',
-                        borderRadius: 8,
-                        transition: 'all 0.2s'
-                      }}
-                      onMouseEnter={(e) => { e.target.style.background = 'rgba(232,255,90,0.15)'; e.target.style.borderColor = 'var(--accent)'; }}
-                      onMouseLeave={(e) => { e.target.style.background = 'rgba(232,255,90,0.08)'; e.target.style.borderColor = 'rgba(232,255,90,0.2)'; }}
+                      onClick={() => handleSendReply("Is my split too much volume?")}
+                      style={{ background: 'rgba(232,255,90,0.05)', border: '1px solid rgba(232,255,90,0.15)', borderRadius: 12, padding: '4px 10px', fontSize: 11, color: 'var(--accent)', cursor: 'pointer', transition: 'all 0.15s' }}
+                      onMouseEnter={(e) => { e.target.style.background = 'rgba(232,255,90,0.1)'; }}
+                      onMouseLeave={(e) => { e.target.style.background = 'rgba(232,255,90,0.05)'; }}
                     >
-                      {loadingAi ? (
-                        <>
-                          <span style={{
-                            display: 'inline-block', width: 12, height: 12, marginRight: 6,
-                            border: '1.5px solid var(--accent)', borderTopColor: 'transparent',
-                            borderRadius: '50%', animation: 'spin 0.6s linear infinite'
-                          }} />
-                          Analyzing workout locally...
-                        </>
-                      ) : (
-                        <>
-                          <span>✨</span> Get AI Coach Critique & Insights
-                        </>
-                      )}
+                      Is this split too much?
+                    </button>
+                    <button 
+                      onClick={() => handleSendReply("What is a better alternative for this split?")}
+                      style={{ background: 'rgba(232,255,90,0.05)', border: '1px solid rgba(232,255,90,0.15)', borderRadius: 12, padding: '4px 10px', fontSize: 11, color: 'var(--accent)', cursor: 'pointer', transition: 'all 0.15s' }}
+                      onMouseEnter={(e) => { e.target.style.background = 'rgba(232,255,90,0.1)'; }}
+                      onMouseLeave={(e) => { e.target.style.background = 'rgba(232,255,90,0.05)'; }}
+                    >
+                      What's a better split?
+                    </button>
+                    <button 
+                      onClick={() => handleSendReply("What do others usually do for this type of split?")}
+                      style={{ background: 'rgba(232,255,90,0.05)', border: '1px solid rgba(232,255,90,0.15)', borderRadius: 12, padding: '4px 10px', fontSize: 11, color: 'var(--accent)', cursor: 'pointer', transition: 'all 0.15s' }}
+                      onMouseEnter={(e) => { e.target.style.background = 'rgba(232,255,90,0.1)'; }}
+                      onMouseLeave={(e) => { e.target.style.background = 'rgba(232,255,90,0.05)'; }}
+                    >
+                      What do others do?
                     </button>
                   </div>
                 )}
 
-                <div style={{ 
-                  padding: '14px 16px', 
-                  borderTop: '1px solid var(--border)', 
-                  background: 'rgba(68,255,136,0.03)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: 4,
-                  marginTop: 12
-                }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--green)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Workout Logged
-                  </div>
-                  <div style={{ fontSize: 11, color: 'var(--text2)', textAlign: 'center' }}>
-                    This workout is locked. To modify it, delete its log in the Stats tab.
-                  </div>
+                {/* Chat Input Field */}
+                <form 
+                  onSubmit={(e) => { e.preventDefault(); handleSendReply(); }}
+                  style={{ display: 'flex', gap: 6 }}
+                >
+                  <input 
+                    type="text"
+                    value={inputText}
+                    onChange={(e) => setInputText(e.target.value)}
+                    placeholder="Ask follow-up questions..."
+                    style={{
+                      flex: 1,
+                      background: 'var(--bg3)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 6,
+                      color: 'var(--text)',
+                      padding: '8px 12px',
+                      fontSize: 13,
+                      outline: 'none'
+                    }}
+                  />
+                  <button 
+                    type="submit" 
+                    disabled={!inputText.trim() || loadingAi}
+                    style={{
+                      padding: '8px 14px',
+                      background: 'var(--accent)',
+                      border: 'none',
+                      borderRadius: 6,
+                      color: '#0a0a0a',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      fontSize: 13,
+                      opacity: (!inputText.trim() || loadingAi) ? 0.5 : 1
+                    }}
+                  >
+                    Send
+                  </button>
+                </form>
+              </div>
+            ) : (
+              <div style={{ padding: '12px 16px 0' }}>
+                <button 
+                  className="btn" 
+                  onClick={handleAiCritique}
+                  disabled={loadingAi}
+                  style={{
+                    width: '100%',
+                    background: 'rgba(232,255,90,0.08)',
+                    color: 'var(--accent)',
+                    border: '1px solid rgba(232,255,90,0.2)',
+                    fontSize: 13,
+                    padding: '10px 12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    cursor: 'pointer',
+                    borderRadius: 8,
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => { e.target.style.background = 'rgba(232,255,90,0.15)'; e.target.style.borderColor = 'var(--accent)'; }}
+                  onMouseLeave={(e) => { e.target.style.background = 'rgba(232,255,90,0.08)'; e.target.style.borderColor = 'rgba(232,255,90,0.2)'; }}
+                >
+                  {loadingAi ? (
+                    <>
+                      <span style={{
+                        display: 'inline-block', width: 12, height: 12, marginRight: 6,
+                        border: '1.5px solid var(--accent)', borderTopColor: 'transparent',
+                        borderRadius: '50%', animation: 'spin 0.6s linear infinite'
+                      }} />
+                      Analyzing workout locally...
+                    </>
+                  ) : (
+                    <>
+                      <span>✨</span> Get AI Coach Critique & Insights
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+
+            {isCompleted && (
+              <div style={{ 
+                padding: '14px 16px', 
+                borderTop: '1px solid var(--border)', 
+                background: 'rgba(68,255,136,0.03)',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 4,
+                marginTop: 12
+              }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--green)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Workout Logged
                 </div>
-              </>
+                <div style={{ fontSize: 11, color: 'var(--text2)', textAlign: 'center' }}>
+                  This workout is locked. To modify it, delete its log in the Stats tab.
+                </div>
+              </div>
             )}
             
             {isPast && !isCompleted && (
@@ -805,7 +798,8 @@ Coach:`;
                 background: 'rgba(255,255,255,0.01)',
                 textAlign: 'center',
                 fontSize: 12,
-                color: 'var(--text3)'
+                color: 'var(--text3)',
+                marginTop: 12
               }}>
                 This day has passed. Exercises are in view-only mode.
               </div>
