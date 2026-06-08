@@ -184,6 +184,64 @@ ${progressionTips.length > 0 ? progressionTips.map(tip => `- ${tip}`).join('\n')
 - Prioritize dynamic recovery: drink plenty of water and target 7-8 hours of sleep tonight for optimal recovery.`;
 }
 
+/* ─── Local Chat Heuristics ─── */
+function generateLocalCoachResponse(query, log, allLogs) {
+  const q = query.toLowerCase();
+  const exercises = log.exercises || [];
+  const numEx = exercises.length;
+  
+  if (q.includes("too much") || q.includes("volume") || q.includes("heavy") || q.includes("excessive")) {
+    if (numEx > 5) {
+      return `### Split Volume Critique
+Your split **${log.splitName}** has **${numEx} exercises** logged today. If you run this split 5-6 times a week, it borders on high volume.
+- **Is it too much?** For most natural lifters, yes, if every single set is taken to absolute failure.
+- **Recommendation:** Reduce to 4-5 high-quality compound movements and focus on lifting heavier with intense effort on fewer sets.
+- **Tip:** Limit total working sets to 12-18 sets per workout to prevent central nervous system fatigue.`;
+    } else {
+      return `### Split Volume Critique
+Your workout today is **${numEx} exercises**, which is a highly balanced volume!
+- **Is it too much?** No, it falls right in the hypertrophy sweet spot (10-15 working sets total).
+- **Recommendation:** Keep doing this volume. If you feel good, focus on adding weight or reps (progressive overload) rather than adding more exercises.`;
+    }
+  }
+  
+  if (q.includes("better") || q.includes("alternative") || q.includes("change") || q.includes("improve") || q.includes("optimize")) {
+    const splitName = log.splitName.toLowerCase();
+    if (splitName.includes("ppl") || splitName.includes("push")) {
+      return `### Better Alternatives for PPL
+Push/Pull/Legs is one of the best splits, but it requires high commitment (6 days/week to hit muscles 2x).
+- **Alternative:** If you can only train 3-4 days, switch to an **Upper/Lower** split.
+- **How to improve:** Alternate focus weeks (e.g. week 1 heavy compound strength, week 2 high-rep hypertrophy).`;
+    } else if (splitName.includes("upper") || splitName.includes("lower")) {
+      return `### Better Alternatives for Upper/Lower
+Your Upper/Lower split is highly scientific and efficient.
+- **Alternative:** If you want to train 5-6 days, a **PPL** or **Arnold Split** might give you more fun/variety.
+- **How to improve:** Run Upper A (chest focus), Upper B (shoulder focus) to ensure no muscle is neglected.`;
+    } else {
+      return `### How to Improve Your Split
+For natural lifters, frequency is key. 
+- **Better Alternative:** If you are running a single-muscle "Bro Split" (one muscle once a week), switching to a 4-day **Upper/Lower** or a 3/6-day **Push/Pull/Legs** is a better alternative.
+- **Rule of Thumb:** Ensure you hit every muscle group at least **2 times per week** for optimal protein synthesis.`;
+    }
+  }
+  
+  if (q.includes("others") || q.includes("what do others") || q.includes("popular") || q.includes("routine")) {
+    return `### What Other Lifters Do
+For a split like yours, standard practice in the lifting community is:
+- **Frequency:** Training 4 to 5 days a week, keeping sessions under 60 minutes.
+- **Split Structure:**
+  - **Upper/Lower:** Mon/Tue (Upper/Lower), Thu/Fri (Upper/Lower).
+  - **PPL:** Push/Pull/Legs/Rest/Repeat.
+- **Focus:** Committing to compound lifts first, and using isolation moves as "finishers" at the end of the session.`;
+  }
+  
+  return `### Coach Tips
+That's a good question! To give you a specific recommendation, what part of your recovery or exercise order are you trying to optimize?
+- **Progression:** Focus on beating your log numbers (reps/weight) week-by-week.
+- **Recovery:** Drink 3L of water and get 8 hours of sleep.
+- Feel free to ask more specific questions about volume, alternatives, or training frequency!`;
+}
+
 function ExerciseRow({ ex, index, splitId, dayId, onToggle, readOnly, isCompleted }) {
   const queryClient = useQueryClient();
   const { storage } = useStorage();
@@ -239,19 +297,35 @@ function DayCard({ day, splitId, splitName, isToday, defaultOpen, dateStr, logFo
   // AI-related state
   const [critique, setCritique] = useState(() => logForDate ? (localStorage.getItem('ai_critique_' + logForDate._id) || '') : '');
   const [loadingAi, setLoadingAi] = useState(false);
+  const [chatHistory, setChatHistory] = useState(() => {
+    if (!logForDate) return [];
+    const saved = localStorage.getItem('ai_chat_history_' + logForDate._id);
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [inputText, setInputText] = useState('');
+
+  const messagesEndRef = useRef(null);
 
   useEffect(() => {
     setExercises(day.exercises || []);
   }, [day.exercises]);
 
-  // Sync critique state when logForDate changes (e.g., when marking completed or loading logs)
+  // Sync critique and chat history when logForDate changes
   useEffect(() => {
     if (logForDate) {
       setCritique(localStorage.getItem('ai_critique_' + logForDate._id) || '');
+      const saved = localStorage.getItem('ai_chat_history_' + logForDate._id);
+      setChatHistory(saved ? JSON.parse(saved) : []);
     } else {
       setCritique('');
+      setChatHistory([]);
     }
   }, [logForDate]);
+
+  // Scroll to bottom on new messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatHistory, critique, loadingAi]);
 
   useEffect(() => {
     if (!open || logForDate) return;
@@ -357,22 +431,93 @@ ${logForDate.exercises.map(e => `- ${e.name}: ${e.sets} sets x ${e.reps} reps @ 
       }
 
       if (result && result.trim()) {
-        localStorage.setItem('ai_critique_' + logForDate._id, result.trim() + '\n\n*✨ Powered by Gemini Nano (Offline)*');
-        setCritique(result.trim() + '\n\n*✨ Powered by Gemini Nano (Offline)*');
+        const withTag = result.trim() + '\n\n*✨ Powered by Gemini Nano (Offline)*';
+        localStorage.setItem('ai_critique_' + logForDate._id, withTag);
+        setCritique(withTag);
       } else {
-        const localResult = generateOnDeviceCritique(logForDate, logs);
-        localStorage.setItem('ai_critique_' + logForDate._id, localResult + '\n\n*✨ Powered by Local Analysis Engine*');
-        setCritique(localResult + '\n\n*✨ Powered by Local Analysis Engine*');
+        const localResult = generateOnDeviceCritique(logForDate, logs) + '\n\n*✨ Powered by Local Analysis Engine*';
+        localStorage.setItem('ai_critique_' + logForDate._id, localResult);
+        setCritique(localResult);
       }
     } catch (err) {
       console.error("Local AI failed, falling back to local analysis:", err);
-      const localResult = generateOnDeviceCritique(logForDate, logs);
-      localStorage.setItem('ai_critique_' + logForDate._id, localResult + '\n\n*✨ Powered by Local Analysis Engine*');
-      setCritique(localResult + '\n\n*✨ Powered by Local Analysis Engine*');
+      const localResult = generateOnDeviceCritique(logForDate, logs) + '\n\n*✨ Powered by Local Analysis Engine*';
+      localStorage.setItem('ai_critique_' + logForDate._id, localResult);
+      setCritique(localResult);
     } finally {
       setLoadingAi(false);
     }
   }
+
+  async function handleSendReply(textToSend) {
+    const text = textToSend || inputText;
+    if (!text.trim() || !logForDate || loadingAi) return;
+
+    const updatedHistory = [...chatHistory, { sender: 'user', text: text.trim() }];
+    setChatHistory(updatedHistory);
+    setInputText('');
+    setLoadingAi(true);
+
+    const isLocalEngine = critique.includes('Local Analysis Engine');
+
+    try {
+      let reply = '';
+      if (window.ai && !isLocalEngine) {
+        // Chat using Chrome Gemini Nano Prompt API
+        const promptText = `You are a professional strength coach. Answer the user's question about their workout or split. Keep your answer under 120 words and format with clear markdown bullet points.
+
+Workout split: ${logForDate.splitName}
+Workout day: ${logForDate.dayName} (${logForDate.dayTag})
+Exercises done: ${logForDate.exercises.map(e => e.name).join(', ')}
+
+Chat History:
+Coach: ${critique.replace(/\*✨.*\*/, '')}
+${chatHistory.map(m => `${m.sender === 'user' ? 'User' : 'Coach'}: ${m.text}`).join('\n')}
+User: ${text.trim()}
+Coach:`;
+
+        let session = null;
+        if (window.ai.languageModel) {
+          session = await window.ai.languageModel.create();
+        } else if (window.ai.assistant) {
+          session = await window.ai.assistant.create();
+        } else if (window.ai.createTextSession) {
+          session = await window.ai.createTextSession();
+        }
+
+        if (session) {
+          reply = await session.prompt(promptText);
+          session.destroy?.();
+        }
+      }
+
+      if (reply && reply.trim()) {
+        const finalHistory = [...updatedHistory, { sender: 'coach', text: reply.trim() }];
+        setChatHistory(finalHistory);
+        localStorage.setItem('ai_chat_history_' + logForDate._id, JSON.stringify(finalHistory));
+      } else {
+        // Fallback to local heuristic responder
+        const localReply = generateLocalCoachResponse(text.trim(), logForDate, logs);
+        const finalHistory = [...updatedHistory, { sender: 'coach', text: localReply }];
+        setChatHistory(finalHistory);
+        localStorage.setItem('ai_chat_history_' + logForDate._id, JSON.stringify(finalHistory));
+      }
+    } catch (err) {
+      console.error(err);
+      const localReply = generateLocalCoachResponse(text.trim(), logForDate, logs);
+      const finalHistory = [...updatedHistory, { sender: 'coach', text: localReply }];
+      setChatHistory(finalHistory);
+      localStorage.setItem('ai_chat_history_' + logForDate._id, JSON.stringify(finalHistory));
+    } finally {
+      setLoadingAi(false);
+    }
+  }
+
+  // Combine initial critique and replies into a single chat window
+  const chatMessages = critique ? [
+    { sender: 'coach', text: critique },
+    ...chatHistory
+  ] : [];
 
   return (
     <>
@@ -430,7 +575,7 @@ ${logForDate.exercises.map(e => `- ${e.name}: ${e.sets} sets x ${e.reps} reps @ 
             {/* Completed Workout section details */}
             {isCompleted && (
               <>
-                {/* AI Critique block */}
+                {/* AI Chat / Critique block */}
                 {critique ? (
                   <div style={{
                     margin: '12px 16px',
@@ -439,8 +584,7 @@ ${logForDate.exercises.map(e => `- ${e.name}: ${e.sets} sets x ${e.reps} reps @ 
                     border: '1px solid rgba(232,255,90,0.15)',
                     borderRadius: 8,
                     boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-                    position: 'relative',
-                    overflow: 'hidden'
+                    position: 'relative'
                   }}>
                     <div style={{
                       position: 'absolute',
@@ -449,36 +593,154 @@ ${logForDate.exercises.map(e => `- ${e.name}: ${e.sets} sets x ${e.reps} reps @ 
                       width: 60,
                       height: 60,
                       background: 'var(--accent)',
-                      opacity: 0.06,
+                      opacity: 0.05,
                       filter: 'blur(20px)',
-                      borderRadius: '50%'
+                      borderRadius: '50%',
+                      pointerEvents: 'none'
                     }} />
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    {/* Chat Header */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, borderBottom: '1px solid rgba(232,255,90,0.1)', paddingBottom: 6 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <span style={{ fontSize: 16 }}>✨</span>
-                        <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>AI Coach Insights</span>
+                        <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>AI Coach Chat</span>
                       </div>
                       <button 
-                        onClick={() => handleAiCritique()} 
+                        onClick={handleAiCritique} 
                         disabled={loadingAi}
                         style={{ background: 'none', border: 'none', color: 'var(--text3)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', cursor: 'pointer', transition: 'color 0.15s' }}
                         onMouseEnter={(e) => e.target.style.color = 'var(--accent)'}
                         onMouseLeave={(e) => e.target.style.color = 'var(--text3)'}
                       >
-                        {loadingAi ? 'Analyzing…' : '🔄 Recalculate'}
+                        {loadingAi ? 'Analyzing…' : '🔄 Restart'}
                       </button>
                     </div>
-                    
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      {renderMarkdown(critique)}
+
+                    {/* Messages list */}
+                    <div style={{ maxHeight: 300, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 12, paddingRight: 4 }}>
+                      {chatMessages.map((msg, idx) => {
+                        const isUser = msg.sender === 'user';
+                        return (
+                          <div 
+                            key={idx}
+                            style={{
+                              alignSelf: isUser ? 'flex-end' : 'flex-start',
+                              background: isUser ? 'var(--bg4)' : 'rgba(255,255,255,0.01)',
+                              border: isUser ? '1px solid var(--border2)' : '1px solid rgba(255,255,255,0.04)',
+                              padding: '10px 14px',
+                              borderRadius: isUser ? '12px 12px 0 12px' : '12px 12px 12px 0',
+                              maxWidth: '88%',
+                              fontSize: 13,
+                              boxShadow: '0 2px 6px rgba(0,0,0,0.1)'
+                            }}
+                          >
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                              {renderMarkdown(msg.text)}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      
+                      {loadingAi && (
+                        <div style={{
+                          alignSelf: 'flex-start',
+                          background: 'rgba(255,255,255,0.01)',
+                          border: '1px solid rgba(255,255,255,0.04)',
+                          padding: '10px 14px',
+                          borderRadius: '12px 12px 12px 0',
+                          fontSize: 13,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          color: 'var(--text3)'
+                        }}>
+                          <span style={{
+                            display: 'inline-block', width: 8, height: 8,
+                            border: '1.5px solid var(--text3)', borderTopColor: 'transparent',
+                            borderRadius: '50%', animation: 'spin 0.6s linear infinite'
+                          }} />
+                          Coach is writing...
+                        </div>
+                      )}
+                      
+                      <div ref={messagesEndRef} />
                     </div>
+
+                    {/* Quick Replies presets */}
+                    {!loadingAi && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                        <button 
+                          onClick={() => handleSendReply("Is my split too much volume?")}
+                          style={{ background: 'rgba(232,255,90,0.05)', border: '1px solid rgba(232,255,90,0.15)', borderRadius: 12, padding: '4px 10px', fontSize: 11, color: 'var(--accent)', cursor: 'pointer', transition: 'all 0.15s' }}
+                          onMouseEnter={(e) => { e.target.style.background = 'rgba(232,255,90,0.1)'; }}
+                          onMouseLeave={(e) => { e.target.style.background = 'rgba(232,255,90,0.05)'; }}
+                        >
+                          Is this split too much?
+                        </button>
+                        <button 
+                          onClick={() => handleSendReply("What is a better alternative for this split?")}
+                          style={{ background: 'rgba(232,255,90,0.05)', border: '1px solid rgba(232,255,90,0.15)', borderRadius: 12, padding: '4px 10px', fontSize: 11, color: 'var(--accent)', cursor: 'pointer', transition: 'all 0.15s' }}
+                          onMouseEnter={(e) => { e.target.style.background = 'rgba(232,255,90,0.1)'; }}
+                          onMouseLeave={(e) => { e.target.style.background = 'rgba(232,255,90,0.05)'; }}
+                        >
+                          What's a better split?
+                        </button>
+                        <button 
+                          onClick={() => handleSendReply("What do others usually do for this type of split?")}
+                          style={{ background: 'rgba(232,255,90,0.05)', border: '1px solid rgba(232,255,90,0.15)', borderRadius: 12, padding: '4px 10px', fontSize: 11, color: 'var(--accent)', cursor: 'pointer', transition: 'all 0.15s' }}
+                          onMouseEnter={(e) => { e.target.style.background = 'rgba(232,255,90,0.1)'; }}
+                          onMouseLeave={(e) => { e.target.style.background = 'rgba(232,255,90,0.05)'; }}
+                        >
+                          What do others do?
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Chat Input Field */}
+                    <form 
+                      onSubmit={(e) => { e.preventDefault(); handleSendReply(); }}
+                      style={{ display: 'flex', gap: 6 }}
+                    >
+                      <input 
+                        type="text"
+                        value={inputText}
+                        onChange={(e) => setInputText(e.target.value)}
+                        placeholder="Ask follow-up questions..."
+                        style={{
+                          flex: 1,
+                          background: 'var(--bg3)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 6,
+                          color: 'var(--text)',
+                          padding: '8px 12px',
+                          fontSize: 13,
+                          outline: 'none'
+                        }}
+                      />
+                      <button 
+                        type="submit" 
+                        disabled={!inputText.trim() || loadingAi}
+                        style={{
+                          padding: '8px 14px',
+                          background: 'var(--accent)',
+                          border: 'none',
+                          borderRadius: 6,
+                          color: '#0a0a0a',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          fontSize: 13,
+                          opacity: (!inputText.trim() || loadingAi) ? 0.5 : 1
+                        }}
+                      >
+                        Send
+                      </button>
+                    </form>
                   </div>
                 ) : (
                   <div style={{ padding: '12px 16px 0' }}>
                     <button 
                       className="btn" 
-                      onClick={() => handleAiCritique()}
+                      onClick={handleAiCritique}
                       disabled={loadingAi}
                       style={{
                         width: '100%',
