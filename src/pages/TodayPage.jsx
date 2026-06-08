@@ -103,11 +103,14 @@ function renderMarkdown(text) {
   });
 }
 
-/* ─── Heuristic Rule-Based Mock Critique Generator ─── */
-function generateMockCritique(log) {
+/* ─── Heuristic Rule-Based local Analysis Engine ─── */
+function generateOnDeviceCritique(log, allLogs) {
   const exercises = log.exercises || [];
   const numEx = exercises.length;
   const totalVolume = log.totalVolume || 0;
+  
+  // Find past logs for this split/day
+  const pastLogs = (allLogs || []).filter(l => l._id !== log._id && l.date < log.date);
   
   let primaryFocus = "general fitness";
   const lowerName = log.dayName.toLowerCase();
@@ -122,29 +125,63 @@ function generateMockCritique(log) {
     primaryFocus = "upper body";
   }
 
+  const progressionTips = [];
+  exercises.forEach(ex => {
+    let prevEx = null;
+    for (const pastLog of pastLogs) {
+      const found = pastLog.exercises.find(e => e.name.toLowerCase() === ex.name.toLowerCase());
+      if (found) {
+        prevEx = found;
+        break;
+      }
+    }
+    
+    if (prevEx) {
+      const currentWeight = ex.weight || 0;
+      const prevWeight = prevEx.weight || 0;
+      const currentReps = ex.reps || 0;
+      const prevReps = prevEx.reps || 0;
+      const unit = ex.weightUnit || 'kg';
+      
+      if (currentWeight > prevWeight) {
+        progressionTips.push(`🎉 **Progression on ${ex.name}:** Increased weight from **${prevWeight}${unit}** to **${currentWeight}${unit}**!`);
+      } else if (currentWeight === prevWeight && currentReps > prevReps) {
+        progressionTips.push(`📈 **Progression on ${ex.name}:** Reps increased from **${prevReps}** to **${currentReps}** at **${currentWeight}${unit}**!`);
+      } else if (currentWeight < prevWeight) {
+        progressionTips.push(`ℹ️ **De-load on ${ex.name}:** Lifted **${currentWeight}${unit}** (previously **${prevWeight}${unit}**).`);
+      }
+    }
+  });
+
+  const previousLog = pastLogs.find(l => l.dayName.toLowerCase() === log.dayName.toLowerCase());
+  let volumeComparison = "";
+  if (previousLog && previousLog.totalVolume) {
+    const diff = totalVolume - previousLog.totalVolume;
+    if (diff > 0) {
+      volumeComparison = `This is an increase of **${diff} kg** (+${((diff / previousLog.totalVolume) * 100).toFixed(1)}%) in workload compared to your last session!`;
+    } else if (diff < 0) {
+      volumeComparison = `Workload decreased by **${Math.abs(diff)} kg** compared to last session. Focus on rest and nutrition to recharge.`;
+    }
+  }
+
   const tips = [];
   if (numEx < 3) {
-    tips.push("Your volume is on the lower side. Consider adding 1-2 accessory movements to target secondary muscle groups.");
+    tips.push("Your volume is low today. Try adding 1-2 accessory movements to target minor muscle groups.");
   } else if (numEx > 6) {
-    tips.push("High exercise count! Make sure your training intensity remains high. Reduce to 4-5 high-quality movements if you feel fatigue setting in early.");
+    tips.push("High exercise count! Verify that your intensity is high throughout. Reduce to 4-5 movements if you hit a wall early.");
   } else {
-    tips.push("Perfect volume selection! A structure of 3-6 compound and isolation exercises is ideal for maximizing muscle protein synthesis while keeping fatigue manageable.");
+    tips.push("Excellent exercise selection! Keeping it to 3-6 exercises ensures optimal energy distribution.");
   }
 
-  const heavyEx = exercises.find(e => e.weight > 60);
-  if (heavyEx) {
-    tips.push(`Strong lifting on **${heavyEx.name}** at ${heavyEx.weight}${heavyEx.weightUnit}. Try to apply progressive overload in your next session by aiming for 1 more repetition with the same weight.`);
-  } else {
-    tips.push("Focus on progressive overload: tracking your weights and ensuring you increase resistance or repetitions incrementally week-over-week is key for growth.");
-  }
+  return `### Workout Workload
+You trained **${primaryFocus}** doing **${numEx} exercises** with a total volume of **${totalVolume} kg**. ${volumeComparison}
 
-  return `### Workout Summary
-Great effort today! You trained **${primaryFocus}** doing **${numEx} exercises** with a calculated training volume of **${totalVolume} kg**.
+### Progression Highlights
+${progressionTips.length > 0 ? progressionTips.map(tip => `- ${tip}`).join('\n') : '- No historical data found for these exercises yet. Keep logging to track your progression!'}
 
-### Coach Critique & Next Steps
+### Coach Tips
 - ${tips[0]}
-- ${tips[1]}
-- Ensure you have a post-workout meal with adequate protein and fast-digesting carbohydrates to kickstart muscle recovery. Keep up the consistency!`;
+- Prioritize dynamic recovery: drink plenty of water and target 7-8 hours of sleep tonight for optimal recovery.`;
 }
 
 function ExerciseRow({ ex, index, splitId, dayId, onToggle, readOnly, isCompleted }) {
@@ -190,7 +227,7 @@ function ExerciseRow({ ex, index, splitId, dayId, onToggle, readOnly, isComplete
   );
 }
 
-function DayCard({ day, splitId, splitName, isToday, defaultOpen, dateStr, logForDate }) {
+function DayCard({ day, splitId, splitName, isToday, defaultOpen, dateStr, logForDate, logs }) {
   const queryClient = useQueryClient();
   const { storage } = useStorage();
   const [open, setOpen] = useState(defaultOpen);
@@ -202,8 +239,6 @@ function DayCard({ day, splitId, splitName, isToday, defaultOpen, dateStr, logFo
   // AI-related state
   const [critique, setCritique] = useState(() => logForDate ? (localStorage.getItem('ai_critique_' + logForDate._id) || '') : '');
   const [loadingAi, setLoadingAi] = useState(false);
-  const [showInstructions, setShowInstructions] = useState(false);
-  const [aiError, setAiError] = useState('');
 
   useEffect(() => {
     setExercises(day.exercises || []);
@@ -288,11 +323,9 @@ function DayCard({ day, splitId, splitName, isToday, defaultOpen, dateStr, logFo
     finally { setSharing(false); }
   }
 
-  async function handleAiCritique(useMock = false) {
+  async function handleAiCritique() {
     if (!logForDate) return;
     setLoadingAi(true);
-    setAiError('');
-    setShowInstructions(false);
 
     const promptText = `You are a professional strength coach. Analyze the user's workout and provide a brief critique and actionable recommendation for their next workout. Keep it under 100 words and format with clear markdown bullet points.
 
@@ -300,16 +333,6 @@ Workout split: ${logForDate.splitName}
 Workout day: ${logForDate.dayName} (${logForDate.dayTag})
 Exercises completed:
 ${logForDate.exercises.map(e => `- ${e.name}: ${e.sets} sets x ${e.reps} reps @ ${e.weight}${e.weightUnit}`).join('\n')}`;
-
-    if (useMock) {
-      setTimeout(() => {
-        const result = generateMockCritique(logForDate);
-        localStorage.setItem('ai_critique_' + logForDate._id, result);
-        setCritique(result);
-        setLoadingAi(false);
-      }, 1000);
-      return;
-    }
 
     try {
       let result = '';
@@ -330,23 +353,22 @@ ${logForDate.exercises.map(e => `- ${e.name}: ${e.sets} sets x ${e.reps} reps @ 
         if (session) {
           result = await session.prompt(promptText);
           session.destroy?.();
-        } else {
-          throw new Error("Local model Prompt API is supported but could not initialize.");
         }
-      } else {
-        throw new Error("Native window.ai Prompt API is not supported in this browser.");
       }
 
       if (result && result.trim()) {
-        localStorage.setItem('ai_critique_' + logForDate._id, result.trim());
-        setCritique(result.trim());
+        localStorage.setItem('ai_critique_' + logForDate._id, result.trim() + '\n\n*✨ Powered by Gemini Nano (Offline)*');
+        setCritique(result.trim() + '\n\n*✨ Powered by Gemini Nano (Offline)*');
       } else {
-        throw new Error("Local model returned empty response.");
+        const localResult = generateOnDeviceCritique(logForDate, logs);
+        localStorage.setItem('ai_critique_' + logForDate._id, localResult + '\n\n*✨ Powered by Local Analysis Engine*');
+        setCritique(localResult + '\n\n*✨ Powered by Local Analysis Engine*');
       }
     } catch (err) {
-      console.error(err);
-      setAiError(err.message || "Failed to initialize local AI.");
-      setShowInstructions(true);
+      console.error("Local AI failed, falling back to local analysis:", err);
+      const localResult = generateOnDeviceCritique(logForDate, logs);
+      localStorage.setItem('ai_critique_' + logForDate._id, localResult + '\n\n*✨ Powered by Local Analysis Engine*');
+      setCritique(localResult + '\n\n*✨ Powered by Local Analysis Engine*');
     } finally {
       setLoadingAi(false);
     }
@@ -438,7 +460,7 @@ ${logForDate.exercises.map(e => `- ${e.name}: ${e.sets} sets x ${e.reps} reps @ 
                         <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>AI Coach Insights</span>
                       </div>
                       <button 
-                        onClick={() => handleAiCritique(false)} 
+                        onClick={() => handleAiCritique()} 
                         disabled={loadingAi}
                         style={{ background: 'none', border: 'none', color: 'var(--text3)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', cursor: 'pointer', transition: 'color 0.15s' }}
                         onMouseEnter={(e) => e.target.style.color = 'var(--accent)'}
@@ -456,7 +478,7 @@ ${logForDate.exercises.map(e => `- ${e.name}: ${e.sets} sets x ${e.reps} reps @ 
                   <div style={{ padding: '12px 16px 0' }}>
                     <button 
                       className="btn" 
-                      onClick={() => handleAiCritique(false)}
+                      onClick={() => handleAiCritique()}
                       disabled={loadingAi}
                       style={{
                         width: '100%',
@@ -491,47 +513,6 @@ ${logForDate.exercises.map(e => `- ${e.name}: ${e.sets} sets x ${e.reps} reps @ 
                         </>
                       )}
                     </button>
-                  </div>
-                )}
-
-                {/* Instructions panel */}
-                {showInstructions && (
-                  <div style={{
-                    margin: '12px 16px 0',
-                    padding: '14px',
-                    background: 'var(--bg3)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 8,
-                    fontSize: 13
-                  }}>
-                    <div style={{ fontWeight: 700, color: 'var(--red)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span>⚠️</span> Chrome On-Device AI Not Setup
-                    </div>
-                    <p style={{ color: 'var(--text2)', fontSize: 12, lineHeight: 1.4, marginBottom: 10 }}>
-                      This app uses Google Chrome's built-in <strong>Gemini Nano</strong> model to run AI 100% offline. Follow these quick steps to enable it:
-                    </p>
-                    <ol style={{ paddingLeft: 18, color: 'var(--text2)', fontSize: 11, lineHeight: 1.5, display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
-                      <li>Open <code>chrome://flags/#optimization-guide-on-device-model</code> and set to <strong>Enabled BypassPrefRequirement</strong>.</li>
-                      <li>Open <code>chrome://flags/#prompt-api-for-gemini-nano</code> and set to <strong>Enabled</strong>.</li>
-                      <li>Relaunch Chrome.</li>
-                      <li>Go to <code>chrome://components</code> and check for updates under <strong>Optimization Guide On Device Model</strong> to download the local model.</li>
-                    </ol>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button 
-                        className="btn btn-accent" 
-                        style={{ flex: 1, fontSize: 11, padding: '6px 10px' }} 
-                        onClick={() => handleAiCritique(true)}
-                      >
-                        Run Mock AI (Demo)
-                      </button>
-                      <button 
-                        className="btn btn-ghost" 
-                        style={{ fontSize: 11, padding: '6px 10px' }} 
-                        onClick={() => setShowInstructions(false)}
-                      >
-                        Close
-                      </button>
-                    </div>
                   </div>
                 )}
 
@@ -644,6 +625,7 @@ export default function TodayPage() {
                 defaultOpen={i === todayIndex && !day.isRest}
                 dateStr={dateStr}
                 logForDate={logForDate}
+                logs={logs}
               />
             );
           })
