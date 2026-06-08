@@ -77,6 +77,76 @@ function CompletionScreen({ log, onClose, onShare, sharing }) {
   );
 }
 
+/* ─── Local AI Markdown Parser ─── */
+function parseBold(text) {
+  const parts = text.split(/\*\*(.*?)\*\*/g);
+  return parts.map((part, i) => i % 2 === 1 ? <strong key={i} style={{ color: 'var(--accent)', fontWeight: 700 }}>{part}</strong> : part);
+}
+
+function renderMarkdown(text) {
+  if (!text) return null;
+  return text.split('\n').map((line, i) => {
+    const cleanLine = line.trim();
+    if (cleanLine.startsWith('###')) {
+      return <h4 key={i} style={{ fontSize: 13, fontWeight: 800, color: 'var(--accent)', marginTop: 10, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.02em' }}>{cleanLine.replace('###', '').trim()}</h4>;
+    }
+    if (cleanLine.startsWith('-') || cleanLine.startsWith('*')) {
+      return (
+        <div key={i} style={{ display: 'flex', gap: 6, margin: '3px 0', fontSize: 13, color: 'var(--text)', lineHeight: 1.4 }}>
+          <span style={{ color: 'var(--accent)', flexShrink: 0 }}>•</span>
+          <span>{parseBold(cleanLine.substring(1).trim())}</span>
+        </div>
+      );
+    }
+    if (cleanLine.length === 0) return <div key={i} style={{ height: 6 }} />;
+    return <p key={i} style={{ fontSize: 13, color: 'var(--text2)', margin: '3px 0', lineHeight: 1.4 }}>{parseBold(cleanLine)}</p>;
+  });
+}
+
+/* ─── Heuristic Rule-Based Mock Critique Generator ─── */
+function generateMockCritique(log) {
+  const exercises = log.exercises || [];
+  const numEx = exercises.length;
+  const totalVolume = log.totalVolume || 0;
+  
+  let primaryFocus = "general fitness";
+  const lowerName = log.dayName.toLowerCase();
+  const lowerTag = log.dayTag.toLowerCase();
+  if (lowerName.includes("push") || lowerTag.includes("chest") || lowerTag.includes("push")) {
+    primaryFocus = "push muscles (chest, shoulders, triceps)";
+  } else if (lowerName.includes("pull") || lowerTag.includes("back") || lowerTag.includes("pull")) {
+    primaryFocus = "pull muscles (back, biceps)";
+  } else if (lowerName.includes("leg") || lowerTag.includes("quads") || lowerTag.includes("legs") || lowerTag.includes("lower")) {
+    primaryFocus = "legs (quadriceps, hamstrings, calves)";
+  } else if (lowerName.includes("upper") || lowerTag.includes("upper")) {
+    primaryFocus = "upper body";
+  }
+
+  const tips = [];
+  if (numEx < 3) {
+    tips.push("Your volume is on the lower side. Consider adding 1-2 accessory movements to target secondary muscle groups.");
+  } else if (numEx > 6) {
+    tips.push("High exercise count! Make sure your training intensity remains high. Reduce to 4-5 high-quality movements if you feel fatigue setting in early.");
+  } else {
+    tips.push("Perfect volume selection! A structure of 3-6 compound and isolation exercises is ideal for maximizing muscle protein synthesis while keeping fatigue manageable.");
+  }
+
+  const heavyEx = exercises.find(e => e.weight > 60);
+  if (heavyEx) {
+    tips.push(`Strong lifting on **${heavyEx.name}** at ${heavyEx.weight}${heavyEx.weightUnit}. Try to apply progressive overload in your next session by aiming for 1 more repetition with the same weight.`);
+  } else {
+    tips.push("Focus on progressive overload: tracking your weights and ensuring you increase resistance or repetitions incrementally week-over-week is key for growth.");
+  }
+
+  return `### Workout Summary
+Great effort today! You trained **${primaryFocus}** doing **${numEx} exercises** with a calculated training volume of **${totalVolume} kg**.
+
+### Coach Critique & Next Steps
+- ${tips[0]}
+- ${tips[1]}
+- Ensure you have a post-workout meal with adequate protein and fast-digesting carbohydrates to kickstart muscle recovery. Keep up the consistency!`;
+}
+
 function ExerciseRow({ ex, index, splitId, dayId, onToggle, readOnly, isCompleted }) {
   const queryClient = useQueryClient();
   const { storage } = useStorage();
@@ -129,9 +199,24 @@ function DayCard({ day, splitId, splitName, isToday, defaultOpen, dateStr, logFo
   const [sharing, setSharing] = useState(false);
   const shareCardRef = useRef(null);
 
+  // AI-related state
+  const [critique, setCritique] = useState(() => logForDate ? (localStorage.getItem('ai_critique_' + logForDate._id) || '') : '');
+  const [loadingAi, setLoadingAi] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(false);
+  const [aiError, setAiError] = useState('');
+
   useEffect(() => {
     setExercises(day.exercises || []);
   }, [day.exercises]);
+
+  // Sync critique state when logForDate changes (e.g., when marking completed or loading logs)
+  useEffect(() => {
+    if (logForDate) {
+      setCritique(localStorage.getItem('ai_critique_' + logForDate._id) || '');
+    } else {
+      setCritique('');
+    }
+  }, [logForDate]);
 
   useEffect(() => {
     if (!open || logForDate) return;
@@ -203,6 +288,70 @@ function DayCard({ day, splitId, splitName, isToday, defaultOpen, dateStr, logFo
     finally { setSharing(false); }
   }
 
+  async function handleAiCritique(useMock = false) {
+    if (!logForDate) return;
+    setLoadingAi(true);
+    setAiError('');
+    setShowInstructions(false);
+
+    const promptText = `You are a professional strength coach. Analyze the user's workout and provide a brief critique and actionable recommendation for their next workout. Keep it under 100 words and format with clear markdown bullet points.
+
+Workout split: ${logForDate.splitName}
+Workout day: ${logForDate.dayName} (${logForDate.dayTag})
+Exercises completed:
+${logForDate.exercises.map(e => `- ${e.name}: ${e.sets} sets x ${e.reps} reps @ ${e.weight}${e.weightUnit}`).join('\n')}`;
+
+    if (useMock) {
+      setTimeout(() => {
+        const result = generateMockCritique(logForDate);
+        localStorage.setItem('ai_critique_' + logForDate._id, result);
+        setCritique(result);
+        setLoadingAi(false);
+      }, 1000);
+      return;
+    }
+
+    try {
+      let result = '';
+      const hasAi = window.ai;
+      
+      if (hasAi) {
+        let session = null;
+        if (window.ai.languageModel) {
+          session = await window.ai.languageModel.create({
+            systemPrompt: "You are a professional gym coach. You analyze workout logs and provide helpful, encouraging, and actionable recommendations in under 120 words using markdown bullet points."
+          });
+        } else if (window.ai.assistant) {
+          session = await window.ai.assistant.create();
+        } else if (window.ai.createTextSession) {
+          session = await window.ai.createTextSession();
+        }
+
+        if (session) {
+          result = await session.prompt(promptText);
+          session.destroy?.();
+        } else {
+          throw new Error("Local model Prompt API is supported but could not initialize.");
+        }
+      } else {
+        throw new Error("Native window.ai Prompt API is not supported in this browser.");
+      }
+
+      if (result && result.trim()) {
+        localStorage.setItem('ai_critique_' + logForDate._id, result.trim());
+        setCritique(result.trim());
+      } else {
+        throw new Error("Local model returned empty response.");
+      }
+    } catch (err) {
+      console.error(err);
+      setAiError(err.message || "Failed to initialize local AI.");
+      setShowInstructions(true);
+    } finally {
+      setLoadingAi(false);
+    }
+  }
+
   return (
     <>
       <div style={{ margin: '0 16px 12px', borderRadius: 10, border: `1px solid ${isToday ? 'var(--accent)' : 'var(--border)'}`, overflow: 'hidden', background: 'var(--bg2)' }}>
@@ -255,24 +404,157 @@ function DayCard({ day, splitId, splitName, isToday, defaultOpen, dateStr, logFo
                 </button>
               </div>
             )}
+            
+            {/* Completed Workout section details */}
             {isCompleted && (
-              <div style={{ 
-                padding: '14px 16px', 
-                borderTop: '1px solid var(--border)', 
-                background: 'rgba(68,255,136,0.03)',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 4
-              }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--green)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  Workout Logged
+              <>
+                {/* AI Critique block */}
+                {critique ? (
+                  <div style={{
+                    margin: '12px 16px',
+                    padding: '16px',
+                    background: 'linear-gradient(135deg, rgba(232,255,90,0.03) 0%, rgba(0,0,0,0.4) 100%)',
+                    border: '1px solid rgba(232,255,90,0.15)',
+                    borderRadius: 8,
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                    position: 'relative',
+                    overflow: 'hidden'
+                  }}>
+                    <div style={{
+                      position: 'absolute',
+                      top: -20,
+                      right: -20,
+                      width: 60,
+                      height: 60,
+                      background: 'var(--accent)',
+                      opacity: 0.06,
+                      filter: 'blur(20px)',
+                      borderRadius: '50%'
+                    }} />
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 16 }}>✨</span>
+                        <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>AI Coach Insights</span>
+                      </div>
+                      <button 
+                        onClick={() => handleAiCritique(false)} 
+                        disabled={loadingAi}
+                        style={{ background: 'none', border: 'none', color: 'var(--text3)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', cursor: 'pointer', transition: 'color 0.15s' }}
+                        onMouseEnter={(e) => e.target.style.color = 'var(--accent)'}
+                        onMouseLeave={(e) => e.target.style.color = 'var(--text3)'}
+                      >
+                        {loadingAi ? 'Analyzing…' : '🔄 Recalculate'}
+                      </button>
+                    </div>
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      {renderMarkdown(critique)}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ padding: '12px 16px 0' }}>
+                    <button 
+                      className="btn" 
+                      onClick={() => handleAiCritique(false)}
+                      disabled={loadingAi}
+                      style={{
+                        width: '100%',
+                        background: 'rgba(232,255,90,0.08)',
+                        color: 'var(--accent)',
+                        border: '1px solid rgba(232,255,90,0.2)',
+                        fontSize: 13,
+                        padding: '10px 12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                        cursor: 'pointer',
+                        borderRadius: 8,
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={(e) => { e.target.style.background = 'rgba(232,255,90,0.15)'; e.target.style.borderColor = 'var(--accent)'; }}
+                      onMouseLeave={(e) => { e.target.style.background = 'rgba(232,255,90,0.08)'; e.target.style.borderColor = 'rgba(232,255,90,0.2)'; }}
+                    >
+                      {loadingAi ? (
+                        <>
+                          <span style={{
+                            display: 'inline-block', width: 12, height: 12, marginRight: 6,
+                            border: '1.5px solid var(--accent)', borderTopColor: 'transparent',
+                            borderRadius: '50%', animation: 'spin 0.6s linear infinite'
+                          }} />
+                          Analyzing workout locally...
+                        </>
+                      ) : (
+                        <>
+                          <span>✨</span> Get AI Coach Critique & Insights
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+
+                {/* Instructions panel */}
+                {showInstructions && (
+                  <div style={{
+                    margin: '12px 16px 0',
+                    padding: '14px',
+                    background: 'var(--bg3)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 8,
+                    fontSize: 13
+                  }}>
+                    <div style={{ fontWeight: 700, color: 'var(--red)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span>⚠️</span> Chrome On-Device AI Not Setup
+                    </div>
+                    <p style={{ color: 'var(--text2)', fontSize: 12, lineHeight: 1.4, marginBottom: 10 }}>
+                      This app uses Google Chrome's built-in <strong>Gemini Nano</strong> model to run AI 100% offline. Follow these quick steps to enable it:
+                    </p>
+                    <ol style={{ paddingLeft: 18, color: 'var(--text2)', fontSize: 11, lineHeight: 1.5, display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+                      <li>Open <code>chrome://flags/#optimization-guide-on-device-model</code> and set to <strong>Enabled BypassPrefRequirement</strong>.</li>
+                      <li>Open <code>chrome://flags/#prompt-api-for-gemini-nano</code> and set to <strong>Enabled</strong>.</li>
+                      <li>Relaunch Chrome.</li>
+                      <li>Go to <code>chrome://components</code> and check for updates under <strong>Optimization Guide On Device Model</strong> to download the local model.</li>
+                    </ol>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button 
+                        className="btn btn-accent" 
+                        style={{ flex: 1, fontSize: 11, padding: '6px 10px' }} 
+                        onClick={() => handleAiCritique(true)}
+                      >
+                        Run Mock AI (Demo)
+                      </button>
+                      <button 
+                        className="btn btn-ghost" 
+                        style={{ fontSize: 11, padding: '6px 10px' }} 
+                        onClick={() => setShowInstructions(false)}
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ 
+                  padding: '14px 16px', 
+                  borderTop: '1px solid var(--border)', 
+                  background: 'rgba(68,255,136,0.03)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 4,
+                  marginTop: 12
+                }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--green)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Workout Logged
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text2)', textAlign: 'center' }}>
+                    This workout is locked. To modify it, delete its log in the Stats tab.
+                  </div>
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--text2)', textAlign: 'center' }}>
-                  This workout is locked. To modify it, delete its log in the Stats tab.
-                </div>
-              </div>
+              </>
             )}
+            
             {isPast && !isCompleted && (
               <div style={{ 
                 padding: '12px 16px', 
