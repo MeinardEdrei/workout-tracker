@@ -77,10 +77,10 @@ function CompletionScreen({ log, onClose, onShare, sharing }) {
   );
 }
 
-function ExerciseRow({ ex, index, splitId, dayId, onToggle }) {
+function ExerciseRow({ ex, index, splitId, dayId, onToggle, readOnly, isCompleted }) {
   const queryClient = useQueryClient();
   const { storage } = useStorage();
-  const effectiveChecked = ex.lastCheckedDate === TODAY_STR ? ex.checked : false;
+  const effectiveChecked = isCompleted ? true : (ex.lastCheckedDate === TODAY_STR ? ex.checked : false);
 
   const toggleMutation = useMutation({
     mutationFn: () => storage.toggleExercise(splitId, dayId, ex._id),
@@ -95,7 +95,11 @@ function ExerciseRow({ ex, index, splitId, dayId, onToggle }) {
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: '1px solid var(--border)', opacity: toggleMutation.isPending ? 0.5 : 1, transition: 'opacity 0.15s' }}>
-      <label className={`checkbox-wrap ${effectiveChecked ? 'checked' : ''}`} onClick={() => !toggleMutation.isPending && toggleMutation.mutate()}>
+      <label 
+        className={`checkbox-wrap ${effectiveChecked ? 'checked' : ''} ${readOnly ? 'readonly' : ''}`}
+        onClick={() => !readOnly && !toggleMutation.isPending && toggleMutation.mutate()}
+        style={{ cursor: readOnly ? 'default' : 'pointer' }}
+      >
         <div className="checkbox-box">{effectiveChecked && <CheckIcon />}</div>
       </label>
       <ExerciseThumbnail imageUrl={ex.imageUrl} name={ex.name} size={56} />
@@ -116,7 +120,7 @@ function ExerciseRow({ ex, index, splitId, dayId, onToggle }) {
   );
 }
 
-function DayCard({ day, splitId, splitName, isToday, defaultOpen }) {
+function DayCard({ day, splitId, splitName, isToday, defaultOpen, dateStr, logForDate }) {
   const queryClient = useQueryClient();
   const { storage } = useStorage();
   const [open, setOpen] = useState(defaultOpen);
@@ -126,7 +130,11 @@ function DayCard({ day, splitId, splitName, isToday, defaultOpen }) {
   const shareCardRef = useRef(null);
 
   useEffect(() => {
-    if (!open) return;
+    setExercises(day.exercises || []);
+  }, [day.exercises]);
+
+  useEffect(() => {
+    if (!open || logForDate) return;
     const needsImage = exercises.filter(e => !e.imageUrl && !e.placeholderUsed && e.name);
     if (!needsImage.length) return;
     (async () => {
@@ -150,8 +158,30 @@ function DayCard({ day, splitId, splitName, isToday, defaultOpen }) {
     setExercises((prev) => prev.map((e) => (e._id === updated._id ? updated : e)));
   }
 
-  const checkedCount = exercises.filter((e) => e.lastCheckedDate === TODAY_STR && e.checked).length;
-  const total = exercises.length;
+  const isCompleted = !!logForDate;
+  const isPast = dateStr < TODAY_STR;
+  const readOnly = isPast || isCompleted || !isToday;
+
+  const displayExercises = isCompleted
+    ? logForDate.exercises.map(logEx => {
+        const defaultEx = (day.exercises || []).find(e => e.name.toLowerCase() === logEx.name.toLowerCase());
+        return {
+          ...logEx,
+          _id: defaultEx?._id || logEx.name,
+          imageUrl: defaultEx?.imageUrl,
+          muscleTargets: defaultEx?.muscleTargets || [],
+          checked: true,
+          lastCheckedDate: dateStr
+        };
+      })
+    : exercises;
+
+  const checkedCount = isCompleted
+    ? displayExercises.length
+    : displayExercises.filter((e) => e.lastCheckedDate === TODAY_STR && e.checked).length;
+  const total = isCompleted
+    ? displayExercises.length
+    : (day.exercises || []).length;
 
   const saveLogMutation = useMutation({
     mutationFn: (logData) => storage.saveLog(logData),
@@ -190,7 +220,17 @@ function DayCard({ day, splitId, splitName, isToday, defaultOpen }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
             {day.isRest ? <span className="tag">Rest</span> : (
               <>
-                {total > 0 && <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: checkedCount === total ? 'var(--green)' : 'var(--text2)' }}>{checkedCount}/{total}</span>}
+                {isCompleted ? (
+                  <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--green)', letterSpacing: '0.05em', textTransform: 'uppercase', background: 'rgba(68,255,136,0.1)', padding: '3px 8px', borderRadius: 4 }}>
+                    Completed
+                  </span>
+                ) : isPast ? (
+                  <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--text3)', letterSpacing: '0.05em', textTransform: 'uppercase', background: 'rgba(255,255,255,0.03)', padding: '3px 8px', borderRadius: 4 }}>
+                    Skipped
+                  </span>
+                ) : (
+                  total > 0 && <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: checkedCount === total ? 'var(--green)' : 'var(--text2)' }}>{checkedCount}/{total}</span>
+                )}
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--text3)" strokeWidth="2" strokeLinecap="round" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: '0.15s' }}>
                   <polyline points="4,6 8,10 12,6" />
                 </svg>
@@ -201,18 +241,48 @@ function DayCard({ day, splitId, splitName, isToday, defaultOpen }) {
 
         {open && !day.isRest && (
           <div style={{ borderTop: '1px solid var(--border)' }}>
-            {exercises.length === 0 ? (
+            {displayExercises.length === 0 ? (
               <div className="empty-state" style={{ padding: '20px' }}>No exercises yet</div>
             ) : (
-              exercises.map((ex, i) => (
-                <ExerciseRow key={ex._id} ex={ex} index={i} splitId={splitId} dayId={day._id} onToggle={handleToggle} />
+              displayExercises.map((ex, i) => (
+                <ExerciseRow key={ex._id || i} ex={ex} index={i} splitId={splitId} dayId={day._id} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} />
               ))
             )}
-            {checkedCount > 0 && isToday && (
+            {checkedCount > 0 && isToday && !isCompleted && (
               <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)' }}>
                 <button className="btn btn-accent" style={{ width: '100%', fontSize: 14, padding: '12px' }} onClick={handleFinish} disabled={saveLogMutation.isPending}>
                   {saveLogMutation.isPending ? 'Saving…' : `✓ Finish Workout (${checkedCount} done)`}
                 </button>
+              </div>
+            )}
+            {isCompleted && (
+              <div style={{ 
+                padding: '14px 16px', 
+                borderTop: '1px solid var(--border)', 
+                background: 'rgba(68,255,136,0.03)',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 4
+              }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--green)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Workout Logged
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text2)', textAlign: 'center' }}>
+                  This workout is locked. To modify it, delete its log in the Stats tab.
+                </div>
+              </div>
+            )}
+            {isPast && !isCompleted && (
+              <div style={{ 
+                padding: '12px 16px', 
+                borderTop: '1px solid var(--border)', 
+                background: 'rgba(255,255,255,0.01)',
+                textAlign: 'center',
+                fontSize: 12,
+                color: 'var(--text3)'
+              }}>
+                This day has passed. Exercises are in view-only mode.
               </div>
             )}
           </div>
@@ -232,6 +302,11 @@ export default function TodayPage() {
     queryFn: storage.getSplits,
   });
 
+  const { data: logs = [] } = useQuery({
+    queryKey: ['logs', storageKey],
+    queryFn: storage.getLogs,
+  });
+
   if (isLoading) return <div className="spinner" />;
   if (error) return <div className="empty-state">Error: {error.message}</div>;
 
@@ -248,6 +323,12 @@ export default function TodayPage() {
   const dayNameMatch = DAY_NAMES[TODAY_DOW].toLowerCase();
   let todayIndex = days.findIndex((d) => d.name.toLowerCase().startsWith(dayNameMatch));
   if (todayIndex === -1) todayIndex = TODAY_DOW % days.length;
+
+  function getDateForIndex(index) {
+    const d = new Date();
+    d.setDate(d.getDate() + (index - todayIndex));
+    return d.toISOString().slice(0, 10);
+  }
 
   return (
     <div>
@@ -268,9 +349,22 @@ export default function TodayPage() {
         {days.length === 0 ? (
           <div className="empty-state">This split has no days yet</div>
         ) : (
-          days.map((day, i) => (
-            <DayCard key={day._id} day={day} splitId={activeSplit._id} splitName={activeSplit.name} isToday={i === todayIndex} defaultOpen={i === todayIndex && !day.isRest} />
-          ))
+          days.map((day, i) => {
+            const dateStr = getDateForIndex(i);
+            const logForDate = logs.find((l) => l.date === dateStr);
+            return (
+              <DayCard 
+                key={day._id} 
+                day={day} 
+                splitId={activeSplit._id} 
+                splitName={activeSplit.name} 
+                isToday={i === todayIndex} 
+                defaultOpen={i === todayIndex && !day.isRest}
+                dateStr={dateStr}
+                logForDate={logForDate}
+              />
+            );
+          })
         )}
       </div>
     </div>
