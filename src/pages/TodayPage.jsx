@@ -285,6 +285,44 @@ function ExerciseRow({ ex, index, splitId, dayId, onToggle, readOnly, isComplete
   );
 }
 
+/* ─── External Gemini API Helper ─── */
+async function callExternalGeminiApi(apiKey, systemPrompt, chatHistory, userText) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+  
+  const contents = chatHistory.map(m => ({
+    role: m.sender === 'user' ? 'user' : 'model',
+    parts: [{ text: m.text.replace(/\*✨.*\*/g, '').trim() }]
+  }));
+  
+  contents.push({
+    role: 'user',
+    parts: [{ text: userText.trim() }]
+  });
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents,
+      systemInstruction: {
+        parts: [{ text: systemPrompt }]
+      }
+    })
+  });
+
+  if (!response.ok) {
+    const errData = await response.json().catch(() => ({}));
+    throw new Error(errData.error?.message || `HTTP ${response.status}`);
+  }
+
+  const data = await response.json();
+  const reply = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!reply) {
+    throw new Error("Empty response from Gemini API.");
+  }
+  return reply.trim();
+}
+
 function DayCard({ day, splitId, splitName, isToday, defaultOpen, dateStr, logForDate, logs }) {
   const queryClient = useQueryClient();
   const { storage } = useStorage();
@@ -303,6 +341,8 @@ function DayCard({ day, splitId, splitName, isToday, defaultOpen, dateStr, logFo
     return saved ? JSON.parse(saved) : [];
   });
   const [inputText, setInputText] = useState('');
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('user_gemini_api_key') || '');
+  const [showSettings, setShowSettings] = useState(false);
 
   const messagesEndRef = useRef(null);
 
@@ -406,8 +446,12 @@ ${targetExs.map(e => `- ${e.name}: ${e.sets} sets x ${e.reps} reps ${e.weight ? 
     try {
       let result = '';
       const hasAi = window.ai;
+      const externalApiKey = localStorage.getItem('user_gemini_api_key');
       
-      if (hasAi) {
+      if (externalApiKey) {
+        const systemPrompt = "You are a professional gym coach. You analyze workout logs and provide helpful, encouraging, and actionable recommendations in under 120 words using markdown bullet points.";
+        result = await callExternalGeminiApi(externalApiKey, systemPrompt, [], promptText);
+      } else if (hasAi) {
         let session = null;
         if (window.ai.languageModel) {
           session = await window.ai.languageModel.create({
@@ -426,7 +470,7 @@ ${targetExs.map(e => `- ${e.name}: ${e.sets} sets x ${e.reps} reps ${e.weight ? 
       }
 
       if (result && result.trim()) {
-        const withTag = result.trim() + '\n\n*✨ Powered by Gemini Nano (Offline)*';
+        const withTag = result.trim() + (externalApiKey ? '\n\n*✨ Powered by Gemini (API Key)*' : '\n\n*✨ Powered by Gemini Nano (Offline)*');
         localStorage.setItem('ai_critique_' + cacheKey, withTag);
         setCritique(withTag);
       } else {
@@ -435,7 +479,7 @@ ${targetExs.map(e => `- ${e.name}: ${e.sets} sets x ${e.reps} reps ${e.weight ? 
         setCritique(localResult);
       }
     } catch (err) {
-      console.error("Local AI failed, falling back to local analysis:", err);
+      console.error("Gemini AI failed, falling back to local analysis:", err);
       const localResult = generateOnDeviceCritique(logForDate || { ...day, date: dateStr, splitName }, logs) + '\n\n*✨ Powered by Local Analysis Engine*';
       localStorage.setItem('ai_critique_' + cacheKey, localResult);
       setCritique(localResult);
@@ -455,10 +499,19 @@ ${targetExs.map(e => `- ${e.name}: ${e.sets} sets x ${e.reps} reps ${e.weight ? 
 
     const isLocalEngine = critique.includes('Local Analysis Engine');
     const targetExs = logForDate ? logForDate.exercises : (day.exercises || []);
+    const externalApiKey = localStorage.getItem('user_gemini_api_key');
 
     try {
       let reply = '';
-      if (window.ai && !isLocalEngine) {
+      if (externalApiKey) {
+        const systemPrompt = `You are a professional strength coach. Answer the user's question about their workout, split, or general questions. Keep your answer under 150 words and format with clear markdown bullet points.
+
+Workout split: ${splitName}
+Workout day: ${day.name} (${day.tag || 'No tag'})
+Exercises: ${targetExs.map(e => e.name).join(', ')}`;
+
+        reply = await callExternalGeminiApi(externalApiKey, systemPrompt, chatHistory, text.trim());
+      } else if (window.ai && !isLocalEngine) {
         // Chat using Chrome Gemini Nano Prompt API
         const promptText = `You are a professional strength coach. Answer the user's question about their workout or split. Keep your answer under 120 words and format with clear markdown bullet points.
 
@@ -598,16 +651,90 @@ Coach:`;
                     <span style={{ fontSize: 16 }}>✨</span>
                     <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>AI Coach Chat</span>
                   </div>
-                  <button 
-                    onClick={handleAiCritique} 
-                    disabled={loadingAi}
-                    style={{ background: 'none', border: 'none', color: 'var(--text3)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', cursor: 'pointer', transition: 'color 0.15s' }}
-                    onMouseEnter={(e) => e.target.style.color = 'var(--accent)'}
-                    onMouseLeave={(e) => e.target.style.color = 'var(--text3)'}
-                  >
-                    {loadingAi ? 'Analyzing…' : '🔄 Restart'}
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <button 
+                      onClick={() => setShowSettings(!showSettings)}
+                      style={{ background: 'none', border: 'none', color: 'var(--text3)', fontSize: 11, cursor: 'pointer', transition: 'color 0.15s' }}
+                      onMouseEnter={(e) => e.target.style.color = 'var(--accent)'}
+                      onMouseLeave={(e) => e.target.style.color = 'var(--text3)'}
+                      title="API Settings"
+                    >
+                      🔑 {apiKey ? 'Configured' : 'Setup Key'}
+                    </button>
+                    <button 
+                      onClick={handleAiCritique} 
+                      disabled={loadingAi}
+                      style={{ background: 'none', border: 'none', color: 'var(--text3)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', cursor: 'pointer', transition: 'color 0.15s' }}
+                      onMouseEnter={(e) => e.target.style.color = 'var(--accent)'}
+                      onMouseLeave={(e) => e.target.style.color = 'var(--text3)'}
+                    >
+                      {loadingAi ? 'Analyzing…' : '🔄 Restart'}
+                    </button>
+                  </div>
                 </div>
+
+                {/* API Key Setup Panel */}
+                {showSettings && (
+                  <div style={{
+                    padding: 12,
+                    background: 'var(--bg3)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 8,
+                    marginBottom: 12,
+                    fontSize: 12
+                  }}>
+                    <div style={{ fontWeight: 700, color: 'var(--accent)', marginBottom: 4 }}>Gemini API Settings</div>
+                    <div style={{ color: 'var(--text2)', marginBottom: 8, lineHeight: 1.3 }}>
+                      Provide a free API key to unlock full, random Q&A capabilities without Chrome setup.
+                      <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', marginLeft: 4, textDecoration: 'underline' }}>
+                        Get free key here
+                      </a>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <input 
+                        type="password"
+                        placeholder="Paste AI Studio API Key..."
+                        value={apiKey}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setApiKey(val);
+                          if (val.trim()) {
+                            localStorage.setItem('user_gemini_api_key', val.trim());
+                          } else {
+                            localStorage.removeItem('user_gemini_api_key');
+                          }
+                        }}
+                        style={{
+                          flex: 1,
+                          background: 'var(--bg2)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 4,
+                          color: 'var(--text)',
+                          padding: '6px 10px',
+                          fontSize: 12
+                        }}
+                      />
+                      <button 
+                        onClick={() => {
+                          setApiKey('');
+                          localStorage.removeItem('user_gemini_api_key');
+                        }}
+                        style={{
+                          padding: '6px 10px',
+                          background: 'var(--red)',
+                          border: 'none',
+                          borderRadius: 4,
+                          color: '#fff',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          fontSize: 11
+                        }}
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Messages list */}
                 <div style={{ maxHeight: 300, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 12, paddingRight: 4 }}>
@@ -730,7 +857,7 @@ Coach:`;
                 </form>
               </div>
             ) : (
-              <div style={{ padding: '12px 16px 0' }}>
+              <div style={{ padding: '12px 16px 0', display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <button 
                   className="btn" 
                   onClick={handleAiCritique}
@@ -760,7 +887,7 @@ Coach:`;
                         border: '1.5px solid var(--accent)', borderTopColor: 'transparent',
                         borderRadius: '50%', animation: 'spin 0.6s linear infinite'
                       }} />
-                      Analyzing workout locally...
+                      Analyzing workout...
                     </>
                   ) : (
                     <>
@@ -768,6 +895,80 @@ Coach:`;
                     </>
                   )}
                 </button>
+
+                {/* Inline API settings toggle when there is no critique yet */}
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: 2 }}>
+                  <button 
+                    onClick={() => setShowSettings(!showSettings)}
+                    style={{ background: 'none', border: 'none', color: 'var(--text3)', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+                    onMouseEnter={(e) => e.target.style.color = 'var(--accent)'}
+                    onMouseLeave={(e) => e.target.style.color = 'var(--text3)'}
+                  >
+                    🔑 {apiKey ? 'Gemini API Configured' : 'Setup Gemini API Key (Optional)'}
+                  </button>
+                </div>
+
+                {showSettings && (
+                  <div style={{
+                    padding: 12,
+                    background: 'var(--bg3)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 8,
+                    fontSize: 12,
+                    marginTop: 6
+                  }}>
+                    <div style={{ fontWeight: 700, color: 'var(--accent)', marginBottom: 4 }}>Gemini API Settings</div>
+                    <div style={{ color: 'var(--text2)', marginBottom: 8, lineHeight: 1.3 }}>
+                      Provide a free API key to unlock full, random Q&A capabilities without Chrome setup.
+                      <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', marginLeft: 4, textDecoration: 'underline' }}>
+                        Get free key here
+                      </a>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <input 
+                        type="password"
+                        placeholder="Paste AI Studio API Key..."
+                        value={apiKey}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setApiKey(val);
+                          if (val.trim()) {
+                            localStorage.setItem('user_gemini_api_key', val.trim());
+                          } else {
+                            localStorage.removeItem('user_gemini_api_key');
+                          }
+                        }}
+                        style={{
+                          flex: 1,
+                          background: 'var(--bg2)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 4,
+                          color: 'var(--text)',
+                          padding: '6px 10px',
+                          fontSize: 12
+                        }}
+                      />
+                      <button 
+                        onClick={() => {
+                          setApiKey('');
+                          localStorage.removeItem('user_gemini_api_key');
+                        }}
+                        style={{
+                          padding: '6px 10px',
+                          background: 'var(--red)',
+                          border: 'none',
+                          borderRadius: 4,
+                          color: '#fff',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          fontSize: 11
+                        }}
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

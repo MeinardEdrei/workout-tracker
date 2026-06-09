@@ -74,6 +74,44 @@ function ConfirmModal({ message, onConfirm, onClose }) {
   );
 }
 
+/* ─── External Gemini API Helper ─── */
+async function callExternalGeminiApi(apiKey, systemPrompt, chatHistory, userText) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+  
+  const contents = chatHistory.map(m => ({
+    role: m.sender === 'user' ? 'user' : 'model',
+    parts: [{ text: m.text.replace(/\*✨.*\*/g, '').trim() }]
+  }));
+  
+  contents.push({
+    role: 'user',
+    parts: [{ text: userText.trim() }]
+  });
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents,
+      systemInstruction: {
+        parts: [{ text: systemPrompt }]
+      }
+    })
+  });
+
+  if (!response.ok) {
+    const errData = await response.json().catch(() => ({}));
+    throw new Error(errData.error?.message || `HTTP ${response.status}`);
+  }
+
+  const data = await response.json();
+  const reply = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!reply) {
+    throw new Error("Empty response from Gemini API.");
+  }
+  return reply.trim();
+}
+
 /* ─── Local AI Markdown Parser ─── */
 function parseBold(text) {
   const parts = text.split(/\*\*(.*?)\*\*/g);
@@ -248,6 +286,8 @@ export default function SplitsPage() {
   });
   const [inputText, setInputText] = useState('');
   const [loadingAi, setLoadingAi] = useState(false);
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('user_gemini_api_key') || '');
+  const [showSettings, setShowSettings] = useState(false);
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
@@ -284,8 +324,16 @@ export default function SplitsPage() {
     try {
       let reply = '';
       const hasAi = window.ai;
+      const externalApiKey = localStorage.getItem('user_gemini_api_key');
 
-      if (hasAi) {
+      if (externalApiKey) {
+        const systemPrompt = `You are a professional strength coach and fitness programmer. Analyze the user's training splits and answer their question (whether it is about their splits, general fitness, or any general topics). Keep your answer under 150 words and format with clear markdown bullet points.
+
+Here are the user's current workout splits:
+${splitsText}`;
+
+        reply = await callExternalGeminiApi(externalApiKey, systemPrompt, chatHistory, text.trim());
+      } else if (hasAi) {
         const promptText = `You are a professional strength coach and fitness programmer. Analyze the user's training splits and answer their question. Keep your answer under 120 words and format with clear markdown bullet points.
 
 Here are the user's current workout splits:
@@ -314,7 +362,7 @@ Coach:`;
       }
 
       if (reply && reply.trim()) {
-        const withTag = reply.trim() + '\n\n*✨ Powered by Gemini Nano (Offline)*';
+        const withTag = reply.trim() + (externalApiKey ? '\n\n*✨ Powered by Gemini (API Key)*' : '\n\n*✨ Powered by Gemini Nano (Offline)*');
         const finalHistory = [...updatedHistory, { sender: 'coach', text: withTag }];
         setChatHistory(finalHistory);
         localStorage.setItem('ai_splits_chat_history', JSON.stringify(finalHistory));
@@ -325,7 +373,7 @@ Coach:`;
         localStorage.setItem('ai_splits_chat_history', JSON.stringify(finalHistory));
       }
     } catch (err) {
-      console.error("Local AI failed, falling back to local analysis:", err);
+      console.error("Gemini AI failed, falling back to local analysis:", err);
       const localReply = generateSplitsPageLocalResponse(text.trim(), splits) + '\n\n*✨ Powered by Local Analysis Engine*';
       const finalHistory = [...updatedHistory, { sender: 'coach', text: localReply }];
       setChatHistory(finalHistory);
@@ -703,23 +751,97 @@ Coach:`;
                 <span style={{ fontSize: 16 }}>✨</span>
                 <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>AI Split Advisor</span>
               </div>
-              <button 
-                onClick={() => {
-                  const welcome = [{
-                    sender: 'coach',
-                    text: "### AI Split Advisor\nWelcome! I can help you analyze your training splits, balance your workload, schedule rest days, or recommend alternative programs.\n\nHere are some things you can ask me:\n- **Is my split too much volume?**\n- **What's a better alternative for my split?**\n- **What do others usually do for this type of split?**\n- **How should I program rest days?**"
-                  }];
-                  setChatHistory(welcome);
-                  localStorage.setItem('ai_splits_chat_history', JSON.stringify(welcome));
-                }}
-                disabled={loadingAi}
-                style={{ background: 'none', border: 'none', color: 'var(--text3)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', cursor: 'pointer', transition: 'color 0.15s' }}
-                onMouseEnter={(e) => e.target.style.color = 'var(--accent)'}
-                onMouseLeave={(e) => e.target.style.color = 'var(--text3)'}
-              >
-                🔄 Restart
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <button 
+                  onClick={() => setShowSettings(!showSettings)}
+                  style={{ background: 'none', border: 'none', color: 'var(--text3)', fontSize: 11, cursor: 'pointer', transition: 'color 0.15s' }}
+                  onMouseEnter={(e) => e.target.style.color = 'var(--accent)'}
+                  onMouseLeave={(e) => e.target.style.color = 'var(--text3)'}
+                  title="API Settings"
+                >
+                  🔑 {apiKey ? 'Configured' : 'Setup Key'}
+                </button>
+                <button 
+                  onClick={() => {
+                    const welcome = [{
+                      sender: 'coach',
+                      text: "### AI Split Advisor\nWelcome! I can help you analyze your training splits, balance your workload, schedule rest days, or recommend alternative programs.\n\nHere are some things you can ask me:\n- **Is my split too much volume?**\n- **What's a better alternative for my split?**\n- **What do others usually do for this type of split?**\n- **How should I program rest days?**"
+                    }];
+                    setChatHistory(welcome);
+                    localStorage.setItem('ai_splits_chat_history', JSON.stringify(welcome));
+                  }}
+                  disabled={loadingAi}
+                  style={{ background: 'none', border: 'none', color: 'var(--text3)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', cursor: 'pointer', transition: 'color 0.15s' }}
+                  onMouseEnter={(e) => e.target.style.color = 'var(--accent)'}
+                  onMouseLeave={(e) => e.target.style.color = 'var(--text3)'}
+                >
+                  🔄 Restart
+                </button>
+              </div>
             </div>
+
+            {/* API Key Setup Panel */}
+            {showSettings && (
+              <div style={{
+                padding: 12,
+                background: 'var(--bg3)',
+                border: '1px solid var(--border)',
+                borderRadius: 8,
+                marginBottom: 12,
+                fontSize: 12
+              }}>
+                <div style={{ fontWeight: 700, color: 'var(--accent)', marginBottom: 4 }}>Gemini API Settings</div>
+                <div style={{ color: 'var(--text2)', marginBottom: 8, lineHeight: 1.3 }}>
+                  Provide a free API key to unlock full, random Q&A capabilities without Chrome setup.
+                  <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', marginLeft: 4, textDecoration: 'underline' }}>
+                    Get free key here
+                  </a>
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input 
+                    type="password"
+                    placeholder="Paste AI Studio API Key..."
+                    value={apiKey}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setApiKey(val);
+                      if (val.trim()) {
+                        localStorage.setItem('user_gemini_api_key', val.trim());
+                      } else {
+                        localStorage.removeItem('user_gemini_api_key');
+                      }
+                    }}
+                    style={{
+                      flex: 1,
+                      background: 'var(--bg2)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 4,
+                      color: 'var(--text)',
+                      padding: '6px 10px',
+                      fontSize: 12
+                    }}
+                  />
+                  <button 
+                    onClick={() => {
+                      setApiKey('');
+                      localStorage.removeItem('user_gemini_api_key');
+                    }}
+                    style={{
+                      padding: '6px 10px',
+                      background: 'var(--red)',
+                      border: 'none',
+                      borderRadius: 4,
+                      color: '#fff',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      fontSize: 11
+                    }}
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Messages list */}
             <div style={{ maxHeight: 300, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 12, paddingRight: 4 }}>
