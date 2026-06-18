@@ -4,6 +4,7 @@ import { useStorage } from '../hooks/useStorage';
 import { MusclePill, MUSCLE_COLORS } from '../components/MusclePill';
 import { capitalizeWords } from '../utils/textFormat';
 import ExerciseThumbnail from '../components/ExerciseThumbnail';
+import { createPortal } from 'react-dom';
 import * as api from '../api/index.js';
 import {
   DndContext,
@@ -141,7 +142,7 @@ function PickerPill({ label, selected, disabled, onClick, small }) {
 function TextModal({ title, initial = '', placeholder, onConfirm, onClose }) {
   const [value, setValue] = useState(initial);
   function submit(e) { e.preventDefault(); if (!value.trim()) return; onConfirm(value.trim()); }
-  return (
+  return createPortal(
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal">
         <div className="modal-title">{title}</div>
@@ -153,12 +154,13 @@ function TextModal({ title, initial = '', placeholder, onConfirm, onClose }) {
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
 function ConfirmModal({ message, onConfirm, onClose }) {
-  return (
+  return createPortal(
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal">
         <div className="modal-title">Delete?</div>
@@ -168,7 +170,8 @@ function ConfirmModal({ message, onConfirm, onClose }) {
           <button className="btn btn-danger" onClick={onConfirm}>Delete</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -186,9 +189,9 @@ function EditDayModal({ initialName = '', initialTag = '', onConfirm, onClose })
     onConfirm({ name: name.trim(), tag: finalTag });
   }
 
-  return (
+  return createPortal(
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxHeight: '88vh', overflowY: 'auto' }}>
+      <div className="modal">
         <div className="modal-title">Edit Day</div>
         <form onSubmit={submit}>
           {/* Day Name */}
@@ -243,7 +246,8 @@ function EditDayModal({ initialName = '', initialTag = '', onConfirm, onClose })
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -277,9 +281,9 @@ function AddDayModal({ existingDays = [], onConfirm, onClose }) {
     onConfirm({ name: finalName, tag, isRest: finalIsRest });
   }
 
-  return (
+  return createPortal(
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxHeight: '88vh', overflowY: 'auto' }}>
+      <div className="modal">
         <div className="modal-title">New Day</div>
         <form onSubmit={submit}>
 
@@ -351,7 +355,8 @@ function AddDayModal({ existingDays = [], onConfirm, onClose }) {
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -379,9 +384,9 @@ function AddExerciseModal({ onConfirm, onClose }) {
     });
   }
 
-  return (
+  return createPortal(
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxHeight: '88vh', overflowY: 'auto' }}>
+      <div className="modal">
         <div className="modal-title">New Exercise</div>
         <form onSubmit={submit}>
           <input
@@ -446,7 +451,8 @@ function AddExerciseModal({ onConfirm, onClose }) {
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

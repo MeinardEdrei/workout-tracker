@@ -190,20 +190,25 @@ html, body, #root {
   inset: 0;
   background: rgba(0,0,0,0.8);
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
   z-index: 200;
   animation: fadeIn 0.15s ease;
+  padding: 20px;
 }
 
 .modal {
   background: var(--bg2);
   border: 1px solid var(--border);
-  border-radius: 16px 16px 0 0;
+  border-radius: 16px;
   width: 100%;
-  max-width: 480px;
+  max-width: 440px;
   padding: 24px 20px;
-  animation: slideUp 0.2s ease;
+  animation: scaleIn 0.2s ease;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
 }
 
 .modal-title {
