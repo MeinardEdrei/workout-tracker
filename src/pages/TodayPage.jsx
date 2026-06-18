@@ -1017,6 +1017,7 @@ Coach:`;
 
 export default function TodayPage() {
   const { storage, storageKey } = useStorage();
+  const queryClient = useQueryClient();
   const { data: splits = [], isLoading, error } = useQuery({
     queryKey: ['splits', storageKey],
     queryFn: storage.getSplits,
@@ -1027,19 +1028,8 @@ export default function TodayPage() {
     queryFn: storage.getLogs,
   });
 
-  if (isLoading) return <div className="spinner" />;
-  if (error) return <div className="empty-state">Error: {error.message}</div>;
-
   const activeSplit = splits.find((s) => s.isActive) || splits[0] || null;
-
-  if (!activeSplit) return (
-    <div>
-      <div className="page-header"><h1 className="page-title">Today</h1></div>
-      <div className="empty-state">No active split.<br />Go to Splits tab to activate one.</div>
-    </div>
-  );
-
-  const days = [...(activeSplit.days || [])].sort((a, b) => (a.dayOrder ?? 8) - (b.dayOrder ?? 8));
+  const days = activeSplit ? [...(activeSplit.days || [])].sort((a, b) => (a.dayOrder ?? 8) - (b.dayOrder ?? 8)) : [];
   const dayNameMatch = DAY_NAMES[TODAY_DOW].toLowerCase();
   let todayIndex = days.findIndex((d) => d.name.toLowerCase().startsWith(dayNameMatch));
   if (todayIndex === -1) todayIndex = TODAY_DOW % days.length;
@@ -1049,6 +1039,55 @@ export default function TodayPage() {
     d.setDate(d.getDate() + (index - todayIndex));
     return d.toISOString().slice(0, 10);
   }
+
+  useEffect(() => {
+    if (isLoading || !activeSplit || days.length === 0) return;
+
+    let logsInvalidated = false;
+    days.forEach((day, i) => {
+      if (day.isRest) return;
+      const dateStr = getDateForIndex(i);
+      if (dateStr >= TODAY_STR) return; // Only past days
+
+      const logForDate = logs.find((l) => l.date === dateStr);
+      if (logForDate) return; // Already completed
+
+      const checkedExs = (day.exercises || []).filter(
+        (e) => e.checked && e.lastCheckedDate === dateStr
+      );
+
+      if (checkedExs.length > 0) {
+        storage.saveLog({
+          date: dateStr,
+          splitName: activeSplit.name,
+          dayName: day.name,
+          dayTag: day.tag || '',
+          exercises: checkedExs.map((e) => ({
+            name: e.name,
+            sets: e.sets,
+            reps: e.reps,
+            weight: e.weight,
+            weightUnit: e.weightUnit
+          }))
+        }).then(() => {
+          if (!logsInvalidated) {
+            logsInvalidated = true;
+            queryClient.invalidateQueries({ queryKey: ['logs'] });
+          }
+        }).catch(err => console.error("Auto-completion failed:", err));
+      }
+    });
+  }, [splits, logs, isLoading, activeSplit, days, queryClient, storage]);
+
+  if (isLoading) return <div className="spinner" />;
+  if (error) return <div className="empty-state">Error: {error.message}</div>;
+
+  if (!activeSplit) return (
+    <div>
+      <div className="page-header"><h1 className="page-title">Today</h1></div>
+      <div className="empty-state">No active split.<br />Go to Splits tab to activate one.</div>
+    </div>
+  );
 
   return (
     <div>
