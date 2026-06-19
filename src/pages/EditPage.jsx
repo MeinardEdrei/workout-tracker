@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useStorage } from '../hooks/useStorage';
-import { MusclePill, MUSCLE_COLORS } from '../components/MusclePill';
+import { MusclePill, MUSCLE_COLORS, MUSCLE_GROUPS } from '../components/MusclePill';
 import { capitalizeWords } from '../utils/textFormat';
 import ExerciseThumbnail from '../components/ExerciseThumbnail';
 import { createPortal } from 'react-dom';
@@ -26,6 +26,48 @@ const STANDARD_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', '
 const DAY_SHORT = { Monday: 'MON', Tuesday: 'TUE', Wednesday: 'WED', Thursday: 'THU', Friday: 'FRI', Saturday: 'SAT', Sunday: 'SUN', Rest: 'REST' };
 const TAG_OPTIONS = ['Chest + Back', 'Shoulders + Back', 'Legs + Core', 'Push', 'Pull', 'Full Body', 'Rest', 'Cardio', 'Upper Body', 'Lower Body', 'Upper A', 'Upper B', 'Lower A', 'Lower B'];
 const MUSCLE_OPTIONS = Object.keys(MUSCLE_COLORS);
+
+function MuscleTargetPicker({ selected, onToggle }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {MUSCLE_GROUPS.map((group) => (
+        <div key={group.label}>
+          <div style={{ fontSize: 9, fontWeight: 800, color: 'var(--text3)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 5 }}>
+            {group.label}
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+            {group.muscles.map((target) => {
+              const c = MUSCLE_COLORS[target] || { bg: 'rgba(140,140,140,0.18)', text: '#a0a0a0' };
+              const isSelected = selected.includes(target);
+              return (
+                <button
+                  key={target}
+                  type="button"
+                  onClick={() => onToggle(target)}
+                  style={{
+                    padding: '4px 9px',
+                    borderRadius: 10,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: '0.03em',
+                    border: `1px solid ${isSelected ? c.text : 'var(--border2)'}`,
+                    background: isSelected ? c.bg : 'transparent',
+                    color: isSelected ? c.text : 'var(--text3)',
+                    cursor: 'pointer',
+                    transition: 'all 0.12s',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {target}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 const LABEL = { fontSize: 10, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 };
 
 /* ─── Icons ─── */
@@ -429,21 +471,11 @@ function AddExerciseModal({ onConfirm, onClose }) {
           </select>
 
           {/* Muscle target picker */}
-          <div style={LABEL}>
+          <div style={{ ...LABEL, marginBottom: 10 }}>
             Targets{' '}
-            <span style={{ color: 'var(--text3)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional — select all that apply)</span>
+            <span style={{ color: 'var(--text3)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span>
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 4 }}>
-            {MUSCLE_OPTIONS.map((target) => (
-              <PickerPill
-                key={target}
-                label={target}
-                selected={form.muscleTargets.includes(target)}
-                onClick={() => toggleTarget(target)}
-                small
-              />
-            ))}
-          </div>
+          <MuscleTargetPicker selected={form.muscleTargets} onToggle={toggleTarget} />
 
           <div className="modal-actions" style={{ marginTop: 16 }}>
             <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
@@ -661,17 +693,9 @@ function ExerciseEditRow({ ex, index, splitId, dayId, onUpdate, onDelete, dragHa
           </div>
 
           {/* Muscle target picker in inline editor */}
-          <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>Targets (optional)</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 12 }}>
-            {MUSCLE_OPTIONS.map((target) => (
-              <PickerPill
-                key={target}
-                label={target}
-                selected={form.muscleTargets.includes(target)}
-                onClick={() => toggleTarget(target)}
-                small
-              />
-            ))}
+          <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Targets (optional)</div>
+          <div style={{ marginBottom: 12 }}>
+            <MuscleTargetPicker selected={form.muscleTargets} onToggle={toggleTarget} />
           </div>
 
           {/* Image manager */}
