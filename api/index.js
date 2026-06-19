@@ -3,11 +3,11 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 
-const splitsRouter = require('./routes/splits');
-const logsRouter = require('./routes/logs');
-const authRouter = require('./routes/auth');
-const adminRouter = require('./routes/admin');
-const exercisesRouter = require('./routes/exercises');
+const splitsRouter = require('./_lib/routes/splits');
+const logsRouter = require('./_lib/routes/logs');
+const authRouter = require('./_lib/routes/auth');
+const adminRouter = require('./_lib/routes/admin');
+const exercisesRouter = require('./_lib/routes/exercises');
 
 const app = express();
 
