@@ -472,48 +472,150 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
   );
 }
 
-/* ─── External Gemini API Helper ─── */
-async function callExternalGeminiApi(apiKey, systemPrompt, chatHistory, userText, useSearch = false) {
+/* ─── Gemini raw API call (returns full response JSON) ─── */
+async function callGeminiRaw(apiKey, systemPrompt, contents, tools = []) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-
-  const contents = chatHistory.map(m => ({
-    role: m.sender === 'user' ? 'user' : 'model',
-    parts: [{ text: m.text.replace(/\*✨.*\*/g, '').trim() }]
-  }));
-  contents.push({ role: 'user', parts: [{ text: userText.trim() }] });
-
   const body = {
     contents,
     systemInstruction: { parts: [{ text: systemPrompt }] },
   };
-  if (useSearch) {
-    body.tools = [{ google_search: {} }];
-  }
-
+  if (tools.length > 0) body.tools = tools;
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-
   if (!response.ok) {
     const errData = await response.json().catch(() => ({}));
     throw new Error(errData.error?.message || `HTTP ${response.status}`);
   }
+  return response.json();
+}
 
-  const data = await response.json();
-  // Grounded responses may return multiple parts; collect all text parts
-  const parts = data.candidates?.[0]?.content?.parts || [];
-  const reply = parts.map(p => p.text || '').join('').trim();
+function extractText(geminiResponse) {
+  const parts = geminiResponse?.candidates?.[0]?.content?.parts || [];
+  return parts.map(p => p.text || '').join('').trim();
+}
+
+function extractFunctionCall(geminiResponse) {
+  const parts = geminiResponse?.candidates?.[0]?.content?.parts || [];
+  const fc = parts.find(p => p.functionCall);
+  return fc ? fc.functionCall : null;
+}
+
+function historyToContents(chatHistory) {
+  return chatHistory.map(m => ({
+    role: m.sender === 'user' ? 'user' : 'model',
+    parts: [{ text: m.text.replace(/\*✨.*\*/g, '').trim() }],
+  }));
+}
+
+/* ─── Legacy helper kept for handleAiCritique ─── */
+async function callExternalGeminiApi(apiKey, systemPrompt, chatHistory, userText, useSearch = false) {
+  const contents = historyToContents(chatHistory);
+  contents.push({ role: 'user', parts: [{ text: userText.trim() }] });
+  const tools = useSearch ? [{ google_search: {} }] : [];
+  const data = await callGeminiRaw(apiKey, systemPrompt, contents, tools);
+  const reply = extractText(data);
   if (!reply) throw new Error('Empty response from Gemini API.');
   return reply;
 }
 
-const FLEXIBLE_SYSTEM_PROMPT = `You are a smart, knowledgeable AI assistant with access to Google Search. You can answer questions about anything — fitness, nutrition, sports science, general knowledge, current events, research, and more. Use your search capability to provide accurate, up-to-date information whenever relevant.
+/* ─── Prompts ─── */
+const FLEXIBLE_SYSTEM_PROMPT = `You are a smart, knowledgeable AI assistant and personal coach with Google Search access. You can answer anything — fitness, nutrition, sports science, general knowledge, current events, research, and more.
 
-When the user asks fitness or workout questions, provide expert coaching advice. When they ask about anything else — science, health, food, lifestyle, research — answer just as helpfully. Be conversational, thorough, and don't limit yourself to only workout topics. Format with markdown bullet points where it helps clarity, but feel free to use prose for conversational answers.`;
+The user's full workout split and recent history are provided in context. Use that data to give highly specific, personalised advice. When the user asks you to change something in their split (sets, reps, weight, etc.), use the update_exercise tool — but only when explicitly asked to make a change. Always be conversational and thorough. Format with markdown bullet points where it helps.`;
 
-const RESTRICTED_SYSTEM_PROMPT = `You are a professional gym coach. Analyze workout logs and provide helpful, encouraging, and actionable recommendations in under 120 words using markdown bullet points. Keep responses concise and focused on the workout.`;
+const RESTRICTED_SYSTEM_PROMPT = `You are a professional gym coach. Provide helpful, encouraging, actionable recommendations in under 120 words using markdown bullet points. Keep responses focused on the workout.`;
+
+/* ─── Function declarations exposed to Gemini ─── */
+const SPLIT_FUNCTIONS = [{
+  functionDeclarations: [{
+    name: 'update_exercise',
+    description: 'Update sets, reps, weight, or other properties of an exercise in the user\'s split. Only call this when the user explicitly asks to make a change.',
+    parameters: {
+      type: 'object',
+      properties: {
+        dayName: { type: 'string', description: 'Exact day name as in the split (e.g. "Monday", "Thursday", "Upper A")' },
+        exerciseName: { type: 'string', description: 'Name of the exercise to update' },
+        sets: { type: 'number', description: 'New number of sets' },
+        reps: { type: 'number', description: 'New number of reps per set' },
+        weight: { type: 'number', description: 'New weight value' },
+        weightUnit: { type: 'string', enum: ['kg', 'lbs'] },
+        untilFailure: { type: 'boolean', description: 'Set to true if reps should be until failure' },
+      },
+      required: ['dayName', 'exerciseName'],
+    },
+  }],
+}];
+
+/* ─── Build full split + log context string ─── */
+function buildSplitContext(splitDays, logs, splitName) {
+  const daysText = (splitDays || []).map(d => {
+    if (d.isRest) return `  ${d.name}: Rest day`;
+    const exLines = (d.exercises || []).map(e =>
+      `    • ${e.name}: ${e.sets}×${e.untilFailure ? 'failure' : (e.reps ?? 'max')} reps${e.weight > 0 ? ` @ ${e.weight}${e.weightUnit}` : ''}`
+    ).join('\n');
+    return `  ${d.name}${d.tag ? ` (${d.tag})` : ''}:\n${exLines || '    (no exercises)'}`;
+  }).join('\n');
+
+  const recentText = [...(logs || [])]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 20)
+    .map(l => {
+      const vol = l.totalVolume > 0 ? ` [${l.totalVolume}kg vol]` : '';
+      const exStr = l.exercises.map(e => `${e.name}${e.weight > 0 ? ` @${e.weight}${e.weightUnit}` : ''}`).join(', ');
+      return `  ${l.date} – ${l.dayName}${l.dayTag ? ` (${l.dayTag})` : ''}${vol}: ${exStr}`;
+    }).join('\n');
+
+  return `\n\n=== USER'S WORKOUT DATA ===
+Active Split: ${splitName}
+
+Full Split:
+${daysText || '  (no days configured)'}
+
+Recent Sessions (last 20):
+${recentText || '  (no logs yet)'}
+=== END WORKOUT DATA ===`;
+}
+
+/* ─── Permission modal for AI-requested changes ─── */
+function ActionPermissionModal({ pendingAction, onAllow, onDeny }) {
+  const { name, args } = pendingAction.functionCall;
+  const changeLines = Object.entries(args)
+    .filter(([k]) => k !== 'dayName' && k !== 'exerciseName')
+    .map(([k, v]) => {
+      const labels = { sets: 'Sets', reps: 'Reps', weight: 'Weight', weightUnit: 'Unit', untilFailure: 'Until failure' };
+      return `${labels[k] || k} → ${v}`;
+    });
+
+  return createPortal(
+    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onDeny()}>
+      <div className="modal">
+        <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: 10 }}>
+          ⚡ AI wants to make a change
+        </div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>
+          {args.exerciseName}
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 14 }}>on {args.dayName}</div>
+        <div style={{ background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px', marginBottom: 16 }}>
+          {changeLines.length > 0 ? changeLines.map((l, i) => (
+            <div key={i} style={{ fontSize: 13, color: 'var(--text)', fontFamily: 'var(--font-mono)', padding: '2px 0' }}>{l}</div>
+          )) : <div style={{ fontSize: 12, color: 'var(--text3)' }}>No specific changes detected</div>}
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 16, lineHeight: 1.4 }}>
+          Allow the AI to apply this change to your split?
+        </div>
+        <div className="modal-actions">
+          <button className="btn btn-ghost" onClick={onDeny}>Deny</button>
+          <button className="btn btn-accent" onClick={onAllow}>Allow</button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
 
 function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dateStr, logForDate, logs }) {
   const queryClient = useQueryClient();
@@ -535,6 +637,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
   const [inputText, setInputText] = useState('');
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('user_gemini_api_key') || '');
   const [showSettings, setShowSettings] = useState(false);
+  const [pendingAction, setPendingAction] = useState(null);
 
   const messagesEndRef = useRef(null);
 
@@ -630,11 +733,12 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
     const targetExs = logForDate ? logForDate.exercises : (day.exercises || []);
     const externalApiKey = localStorage.getItem('user_gemini_api_key');
 
-    const critiquePrompt = externalApiKey
-      ? `Analyze my ${logForDate ? 'completed' : 'planned'} workout and give me a thorough, insightful critique. Feel free to reference current sports science or nutrition research if relevant. Be specific about what's good, what could be improved, and any tips for progression or recovery.
+    const splitContext = externalApiKey ? buildSplitContext(splitDays, logs, splitName) : '';
 
-Workout split: ${splitName}
-Day: ${day.name}${day.tag ? ` (${day.tag})` : ''}
+    const critiquePrompt = externalApiKey
+      ? `Analyze my ${logForDate ? 'completed' : 'planned'} workout session and give me a thorough, insightful critique. Reference my full split structure and history to give context-aware feedback. Mention progression, balance, and any research-backed tips.
+
+Today's session — Day: ${day.name}${day.tag ? ` (${day.tag})` : ''}
 Exercises ${logForDate ? 'done' : 'planned'}:
 ${targetExs.map(e => `- ${e.name}: ${e.sets}×${e.reps || 'max'} reps${e.weight ? ` @ ${e.weight}${e.weightUnit}` : ''}`).join('\n')}`
       : `Analyze this ${logForDate ? 'completed' : 'planned'} workout. Keep it under 100 words with bullet points.
@@ -647,7 +751,7 @@ Exercises: ${targetExs.map(e => `${e.name} ${e.sets}×${e.reps || 'max'}`).join(
       const hasAi = window.ai;
 
       if (externalApiKey) {
-        result = await callExternalGeminiApi(externalApiKey, FLEXIBLE_SYSTEM_PROMPT, [], critiquePrompt, true);
+        result = await callExternalGeminiApi(externalApiKey, FLEXIBLE_SYSTEM_PROMPT + splitContext, [], critiquePrompt, true);
       } else if (hasAi) {
         let session = null;
         if (window.ai.languageModel) {
@@ -689,25 +793,39 @@ Exercises: ${targetExs.map(e => `${e.name} ${e.sets}×${e.reps || 'max'}`).join(
     setInputText('');
     setLoadingAi(true);
 
-    const targetExs = logForDate ? logForDate.exercises : (day.exercises || []);
     const externalApiKey = localStorage.getItem('user_gemini_api_key');
     const isLocalEngine = critique.includes('Local Analysis Engine');
 
     try {
       let reply = '';
       if (externalApiKey) {
-        // Flexible mode: full system prompt + Google Search grounding
-        const contextNote = `\n\nUser's current workout context (for reference if relevant):\nSplit: ${splitName} | Day: ${day.name}${day.tag ? ` (${day.tag})` : ''} | Exercises: ${targetExs.map(e => e.name).join(', ')}`;
-        reply = await callExternalGeminiApi(
-          externalApiKey,
-          FLEXIBLE_SYSTEM_PROMPT + contextNote,
-          chatHistory,
-          text.trim(),
-          true
-        );
-      } else if (window.ai && !isLocalEngine) {
-        const promptText = `You are a gym coach. Answer concisely in under 120 words with bullet points.
+        const systemPrompt = FLEXIBLE_SYSTEM_PROMPT + buildSplitContext(splitDays, logs, splitName);
+        const contents = historyToContents(chatHistory);
+        contents.push({ role: 'user', parts: [{ text: text.trim() }] });
 
+        const data = await callGeminiRaw(externalApiKey, systemPrompt, contents, [
+          ...SPLIT_FUNCTIONS,
+          { google_search: {} },
+        ]);
+
+        const fc = extractFunctionCall(data);
+        if (fc) {
+          // AI wants to make a change — pause and ask permission
+          const modelParts = data.candidates?.[0]?.content?.parts || [];
+          setPendingAction({
+            functionCall: fc,
+            geminiContents: [...contents, { role: 'model', parts: modelParts }],
+            updatedHistory,
+            systemPrompt,
+          });
+          setLoadingAi(false);
+          return;
+        }
+
+        reply = extractText(data);
+      } else if (window.ai && !isLocalEngine) {
+        const targetExs = logForDate ? logForDate.exercises : (day.exercises || []);
+        const promptText = `You are a gym coach. Answer concisely in under 120 words with bullet points.
 Split: ${splitName} | Day: ${day.name} | Exercises: ${targetExs.map(e => e.name).join(', ')}
 User: ${text.trim()}
 Coach:`;
@@ -732,6 +850,90 @@ Coach:`;
       console.error(err);
       const localReply = generateLocalCoachResponse(text.trim(), logForDate || { ...day, date: dateStr, splitName }, logs);
       const finalHistory = [...updatedHistory, { sender: 'coach', text: localReply }];
+      setChatHistory(finalHistory);
+      localStorage.setItem('ai_chat_history_' + cacheKey, JSON.stringify(finalHistory));
+    } finally {
+      setLoadingAi(false);
+    }
+  }
+
+  async function executeAction(functionCall) {
+    const { name, args } = functionCall;
+    if (name !== 'update_exercise') throw new Error(`Unknown function: ${name}`);
+
+    const targetDay = (splitDays || []).find(d =>
+      d.name.toLowerCase() === args.dayName.toLowerCase() ||
+      d.name.toLowerCase().includes(args.dayName.toLowerCase())
+    );
+    if (!targetDay) throw new Error(`Day "${args.dayName}" not found`);
+
+    const targetEx = (targetDay.exercises || []).find(e =>
+      e.name.toLowerCase() === args.exerciseName.toLowerCase() ||
+      e.name.toLowerCase().includes(args.exerciseName.toLowerCase())
+    );
+    if (!targetEx) throw new Error(`Exercise "${args.exerciseName}" not found in ${args.dayName}`);
+
+    const patch = {};
+    if (args.sets !== undefined) patch.sets = +args.sets;
+    if (args.reps !== undefined) patch.reps = +args.reps;
+    if (args.weight !== undefined) patch.weight = +args.weight;
+    if (args.weightUnit !== undefined) patch.weightUnit = args.weightUnit;
+    if (args.untilFailure !== undefined) patch.untilFailure = args.untilFailure;
+
+    await storage.updateExercise(splitId, targetDay._id, targetEx._id, patch);
+    return `Updated ${args.exerciseName} on ${args.dayName}: ${Object.entries(patch).map(([k, v]) => `${k}=${v}`).join(', ')}`;
+  }
+
+  async function handleActionApproved() {
+    if (!pendingAction) return;
+    const { functionCall, geminiContents, updatedHistory, systemPrompt } = pendingAction;
+    setPendingAction(null);
+    setLoadingAi(true);
+
+    try {
+      const result = await executeAction(functionCall);
+      queryClient.invalidateQueries({ queryKey: ['splits'] });
+
+      // Send function result back to Gemini for natural language wrap-up
+      const contentsWithResult = [
+        ...geminiContents,
+        { role: 'user', parts: [{ functionResponse: { name: functionCall.name, response: { result } } }] },
+      ];
+      const externalApiKey = localStorage.getItem('user_gemini_api_key');
+      const data = await callGeminiRaw(externalApiKey, systemPrompt, contentsWithResult, [{ google_search: {} }]);
+      const reply = extractText(data) || 'Done! The change has been applied to your split.';
+      const finalHistory = [...updatedHistory, { sender: 'coach', text: reply }];
+      setChatHistory(finalHistory);
+      localStorage.setItem('ai_chat_history_' + cacheKey, JSON.stringify(finalHistory));
+    } catch (err) {
+      console.error(err);
+      const finalHistory = [...updatedHistory, { sender: 'coach', text: `Sorry, I couldn't apply that change: ${err.message}` }];
+      setChatHistory(finalHistory);
+      localStorage.setItem('ai_chat_history_' + cacheKey, JSON.stringify(finalHistory));
+    } finally {
+      setLoadingAi(false);
+    }
+  }
+
+  async function handleActionDenied() {
+    if (!pendingAction) return;
+    const { functionCall, geminiContents, updatedHistory, systemPrompt } = pendingAction;
+    setPendingAction(null);
+    setLoadingAi(true);
+
+    try {
+      const externalApiKey = localStorage.getItem('user_gemini_api_key');
+      const contentsWithDenial = [
+        ...geminiContents,
+        { role: 'user', parts: [{ functionResponse: { name: functionCall.name, response: { result: 'User denied this change. Do not retry it.' } } }] },
+      ];
+      const data = await callGeminiRaw(externalApiKey, systemPrompt, contentsWithDenial, [{ google_search: {} }]);
+      const reply = extractText(data) || 'Understood, no changes were made.';
+      const finalHistory = [...updatedHistory, { sender: 'coach', text: reply }];
+      setChatHistory(finalHistory);
+      localStorage.setItem('ai_chat_history_' + cacheKey, JSON.stringify(finalHistory));
+    } catch {
+      const finalHistory = [...updatedHistory, { sender: 'coach', text: 'Understood, no changes were made.' }];
       setChatHistory(finalHistory);
       localStorage.setItem('ai_chat_history_' + cacheKey, JSON.stringify(finalHistory));
     } finally {
@@ -1194,6 +1396,7 @@ Coach:`;
 
       {completedLog && <DailyShareCard log={completedLog} cardRef={shareCardRef} />}
       {completedLog && <CompletionScreen log={completedLog} onClose={() => setCompletedLog(null)} onShare={handleShare} sharing={sharing} />}
+      {pendingAction && <ActionPermissionModal pendingAction={pendingAction} onAllow={handleActionApproved} onDeny={handleActionDenied} />}
     </>
   );
 }
