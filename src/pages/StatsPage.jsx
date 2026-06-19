@@ -6,6 +6,8 @@ import { createPortal } from 'react-dom';
 
 const LOGS_STALE = 2 * 60 * 1000;
 const DOW_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 function ShareIcon() {
   return (
@@ -61,6 +63,266 @@ async function captureAndShare(ref, filename, title) {
       URL.revokeObjectURL(url);
     }
   }, 'image/png');
+}
+
+/* ─── Activity Tracker (Monthly + Yearly) ─── */
+function ChevronLeftSmall() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <polyline points="9,3 5,7 9,11" />
+    </svg>
+  );
+}
+function ChevronRightSmall() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <polyline points="5,3 9,7 5,11" />
+    </svg>
+  );
+}
+
+function MonthCalendar({ year, month, logDates }) {
+  const today = new Date();
+  const todayStr = today.toISOString().slice(0, 10);
+  const firstDay = new Date(year, month, 1);
+  // Monday-first: convert Sunday(0) → 6, Monday(1) → 0, etc.
+  const startDow = (firstDay.getDay() + 6) % 7;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < startDow; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  // pad to complete last row
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  return (
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, marginBottom: 4 }}>
+        {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((l, i) => (
+          <div key={i} style={{ textAlign: 'center', fontSize: 9, fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.06em', paddingBottom: 4 }}>{l}</div>
+        ))}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2 }}>
+        {cells.map((d, i) => {
+          if (!d) return <div key={i} />;
+          const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+          const hasLog = logDates.has(dateStr);
+          const isToday = dateStr === todayStr;
+          const isFuture = dateStr > todayStr;
+          return (
+            <div
+              key={i}
+              style={{
+                aspectRatio: '1',
+                borderRadius: 4,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 11,
+                fontFamily: 'var(--font-mono)',
+                fontWeight: hasLog ? 900 : 500,
+                background: hasLog ? 'var(--accent)' : isToday ? 'rgba(232,255,90,0.1)' : 'var(--bg3)',
+                color: hasLog ? '#0a0a0a' : isToday ? 'var(--accent)' : isFuture ? 'var(--text3)' : 'var(--text2)',
+                border: isToday && !hasLog ? '1px solid rgba(232,255,90,0.35)' : '1px solid transparent',
+                opacity: isFuture ? 0.35 : 1,
+                transition: 'background 0.12s',
+              }}
+            >
+              {d}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function YearHeatmap({ year, logDates }) {
+  const today = new Date();
+  // Build 52 complete weeks ending at current week (or end of year if past)
+  const endDate = new Date(Math.min(today, new Date(year, 11, 31)));
+  // Snap endDate to end of its week (Sunday)
+  const dayOfWeek = endDate.getDay(); // 0=Sun
+  endDate.setDate(endDate.getDate() + (dayOfWeek === 0 ? 0 : 7 - dayOfWeek));
+
+  const startDate = new Date(endDate);
+  startDate.setDate(endDate.getDate() - 52 * 7 + 1);
+
+  // Build grid: columns = weeks, rows = days Mon–Sun
+  const weeks = [];
+  let cursor = new Date(startDate);
+  // Snap cursor to Monday
+  const curDow = (cursor.getDay() + 6) % 7;
+  cursor.setDate(cursor.getDate() - curDow);
+
+  while (cursor <= endDate) {
+    const week = [];
+    for (let d = 0; d < 7; d++) {
+      const dateStr = cursor.toISOString().slice(0, 10);
+      week.push({ dateStr, inYear: cursor.getFullYear() === year });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    weeks.push(week);
+  }
+
+  // Month labels: find which week column each month starts in
+  const monthLabels = [];
+  weeks.forEach((week, wi) => {
+    const firstOfWeek = new Date(week[0].dateStr + 'T12:00:00');
+    if (firstOfWeek.getDate() <= 7 && firstOfWeek.getMonth() !== new Date(weeks[wi > 0 ? wi - 1 : 0][0].dateStr + 'T12:00:00').getMonth()) {
+      monthLabels.push({ wi, label: MONTH_SHORT[firstOfWeek.getMonth()] });
+    }
+  });
+
+  const todayStr = today.toISOString().slice(0, 10);
+
+  return (
+    <div style={{ overflowX: 'auto', paddingBottom: 4 }}>
+      {/* Month labels row */}
+      <div style={{ display: 'flex', marginBottom: 4, paddingLeft: 0 }}>
+        {weeks.map((_, wi) => {
+          const label = monthLabels.find((m) => m.wi === wi);
+          return (
+            <div key={wi} style={{ width: 12, flexShrink: 0, marginRight: 2, fontSize: 8, fontFamily: 'var(--font-mono)', color: 'var(--text3)', letterSpacing: '0.04em', whiteSpace: 'nowrap', overflow: 'visible' }}>
+              {label ? label.label : ''}
+            </div>
+          );
+        })}
+      </div>
+      {/* Grid */}
+      <div style={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+        {weeks.map((week, wi) => (
+          <div key={wi} style={{ display: 'flex', flexDirection: 'column', gap: 2, flexShrink: 0 }}>
+            {week.map(({ dateStr, inYear }, di) => {
+              const hasLog = logDates.has(dateStr);
+              const isFuture = dateStr > todayStr;
+              const isToday = dateStr === todayStr;
+              return (
+                <div
+                  key={di}
+                  title={dateStr}
+                  style={{
+                    width: 12,
+                    height: 12,
+                    borderRadius: 2,
+                    background: hasLog ? 'var(--accent)' : isToday ? 'rgba(232,255,90,0.15)' : 'var(--bg3)',
+                    border: isToday && !hasLog ? '1px solid rgba(232,255,90,0.4)' : '1px solid transparent',
+                    opacity: isFuture || !inYear ? 0.25 : 1,
+                    transition: 'background 0.1s',
+                  }}
+                />
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ActivityTracker({ logs }) {
+  const today = new Date();
+  const [view, setView] = useState('month');
+  const [monthOffset, setMonthOffset] = useState(0);
+  const [viewYear, setViewYear] = useState(today.getFullYear());
+
+  const logDates = new Set(logs.map((l) => l.date));
+
+  const displayDate = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
+  const displayYear = displayDate.getFullYear();
+  const displayMonth = displayDate.getMonth();
+
+  const sessionCountMonth = logs.filter((l) => {
+    const d = new Date(l.date + 'T12:00:00');
+    return d.getFullYear() === displayYear && d.getMonth() === displayMonth;
+  }).length;
+
+  const sessionCountYear = logs.filter((l) => l.date.startsWith(String(viewYear))).length;
+
+  const minYear = logs.length > 0 ? Math.min(...logs.map((l) => +l.date.slice(0, 4))) : today.getFullYear();
+
+  return (
+    <div style={{ borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg2)', padding: '16px', marginBottom: 24 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {['month', 'year'].map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              style={{
+                padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                letterSpacing: '0.05em', textTransform: 'uppercase', cursor: 'pointer', border: 'none',
+                background: view === v ? 'var(--accent)' : 'var(--bg3)',
+                color: view === v ? '#0a0a0a' : 'var(--text3)',
+                transition: 'all 0.15s',
+              }}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
+        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--accent)', fontWeight: 700 }}>
+          {view === 'month' ? `${sessionCountMonth} session${sessionCountMonth !== 1 ? 's' : ''}` : `${sessionCountYear} sessions`}
+        </div>
+      </div>
+
+      {view === 'month' ? (
+        <>
+          {/* Month nav */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <button
+              onClick={() => setMonthOffset((o) => o - 1)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', padding: 4, display: 'flex' }}
+            >
+              <ChevronLeftSmall />
+            </button>
+            <div style={{ fontSize: 14, fontWeight: 800, fontFamily: 'var(--font-display)', letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--text)' }}>
+              {MONTH_NAMES[displayMonth]} {displayYear}
+            </div>
+            <button
+              onClick={() => setMonthOffset((o) => Math.min(o + 1, 0))}
+              disabled={monthOffset >= 0}
+              style={{ background: 'none', border: 'none', cursor: monthOffset >= 0 ? 'default' : 'pointer', color: monthOffset >= 0 ? 'var(--bg3)' : 'var(--text3)', padding: 4, display: 'flex' }}
+            >
+              <ChevronRightSmall />
+            </button>
+          </div>
+          <MonthCalendar year={displayYear} month={displayMonth} logDates={logDates} />
+        </>
+      ) : (
+        <>
+          {/* Year nav */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <button
+              onClick={() => setViewYear((y) => Math.max(y - 1, minYear))}
+              disabled={viewYear <= minYear}
+              style={{ background: 'none', border: 'none', cursor: viewYear <= minYear ? 'default' : 'pointer', color: viewYear <= minYear ? 'var(--bg3)' : 'var(--text3)', padding: 4, display: 'flex' }}
+            >
+              <ChevronLeftSmall />
+            </button>
+            <div style={{ fontSize: 14, fontWeight: 800, fontFamily: 'var(--font-display)', letterSpacing: '0.04em', color: 'var(--text)' }}>
+              {viewYear}
+            </div>
+            <button
+              onClick={() => setViewYear((y) => Math.min(y + 1, today.getFullYear()))}
+              disabled={viewYear >= today.getFullYear()}
+              style={{ background: 'none', border: 'none', cursor: viewYear >= today.getFullYear() ? 'default' : 'pointer', color: viewYear >= today.getFullYear() ? 'var(--bg3)' : 'var(--text3)', padding: 4, display: 'flex' }}
+            >
+              <ChevronRightSmall />
+            </button>
+          </div>
+          <YearHeatmap year={viewYear} logDates={logDates} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, justifyContent: 'flex-end' }}>
+            <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text3)' }}>Less</div>
+            {[0.1, 0.3, 0.6, 1].map((op, i) => (
+              <div key={i} style={{ width: 10, height: 10, borderRadius: 2, background: i === 3 ? 'var(--accent)' : `rgba(232,255,90,${op})` }} />
+            ))}
+            <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text3)' }}>More</div>
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
 /* ─── 7-day activity strip ─── */
@@ -346,6 +608,14 @@ export default function StatsPage() {
             </div>
             <WeekStrip weekLogs={weekLogs} />
           </div>
+
+          {/* ── Activity Tracker ── */}
+          {logs.length > 0 && (
+            <>
+              <SectionLabel>Activity</SectionLabel>
+              <ActivityTracker logs={logs} />
+            </>
+          )}
 
           {/* ── Progression ── */}
           {progressionData.length > 0 && (
