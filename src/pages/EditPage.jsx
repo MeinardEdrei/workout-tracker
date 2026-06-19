@@ -217,6 +217,40 @@ function ConfirmModal({ message, onConfirm, onClose }) {
   );
 }
 
+function WeightSyncModal({ exName, oldWeight, newWeight, unit, otherDays, onSync, onSkip }) {
+  const delta = newWeight - oldWeight;
+  const isIncrease = delta > 0;
+  const directionColor = isIncrease ? 'var(--green)' : '#f87171';
+  return createPortal(
+    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onSkip()}>
+      <div className="modal">
+        <div className="modal-title" style={{ fontSize: 16 }}>Sync Weight Change?</div>
+        <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 12, lineHeight: 1.5 }}>
+          <strong style={{ color: 'var(--text)' }}>{exName}</strong>
+          {' '}changed from{' '}
+          <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text)' }}>{oldWeight}{unit}</span>
+          {' → '}
+          <span style={{ fontFamily: 'var(--font-mono)', color: directionColor, fontWeight: 700 }}>{newWeight}{unit}</span>
+          {' '}
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', background: isIncrease ? 'rgba(68,255,136,0.12)' : 'rgba(248,113,113,0.12)', color: directionColor, padding: '2px 6px', borderRadius: 4 }}>
+            {isIncrease ? `+${delta}${unit} increase` : `${delta}${unit} decrease`}
+          </span>
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 16 }}>
+          Also appears in{' '}
+          <strong style={{ color: 'var(--text2)' }}>{otherDays.map((d) => d.dayName).join(', ')}</strong>
+          . Sync the new weight there too?
+        </div>
+        <div className="modal-actions">
+          <button className="btn btn-ghost" onClick={onSkip}>Keep separate</button>
+          <button className="btn btn-accent" onClick={onSync}>Sync to all days</button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 function EditDayModal({ initialName = '', initialTag = '', onConfirm, onClose }) {
   const [name, setName] = useState(initialName);
   const [selectedTag, setSelectedTag] = useState(TAG_OPTIONS.includes(initialTag) ? initialTag : null);
@@ -489,8 +523,9 @@ function AddExerciseModal({ onConfirm, onClose }) {
 }
 
 /* ─── Inline exercise editor ─── */
-function ExerciseEditRow({ ex, index, splitId, dayId, onUpdate, onDelete, dragHandleProps }) {
-  const { storage } = useStorage();
+function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDelete, dragHandleProps }) {
+  const queryClient = useQueryClient();
+  const { storage, storageKey } = useStorage();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
     name: ex.name, sets: ex.sets, reps: ex.reps ?? 10, weight: ex.weight, weightUnit: ex.weightUnit,
@@ -504,7 +539,18 @@ function ExerciseEditRow({ ex, index, splitId, dayId, onUpdate, onDelete, dragHa
   const [currentImageUrl, setCurrentImageUrl] = useState(ex.imageUrl || '');
   const [suggestions, setSuggestions] = useState([]);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [syncPrompt, setSyncPrompt] = useState(null);
   const fileInputRef = useRef(null);
+
+  function openEdit() {
+    setForm({
+      name: ex.name, sets: ex.sets, reps: ex.reps ?? 10, weight: ex.weight,
+      weightUnit: ex.weightUnit, muscleTargets: ex.muscleTargets || [],
+      untilFailure: ex.untilFailure || false,
+    });
+    setCurrentImageUrl(ex.imageUrl || '');
+    setEditing(true);
+  }
 
   useEffect(() => {
     const q = form.name.trim();
@@ -541,18 +587,42 @@ function ExerciseEditRow({ ex, index, splitId, dayId, onUpdate, onDelete, dragHa
 
   async function save() {
     setSaving(true);
+    const oldWeight = ex.weight ?? 0;
+    const newWeight = +form.weight;
     try {
       const updated = await storage.updateExercise(splitId, dayId, ex._id, {
         ...form,
         sets: +form.sets,
         reps: form.untilFailure ? null : +form.reps,
-        weight: +form.weight,
+        weight: newWeight,
       });
       onUpdate(updated);
       setEditing(false);
+
+      if (newWeight !== oldWeight) {
+        const otherDays = (splitDays || [])
+          .filter((d) => d._id !== dayId && !d.isRest)
+          .flatMap((d) =>
+            (d.exercises || [])
+              .filter((e) => e.name.toLowerCase() === ex.name.toLowerCase())
+              .map((e) => ({ dayName: d.name, dayId: d._id, exId: e._id }))
+          );
+        if (otherDays.length > 0) {
+          setSyncPrompt({ otherDays, oldWeight, newWeight, unit: form.weightUnit });
+        }
+      }
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleSync() {
+    if (!syncPrompt) return;
+    for (const { dayId: dId, exId } of syncPrompt.otherDays) {
+      await storage.updateExercise(splitId, dId, exId, { weight: syncPrompt.newWeight, weightUnit: syncPrompt.unit });
+    }
+    queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
+    setSyncPrompt(null);
   }
 
   async function handleFetchImage() {
@@ -799,8 +869,19 @@ function ExerciseEditRow({ ex, index, splitId, dayId, onUpdate, onDelete, dragHa
           </div>
         )}
       </div>
-      <button className="btn-icon" style={{ flexShrink: 0 }} onClick={() => setEditing(true)} title="Edit"><EditPencil /></button>
+      <button className="btn-icon" style={{ flexShrink: 0 }} onClick={openEdit} title="Edit"><EditPencil /></button>
       <button className="btn-icon" style={{ color: 'var(--red)', flexShrink: 0 }} onClick={() => setDeleteConfirm(true)} title="Delete"><TrashIcon /></button>
+      {syncPrompt && (
+        <WeightSyncModal
+          exName={ex.name}
+          oldWeight={syncPrompt.oldWeight}
+          newWeight={syncPrompt.newWeight}
+          unit={syncPrompt.unit}
+          otherDays={syncPrompt.otherDays}
+          onSync={handleSync}
+          onSkip={() => setSyncPrompt(null)}
+        />
+      )}
       {deleteConfirm && (
         <ConfirmModal
           message={`Delete "${ex.name}"?`}
@@ -813,7 +894,7 @@ function ExerciseEditRow({ ex, index, splitId, dayId, onUpdate, onDelete, dragHa
 }
 
 /* ─── Sortable wrapper for exercise row ─── */
-function SortableExerciseEditRow({ ex, index, splitId, dayId, onUpdate, onDelete }) {
+function SortableExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDelete }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: ex._id });
   return (
     <div
@@ -829,6 +910,7 @@ function SortableExerciseEditRow({ ex, index, splitId, dayId, onUpdate, onDelete
         index={index}
         splitId={splitId}
         dayId={dayId}
+        splitDays={splitDays}
         onUpdate={onUpdate}
         onDelete={onDelete}
         dragHandleProps={{ ...attributes, ...listeners }}
@@ -845,6 +927,10 @@ function DayEditor({ day, split, onBack, onDayUpdated }) {
   const [modal, setModal] = useState(null);
   const [isRest, setIsRest] = useState(day.isRest);
   const [reorderError, setReorderError] = useState(null);
+
+  useEffect(() => {
+    setExercises(day.exercises || []);
+  }, [day]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -971,6 +1057,7 @@ function DayEditor({ day, split, onBack, onDayUpdated }) {
                       index={i}
                       splitId={split._id}
                       dayId={day._id}
+                      splitDays={split.days}
                       onUpdate={handleUpdateExercise}
                       onDelete={handleDeleteExercise}
                     />
@@ -1002,7 +1089,12 @@ function SplitEditorInner({ split, onBack, onSplitUpdated }) {
   const [activeDayId, setActiveDayId] = useState(null);
   const [modal, setModal] = useState(null);
 
+  useEffect(() => {
+    setDays([...(split.days || [])].sort((a, b) => (a.dayOrder ?? 8) - (b.dayOrder ?? 8)));
+  }, [split]);
+
   const activeDay = days.find((d) => d._id === activeDayId);
+  const splitWithCurrentDays = { ...split, days };
 
   function handleDayUpdated(updated) {
     const newDays = days.map((d) => (d._id === updated._id ? { ...d, ...updated } : d));
@@ -1028,7 +1120,7 @@ function SplitEditorInner({ split, onBack, onSplitUpdated }) {
     return (
       <DayEditor
         day={activeDay}
-        split={split}
+        split={splitWithCurrentDays}
         onBack={() => setActiveDayId(null)}
         onDayUpdated={handleDayUpdated}
       />
