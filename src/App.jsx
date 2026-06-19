@@ -3,7 +3,6 @@ import './index.css';
 import { useAuth } from './context/AuthContext';
 import TodayPage from './pages/TodayPage';
 import SplitsPage from './pages/SplitsPage';
-import EditPage from './pages/EditPage';
 import StatsPage from './pages/StatsPage';
 import AdminPage from './pages/AdminPage';
 import CalculatorPage from './pages/CalculatorPage';
@@ -14,7 +13,6 @@ const NAV = [
   { id: 'today', label: 'Today' },
   { id: 'splits', label: 'Splits' },
   { id: 'stats', label: 'Stats' },
-  { id: 'edit', label: 'Edit' },
   { id: 'calc', label: 'Calc' },
 ];
 
@@ -85,7 +83,7 @@ function CalcIcon({ active }) {
   );
 }
 
-const ICONS = { today: TodayIcon, splits: SplitsIcon, stats: StatsIcon, edit: EditIcon, calc: CalcIcon, admin: AdminIcon };
+const ICONS = { today: TodayIcon, splits: SplitsIcon, stats: StatsIcon, calc: CalcIcon, admin: AdminIcon };
 
 // Small spinner for inline use in buttons
 function InlineSpinner() {
@@ -308,7 +306,6 @@ export default function App() {
         {tab === 'today' && <TodayPage />}
         {tab === 'splits' && <SplitsPage />}
         {tab === 'stats' && <StatsPage />}
-        {tab === 'edit' && <EditPage />}
         {tab === 'calc' && <CalculatorPage />}
         {tab === 'admin' && isAdmin && <AdminPage />}
       </div>

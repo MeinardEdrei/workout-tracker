@@ -133,8 +133,12 @@ const seed = [
 async function run() {
   await mongoose.connect(process.env.MONGODB_URI);
   console.log('Connected to MongoDB');
-  await Split.deleteMany({});
-  console.log('Cleared existing splits');
+  const existing = await Split.countDocuments();
+  if (existing > 0) {
+    console.log(`Seed aborted — ${existing} split(s) already exist. Delete them manually first if you really want to reseed.`);
+    await mongoose.disconnect();
+    return;
+  }
   await Split.insertMany(seed);
   console.log('Seed data inserted ✓');
   await mongoose.disconnect();

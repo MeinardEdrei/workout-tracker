@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useStorage } from '../hooks/useStorage';
 import { useAuth } from '../context/AuthContext';
 import SplitShareModal from '../components/SplitShareModal';
+import SplitEditor from './EditPage';
 
 const API = import.meta.env.VITE_API_URL || '';
 
@@ -262,6 +263,7 @@ export default function SplitsPage() {
   const { user, isLoggedIn, logout } = useAuth();
   const [modal, setModal] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
+  const [editingSplitId, setEditingSplitId] = useState(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
   const [signInFailed, setSignInFailed] = useState(false);
@@ -417,6 +419,10 @@ Coach:`;
         setSigningIn(false);
         window.location.href = `${API}/api/auth/google`;
       });
+  }
+
+  if (editingSplitId) {
+    return <SplitEditor splitId={editingSplitId} onBack={() => setEditingSplitId(null)} />;
   }
 
   return (
@@ -631,6 +637,12 @@ Coach:`;
                     <button className="btn-icon" onClick={() => setModal({ type: 'rename', split })} title="Rename">
                       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M11.5 2.5a1.5 1.5 0 0 1 2.12 2.12L5 13.24l-3 .76.76-3L11.5 2.5Z" />
+                      </svg>
+                    </button>
+                    <button className="btn-icon" onClick={() => setEditingSplitId(split._id)} title="Edit days">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z" />
                       </svg>
                     </button>
                     <button className="btn-icon" onClick={() => setShareModal(split)} title="Share">

@@ -984,7 +984,7 @@ function DayEditor({ day, split, onBack, onDayUpdated }) {
 }
 
 /* ─── Split editor panel ─── */
-function SplitEditor({ split, onBack, onSplitUpdated }) {
+function SplitEditorInner({ split, onBack, onSplitUpdated }) {
   const queryClient = useQueryClient();
   const { storage } = useStorage();
   const [days, setDays] = useState(
@@ -1089,77 +1089,29 @@ function SplitEditor({ split, onBack, onSplitUpdated }) {
   );
 }
 
-/* ─── Edit Page root ─── */
-export default function EditPage() {
+/* ─── SplitEditor — exported for use by SplitsPage ─── */
+export default function SplitEditor({ splitId, onBack }) {
   const { storage, storageKey } = useStorage();
-  const [activeSplitId, setActiveSplitId] = useState(null);
 
   const { data: splits = [], isLoading } = useQuery({
     queryKey: ['splits', storageKey],
     queryFn: storage.getSplits,
   });
 
-  const activeSplit = splits.find((s) => s._id === activeSplitId);
+  const split = splits.find((s) => s._id === splitId);
 
   function handleSplitUpdated() {
-    // local state update handled inside SplitEditor; query syncs on next invalidation
+    // local state update handled inside SplitEditorInner; query syncs on next invalidation
   }
 
-  if (activeSplit) {
-    return (
-      <SplitEditor
-        split={activeSplit}
-        onBack={() => setActiveSplitId(null)}
-        onSplitUpdated={handleSplitUpdated}
-      />
-    );
-  }
+  if (isLoading) return <div className="spinner" />;
+  if (!split) return <div className="empty-state">Split not found.</div>;
 
   return (
-    <div>
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Edit</h1>
-          <div className="page-subtitle">Select a split to edit</div>
-        </div>
-      </div>
-
-      {isLoading ? (
-        <div className="spinner" />
-      ) : splits.length === 0 ? (
-        <div className="empty-state">No splits. Create one in the Splits tab.</div>
-      ) : (
-        <div style={{ padding: '16px 16px 0' }}>
-          {splits.map((split) => (
-            <div
-              key={split._id}
-              style={{
-                padding: '14px 16px', marginBottom: 8, borderRadius: 8,
-                border: '1px solid var(--border)', background: 'var(--bg2)',
-                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              }}
-              onClick={() => setActiveSplitId(split._id)}
-            >
-              <div>
-                <div style={{ fontSize: 17, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.01em' }}>
-                  {split.name}
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 2 }}>
-                  {split.days?.length || 0} days
-                  {split.isActive && (
-                    <span style={{ marginLeft: 8, color: 'var(--accent)', fontWeight: 700, letterSpacing: '0.05em', fontSize: 10, textTransform: 'uppercase' }}>
-                      ● Active
-                    </span>
-                  )}
-                </div>
-              </div>
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--text3)" strokeWidth="2" strokeLinecap="round">
-                <polyline points="5,3 9,7 5,11" />
-              </svg>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+    <SplitEditorInner
+      split={split}
+      onBack={onBack}
+      onSplitUpdated={handleSplitUpdated}
+    />
   );
 }
