@@ -473,28 +473,27 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
 }
 
 /* ─── External Gemini API Helper ─── */
-async function callExternalGeminiApi(apiKey, systemPrompt, chatHistory, userText) {
+async function callExternalGeminiApi(apiKey, systemPrompt, chatHistory, userText, useSearch = false) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-  
+
   const contents = chatHistory.map(m => ({
     role: m.sender === 'user' ? 'user' : 'model',
     parts: [{ text: m.text.replace(/\*✨.*\*/g, '').trim() }]
   }));
-  
-  contents.push({
-    role: 'user',
-    parts: [{ text: userText.trim() }]
-  });
+  contents.push({ role: 'user', parts: [{ text: userText.trim() }] });
+
+  const body = {
+    contents,
+    systemInstruction: { parts: [{ text: systemPrompt }] },
+  };
+  if (useSearch) {
+    body.tools = [{ google_search: {} }];
+  }
 
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents,
-      systemInstruction: {
-        parts: [{ text: systemPrompt }]
-      }
-    })
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
@@ -503,12 +502,18 @@ async function callExternalGeminiApi(apiKey, systemPrompt, chatHistory, userText
   }
 
   const data = await response.json();
-  const reply = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!reply) {
-    throw new Error("Empty response from Gemini API.");
-  }
-  return reply.trim();
+  // Grounded responses may return multiple parts; collect all text parts
+  const parts = data.candidates?.[0]?.content?.parts || [];
+  const reply = parts.map(p => p.text || '').join('').trim();
+  if (!reply) throw new Error('Empty response from Gemini API.');
+  return reply;
 }
+
+const FLEXIBLE_SYSTEM_PROMPT = `You are a smart, knowledgeable AI assistant with access to Google Search. You can answer questions about anything — fitness, nutrition, sports science, general knowledge, current events, research, and more. Use your search capability to provide accurate, up-to-date information whenever relevant.
+
+When the user asks fitness or workout questions, provide expert coaching advice. When they ask about anything else — science, health, food, lifestyle, research — answer just as helpfully. Be conversational, thorough, and don't limit yourself to only workout topics. Format with markdown bullet points where it helps clarity, but feel free to use prose for conversational answers.`;
+
+const RESTRICTED_SYSTEM_PROMPT = `You are a professional gym coach. Analyze workout logs and provide helpful, encouraging, and actionable recommendations in under 120 words using markdown bullet points. Keep responses concise and focused on the workout.`;
 
 function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dateStr, logForDate, logs }) {
   const queryClient = useQueryClient();
@@ -623,41 +628,41 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
     setLoadingAi(true);
 
     const targetExs = logForDate ? logForDate.exercises : (day.exercises || []);
-    const promptText = `You are a professional strength coach. Analyze the user's ${logForDate ? 'completed' : 'planned'} workout split and today's day, and provide a brief critique and actionable recommendation for this session. Keep it under 100 words and format with clear markdown bullet points.
+    const externalApiKey = localStorage.getItem('user_gemini_api_key');
+
+    const critiquePrompt = externalApiKey
+      ? `Analyze my ${logForDate ? 'completed' : 'planned'} workout and give me a thorough, insightful critique. Feel free to reference current sports science or nutrition research if relevant. Be specific about what's good, what could be improved, and any tips for progression or recovery.
 
 Workout split: ${splitName}
-Workout day: ${day.name} (${day.tag || 'No tag'})
-Exercises ${logForDate ? 'completed' : 'planned'}:
-${targetExs.map(e => `- ${e.name}: ${e.sets} sets x ${e.reps} reps ${e.weight ? `@ ${e.weight}${e.weightUnit}` : ''}`).join('\n')}`;
+Day: ${day.name}${day.tag ? ` (${day.tag})` : ''}
+Exercises ${logForDate ? 'done' : 'planned'}:
+${targetExs.map(e => `- ${e.name}: ${e.sets}×${e.reps || 'max'} reps${e.weight ? ` @ ${e.weight}${e.weightUnit}` : ''}`).join('\n')}`
+      : `Analyze this ${logForDate ? 'completed' : 'planned'} workout. Keep it under 100 words with bullet points.
+
+Split: ${splitName} | Day: ${day.name}
+Exercises: ${targetExs.map(e => `${e.name} ${e.sets}×${e.reps || 'max'}`).join(', ')}`;
 
     try {
       let result = '';
       const hasAi = window.ai;
-      const externalApiKey = localStorage.getItem('user_gemini_api_key');
-      
+
       if (externalApiKey) {
-        const systemPrompt = "You are a professional gym coach. You analyze workout logs and provide helpful, encouraging, and actionable recommendations in under 120 words using markdown bullet points.";
-        result = await callExternalGeminiApi(externalApiKey, systemPrompt, [], promptText);
+        result = await callExternalGeminiApi(externalApiKey, FLEXIBLE_SYSTEM_PROMPT, [], critiquePrompt, true);
       } else if (hasAi) {
         let session = null;
         if (window.ai.languageModel) {
-          session = await window.ai.languageModel.create({
-            systemPrompt: "You are a professional gym coach. You analyze workout logs and provide helpful, encouraging, and actionable recommendations in under 120 words using markdown bullet points."
-          });
+          session = await window.ai.languageModel.create({ systemPrompt: RESTRICTED_SYSTEM_PROMPT });
         } else if (window.ai.assistant) {
           session = await window.ai.assistant.create();
         } else if (window.ai.createTextSession) {
           session = await window.ai.createTextSession();
         }
-
-        if (session) {
-          result = await session.prompt(promptText);
-          session.destroy?.();
-        }
+        if (session) { result = await session.prompt(critiquePrompt); session.destroy?.(); }
       }
 
       if (result && result.trim()) {
-        const withTag = result.trim() + (externalApiKey ? '\n\n*✨ Powered by Gemini (API Key)*' : '\n\n*✨ Powered by Gemini Nano (Offline)*');
+        const tag = externalApiKey ? '\n\n*✨ Powered by Gemini + Google Search*' : '\n\n*✨ Powered by Gemini Nano (Offline)*';
+        const withTag = result.trim() + tag;
         localStorage.setItem('ai_critique_' + cacheKey, withTag);
         setCritique(withTag);
       } else {
@@ -666,7 +671,7 @@ ${targetExs.map(e => `- ${e.name}: ${e.sets} sets x ${e.reps} reps ${e.weight ? 
         setCritique(localResult);
       }
     } catch (err) {
-      console.error("Gemini AI failed, falling back to local analysis:", err);
+      console.error('Gemini AI failed, falling back to local analysis:', err);
       const localResult = generateOnDeviceCritique(logForDate || { ...day, date: dateStr, splitName }, logs) + '\n\n*✨ Powered by Local Analysis Engine*';
       localStorage.setItem('ai_critique_' + cacheKey, localResult);
       setCritique(localResult);
@@ -684,47 +689,33 @@ ${targetExs.map(e => `- ${e.name}: ${e.sets} sets x ${e.reps} reps ${e.weight ? 
     setInputText('');
     setLoadingAi(true);
 
-    const isLocalEngine = critique.includes('Local Analysis Engine');
     const targetExs = logForDate ? logForDate.exercises : (day.exercises || []);
     const externalApiKey = localStorage.getItem('user_gemini_api_key');
+    const isLocalEngine = critique.includes('Local Analysis Engine');
 
     try {
       let reply = '';
       if (externalApiKey) {
-        const systemPrompt = `You are a professional strength coach. Answer the user's question about their workout, split, or general questions. Keep your answer under 150 words and format with clear markdown bullet points.
-
-Workout split: ${splitName}
-Workout day: ${day.name} (${day.tag || 'No tag'})
-Exercises: ${targetExs.map(e => e.name).join(', ')}`;
-
-        reply = await callExternalGeminiApi(externalApiKey, systemPrompt, chatHistory, text.trim());
+        // Flexible mode: full system prompt + Google Search grounding
+        const contextNote = `\n\nUser's current workout context (for reference if relevant):\nSplit: ${splitName} | Day: ${day.name}${day.tag ? ` (${day.tag})` : ''} | Exercises: ${targetExs.map(e => e.name).join(', ')}`;
+        reply = await callExternalGeminiApi(
+          externalApiKey,
+          FLEXIBLE_SYSTEM_PROMPT + contextNote,
+          chatHistory,
+          text.trim(),
+          true
+        );
       } else if (window.ai && !isLocalEngine) {
-        // Chat using Chrome Gemini Nano Prompt API
-        const promptText = `You are a professional strength coach. Answer the user's question about their workout or split. Keep your answer under 120 words and format with clear markdown bullet points.
+        const promptText = `You are a gym coach. Answer concisely in under 120 words with bullet points.
 
-Workout split: ${splitName}
-Workout day: ${day.name} (${day.tag || 'No tag'})
-Exercises: ${targetExs.map(e => e.name).join(', ')}
-
-Chat History:
-Coach: ${critique.replace(/\*✨.*\*/, '')}
-${chatHistory.map(m => `${m.sender === 'user' ? 'User' : 'Coach'}: ${m.text}`).join('\n')}
+Split: ${splitName} | Day: ${day.name} | Exercises: ${targetExs.map(e => e.name).join(', ')}
 User: ${text.trim()}
 Coach:`;
-
         let session = null;
-        if (window.ai.languageModel) {
-          session = await window.ai.languageModel.create();
-        } else if (window.ai.assistant) {
-          session = await window.ai.assistant.create();
-        } else if (window.ai.createTextSession) {
-          session = await window.ai.createTextSession();
-        }
-
-        if (session) {
-          reply = await session.prompt(promptText);
-          session.destroy?.();
-        }
+        if (window.ai.languageModel) session = await window.ai.languageModel.create({ systemPrompt: RESTRICTED_SYSTEM_PROMPT });
+        else if (window.ai.assistant) session = await window.ai.assistant.create();
+        else if (window.ai.createTextSession) session = await window.ai.createTextSession();
+        if (session) { reply = await session.prompt(promptText); session.destroy?.(); }
       }
 
       if (reply && reply.trim()) {
@@ -732,7 +723,6 @@ Coach:`;
         setChatHistory(finalHistory);
         localStorage.setItem('ai_chat_history_' + cacheKey, JSON.stringify(finalHistory));
       } else {
-        // Fallback to local heuristic responder
         const localReply = generateLocalCoachResponse(text.trim(), logForDate || { ...day, date: dateStr, splitName }, logs);
         const finalHistory = [...updatedHistory, { sender: 'coach', text: localReply }];
         setChatHistory(finalHistory);
@@ -838,7 +828,9 @@ Coach:`;
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, borderBottom: '1px solid rgba(232,255,90,0.1)', paddingBottom: 6 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ fontSize: 16 }}>✨</span>
-                    <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>AI Coach Chat</span>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      {apiKey ? 'AI Coach · Search Enabled' : 'AI Coach'}
+                    </span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <button 
@@ -976,45 +968,47 @@ Coach:`;
                 </div>
 
                 {/* Quick Replies presets */}
-                {!loadingAi && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-                    <button 
-                      onClick={() => handleSendReply("Is my split too much volume?")}
-                      style={{ background: 'rgba(232,255,90,0.05)', border: '1px solid rgba(232,255,90,0.15)', borderRadius: 12, padding: '4px 10px', fontSize: 11, color: 'var(--accent)', cursor: 'pointer', transition: 'all 0.15s' }}
-                      onMouseEnter={(e) => { e.target.style.background = 'rgba(232,255,90,0.1)'; }}
-                      onMouseLeave={(e) => { e.target.style.background = 'rgba(232,255,90,0.05)'; }}
-                    >
-                      Is this split too much?
-                    </button>
-                    <button 
-                      onClick={() => handleSendReply("What is a better alternative for this split?")}
-                      style={{ background: 'rgba(232,255,90,0.05)', border: '1px solid rgba(232,255,90,0.15)', borderRadius: 12, padding: '4px 10px', fontSize: 11, color: 'var(--accent)', cursor: 'pointer', transition: 'all 0.15s' }}
-                      onMouseEnter={(e) => { e.target.style.background = 'rgba(232,255,90,0.1)'; }}
-                      onMouseLeave={(e) => { e.target.style.background = 'rgba(232,255,90,0.05)'; }}
-                    >
-                      What's a better split?
-                    </button>
-                    <button 
-                      onClick={() => handleSendReply("What do others usually do for this type of split?")}
-                      style={{ background: 'rgba(232,255,90,0.05)', border: '1px solid rgba(232,255,90,0.15)', borderRadius: 12, padding: '4px 10px', fontSize: 11, color: 'var(--accent)', cursor: 'pointer', transition: 'all 0.15s' }}
-                      onMouseEnter={(e) => { e.target.style.background = 'rgba(232,255,90,0.1)'; }}
-                      onMouseLeave={(e) => { e.target.style.background = 'rgba(232,255,90,0.05)'; }}
-                    >
-                      What do others do?
-                    </button>
-                  </div>
-                )}
+                {!loadingAi && (() => {
+                  const hasKey = !!apiKey;
+                  const suggestions = hasKey ? [
+                    'How much protein should I eat today?',
+                    'Best pre-workout foods to eat?',
+                    'How does creatine actually work?',
+                    'Should I do cardio on rest days?',
+                    'Latest research on muscle recovery?',
+                    'What supplements are worth it?',
+                  ] : [
+                    'Is this split too much volume?',
+                    "What's a better split?",
+                    'What do others do?',
+                  ];
+                  return (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                      {suggestions.map((s) => (
+                        <button
+                          key={s}
+                          onClick={() => handleSendReply(s)}
+                          style={{ background: 'rgba(232,255,90,0.05)', border: '1px solid rgba(232,255,90,0.15)', borderRadius: 12, padding: '4px 10px', fontSize: 11, color: 'var(--accent)', cursor: 'pointer', transition: 'all 0.15s' }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(232,255,90,0.12)'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(232,255,90,0.05)'; }}
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()}
 
                 {/* Chat Input Field */}
-                <form 
+                <form
                   onSubmit={(e) => { e.preventDefault(); handleSendReply(); }}
                   style={{ display: 'flex', gap: 6 }}
                 >
-                  <input 
+                  <input
                     type="text"
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
-                    placeholder="Ask follow-up questions..."
+                    placeholder={apiKey ? 'Ask anything — fitness, nutrition, research…' : 'Ask about your workout…'}
                     style={{
                       flex: 1,
                       background: 'var(--bg3)',
