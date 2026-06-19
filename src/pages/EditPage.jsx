@@ -503,6 +503,7 @@ function ExerciseEditRow({ ex, index, splitId, dayId, onUpdate, onDelete, dragHa
   const [toast, setToast] = useState(null);
   const [currentImageUrl, setCurrentImageUrl] = useState(ex.imageUrl || '');
   const [suggestions, setSuggestions] = useState([]);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -635,6 +636,7 @@ function ExerciseEditRow({ ex, index, splitId, dayId, onUpdate, onDelete, dragHa
               className="input"
               value={form.name}
               onChange={(e) => set('name', capitalizeWords(e.target.value))}
+              onBlur={() => setTimeout(() => setSuggestions([]), 150)}
               style={{ fontSize: 14, width: '100%' }}
               autoFocus
               autoComplete="off"
@@ -798,7 +800,14 @@ function ExerciseEditRow({ ex, index, splitId, dayId, onUpdate, onDelete, dragHa
         )}
       </div>
       <button className="btn-icon" style={{ flexShrink: 0 }} onClick={() => setEditing(true)} title="Edit"><EditPencil /></button>
-      <button className="btn-icon" style={{ color: 'var(--red)', flexShrink: 0 }} onClick={() => onDelete(ex._id)} title="Delete"><TrashIcon /></button>
+      <button className="btn-icon" style={{ color: 'var(--red)', flexShrink: 0 }} onClick={() => setDeleteConfirm(true)} title="Delete"><TrashIcon /></button>
+      {deleteConfirm && (
+        <ConfirmModal
+          message={`Delete "${ex.name}"?`}
+          onConfirm={() => { setDeleteConfirm(false); onDelete(ex._id); }}
+          onClose={() => setDeleteConfirm(false)}
+        />
+      )}
     </div>
   );
 }

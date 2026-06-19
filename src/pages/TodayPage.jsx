@@ -5,6 +5,7 @@ import * as api from '../api/index.js';
 import DailyShareCard from '../components/DailyShareCard';
 import { MusclePill } from '../components/MusclePill';
 import ExerciseThumbnail from '../components/ExerciseThumbnail';
+import { createPortal } from 'react-dom';
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const TODAY_DOW = new Date().getDay();
@@ -242,12 +243,60 @@ That's a good question! To give you a specific recommendation, what part of your
 - Feel free to ask more specific questions about volume, alternatives, or training frequency!`;
 }
 
-function ExerciseRow({ ex, index, splitId, dayId, onToggle, readOnly, isCompleted }) {
+function WeightSyncModal({ exName, oldWeight, newWeight, unit, otherDays, onSync, onSkip }) {
+  const delta = newWeight - oldWeight;
+  const isIncrease = delta > 0;
+  const direction = isIncrease ? 'increase' : 'decrease';
+  const directionColor = isIncrease ? 'var(--green)' : '#f87171';
+
+  return createPortal(
+    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onSkip()}>
+      <div className="modal">
+        <div className="modal-title" style={{ fontSize: 16 }}>Sync Weight Change?</div>
+        <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 12, lineHeight: 1.5 }}>
+          <strong style={{ color: 'var(--text)' }}>{exName}</strong>
+          {' '}changed from{' '}
+          <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text)' }}>{oldWeight}{unit}</span>
+          {' → '}
+          <span style={{ fontFamily: 'var(--font-mono)', color: directionColor, fontWeight: 700 }}>{newWeight}{unit}</span>
+          {' '}
+          <span style={{
+            fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+            background: isIncrease ? 'rgba(68,255,136,0.12)' : 'rgba(248,113,113,0.12)',
+            color: directionColor, padding: '2px 6px', borderRadius: 4,
+          }}>
+            {isIncrease ? `+${delta}${unit} increase` : `${delta}${unit} decrease`}
+          </span>
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 16 }}>
+          This exercise also appears in{' '}
+          <strong style={{ color: 'var(--text2)' }}>
+            {otherDays.map((d) => d.dayName).join(', ')}
+          </strong>
+          . Sync the new weight there too?
+        </div>
+        <div className="modal-actions">
+          <button className="btn btn-ghost" onClick={onSkip}>Keep separate</button>
+          <button
+            className="btn btn-accent"
+            onClick={onSync}
+          >
+            Sync to all days
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly, isCompleted }) {
   const queryClient = useQueryClient();
   const { storage, storageKey } = useStorage();
   const [editingWeight, setEditingWeight] = useState(false);
   const [weightVal, setWeightVal] = useState(String(ex.weight ?? 0));
   const [weightUnit, setWeightUnit] = useState(ex.weightUnit || 'kg');
+  const [syncPrompt, setSyncPrompt] = useState(null);
   const effectiveChecked = isCompleted ? true : (ex.lastCheckedDate === TODAY_STR ? ex.checked : false);
 
   const toggleMutation = useMutation({
@@ -260,11 +309,37 @@ function ExerciseRow({ ex, index, splitId, dayId, onToggle, readOnly, isComplete
 
   const weightMutation = useMutation({
     mutationFn: ({ weight, unit }) => storage.updateExercise(splitId, dayId, ex._id, { weight: +weight, weightUnit: unit }),
-    onSuccess: () => {
+    onSuccess: (_, { weight, unit }) => {
       queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
       setEditingWeight(false);
+
+      const newW = +weight;
+      const oldW = ex.weight ?? 0;
+      if (newW === oldW) return;
+
+      // Find other days that have the same exercise name
+      const otherDays = (splitDays || [])
+        .filter((d) => d._id !== dayId && !d.isRest)
+        .flatMap((d) =>
+          (d.exercises || [])
+            .filter((e) => e.name.toLowerCase() === ex.name.toLowerCase())
+            .map((e) => ({ dayName: d.name, dayId: d._id, exId: e._id }))
+        );
+
+      if (otherDays.length > 0) {
+        setSyncPrompt({ otherDays, oldWeight: oldW, newWeight: newW, unit });
+      }
     },
   });
+
+  async function handleSync() {
+    if (!syncPrompt) return;
+    for (const { dayId: dId, exId } of syncPrompt.otherDays) {
+      await storage.updateExercise(splitId, dId, exId, { weight: syncPrompt.newWeight, weightUnit: syncPrompt.unit });
+    }
+    queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
+    setSyncPrompt(null);
+  }
 
   const repsLabel = ex.untilFailure ? '∞' : (ex.reps > 0 ? ex.reps : 'max');
 
@@ -315,6 +390,18 @@ function ExerciseRow({ ex, index, splitId, dayId, onToggle, readOnly, isComplete
           </div>
         )}
       </div>
+
+      {syncPrompt && (
+        <WeightSyncModal
+          exName={ex.name}
+          oldWeight={syncPrompt.oldWeight}
+          newWeight={syncPrompt.newWeight}
+          unit={syncPrompt.unit}
+          otherDays={syncPrompt.otherDays}
+          onSync={handleSync}
+          onSkip={() => setSyncPrompt(null)}
+        />
+      )}
 
       {/* Weight — tappable to edit */}
       {editingWeight ? (
@@ -423,7 +510,7 @@ async function callExternalGeminiApi(apiKey, systemPrompt, chatHistory, userText
   return reply.trim();
 }
 
-function DayCard({ day, splitId, splitName, isToday, defaultOpen, dateStr, logForDate, logs }) {
+function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dateStr, logForDate, logs }) {
   const queryClient = useQueryClient();
   const { storage } = useStorage();
   const [open, setOpen] = useState(defaultOpen);
@@ -712,7 +799,7 @@ Coach:`;
               <div className="empty-state" style={{ padding: '20px' }}>No exercises yet</div>
             ) : (
               displayExercises.map((ex, i) => (
-                <ExerciseRow key={ex._id || i} ex={ex} index={i} splitId={splitId} dayId={day._id} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} />
+                <ExerciseRow key={ex._id || i} ex={ex} index={i} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} />
               ))
             )}
             {checkedCount > 0 && isToday && !isCompleted && (
@@ -1214,12 +1301,13 @@ export default function TodayPage() {
             const dateStr = getDateForIndex(i);
             const logForDate = logs.find((l) => l.date === dateStr);
             return (
-              <DayCard 
-                key={day._id} 
-                day={day} 
-                splitId={activeSplit._id} 
-                splitName={activeSplit.name} 
-                isToday={i === todayIndex} 
+              <DayCard
+                key={day._id}
+                day={day}
+                splitId={activeSplit._id}
+                splitDays={days}
+                splitName={activeSplit.name}
+                isToday={i === todayIndex}
                 defaultOpen={i === todayIndex && !day.isRest}
                 dateStr={dateStr}
                 logForDate={logForDate}
