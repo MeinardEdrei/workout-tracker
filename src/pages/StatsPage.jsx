@@ -2,8 +2,10 @@ import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useStorage } from '../hooks/useStorage';
 import WeeklyShareCard from '../components/WeeklyShareCard';
+import { createPortal } from 'react-dom';
 
 const LOGS_STALE = 2 * 60 * 1000;
+const DOW_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
 function ShareIcon() {
   return (
@@ -20,9 +22,17 @@ function TrashIcon() {
     </svg>
   );
 }
+function ChevronIcon({ open }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--text3)" strokeWidth="2" strokeLinecap="round"
+      style={{ transform: open ? 'rotate(180deg)' : 'none', transition: '0.15s', flexShrink: 0 }}>
+      <polyline points="3,5 7,9 11,5"/>
+    </svg>
+  );
+}
 
 function ConfirmModal({ message, onConfirm, onClose }) {
-  return (
+  return createPortal(
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal">
         <div className="modal-title">Confirm</div>
@@ -32,7 +42,8 @@ function ConfirmModal({ message, onConfirm, onClose }) {
           <button className="btn btn-danger" onClick={onConfirm}>Delete</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -52,48 +63,215 @@ async function captureAndShare(ref, filename, title) {
   }, 'image/png');
 }
 
-function LogCard({ log, onDelete }) {
+/* ─── 7-day activity strip ─── */
+function WeekStrip({ weekLogs }) {
+  const now = new Date();
+  const dow = now.getDay(); // 0=Sun
+  const diffToMon = dow === 0 ? -6 : 1 - dow;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() + diffToMon);
+
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    const dateStr = d.toISOString().slice(0, 10);
+    const logged = weekLogs.some((l) => l.date === dateStr);
+    const isToday = dateStr === now.toISOString().slice(0, 10);
+    return { label: DOW_LABELS[i], logged, isToday };
+  });
+
+  return (
+    <div style={{ display: 'flex', gap: 6, marginTop: 14 }}>
+      {days.map((d, i) => (
+        <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
+          <div style={{
+            width: '100%', height: 28, borderRadius: 4,
+            background: d.logged ? 'var(--accent)' : d.isToday ? 'rgba(232,255,90,0.12)' : 'var(--bg3)',
+            border: d.isToday && !d.logged ? '1px solid rgba(232,255,90,0.3)' : '1px solid transparent',
+            transition: 'background 0.15s',
+          }} />
+          <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', fontWeight: 700, color: d.isToday ? 'var(--accent)' : 'var(--text3)', letterSpacing: '0.05em' }}>
+            {d.label}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ─── Exercise progression section ─── */
+function buildProgressionMap(logs) {
+  const map = {};
+  logs.forEach((log) => {
+    (log.exercises || []).forEach((ex) => {
+      if (!ex.name) return;
+      const key = ex.name.trim().toLowerCase();
+      if (!map[key]) map[key] = { name: ex.name.trim(), sessions: [] };
+      map[key].sessions.push({ date: log.date, weight: ex.weight ?? 0, weightUnit: ex.weightUnit || 'kg' });
+    });
+  });
+  return Object.values(map)
+    .map((e) => ({
+      ...e,
+      sessions: e.sessions.sort((a, b) => a.date.localeCompare(b.date)),
+    }))
+    .filter((e) => {
+      const uniqueDates = new Set(e.sessions.map((s) => s.date));
+      return uniqueDates.size >= 2 && e.sessions.some((s) => s.weight > 0);
+    })
+    .sort((a, b) => {
+      const la = a.sessions[a.sessions.length - 1]?.date || '';
+      const lb = b.sessions[b.sessions.length - 1]?.date || '';
+      return lb.localeCompare(la);
+    });
+}
+
+function ProgressionCard({ exercise }) {
   const [expanded, setExpanded] = useState(false);
-  const date = new Date(log.date + 'T12:00:00');
-  const dateLabel = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-  const vol = log.totalVolume > 0
-    ? log.totalVolume >= 1000 ? `${(log.totalVolume / 1000).toFixed(1)}k kg` : `${log.totalVolume} kg`
-    : null;
+  const sessions = exercise.sessions;
+  const last6 = sessions.slice(-6);
+  const first = sessions.find((s) => s.weight > 0);
+  const last = [...sessions].reverse().find((s) => s.weight > 0);
+
+  const trend = !first || !last ? '→'
+    : last.weight > first.weight ? '↑'
+    : last.weight < first.weight ? '↓' : '→';
+  const trendColor = trend === '↑' ? 'var(--green)' : trend === '↓' ? 'var(--red)' : 'var(--text3)';
+
+  const maxW = Math.max(...last6.map((s) => s.weight || 0), 1);
+
   return (
     <div style={{ marginBottom: 8, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--bg2)', overflow: 'hidden' }}>
-      <button onClick={() => setExpanded((e) => !e)} style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: '13px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div style={{ width: 36, height: 36, borderRadius: 8, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 14, fontWeight: 800, color: '#0a0a0a' }}>
-          {date.getDate()}
+      <button
+        onClick={() => setExpanded((e) => !e)}
+        style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left' }}
+      >
+        {/* Name + trend */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 800, fontFamily: 'var(--font-display)', textTransform: 'uppercase', letterSpacing: '0.02em', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {exercise.name}
+          </div>
+          {first && last && (
+            <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text3)', marginTop: 3 }}>
+              <span>{first.weight}{first.weightUnit}</span>
+              <span style={{ color: trendColor, margin: '0 5px', fontWeight: 700 }}>{trend}</span>
+              <span style={{ color: last.weight > first.weight ? 'var(--green)' : 'var(--text2)', fontWeight: 700 }}>{last.weight}{last.weightUnit}</span>
+            </div>
+          )}
         </div>
-        <div style={{ flex: 1, textAlign: 'left', minWidth: 0 }}>
-          <div style={{ fontSize: 16, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.01em', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{log.dayName}</div>
-          <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 1 }}>{dateLabel}{log.dayTag ? ` · ${log.dayTag}` : ''}</div>
+
+        {/* Mini weight dots */}
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 28, flexShrink: 0 }}>
+          {last6.map((s, i) => {
+            const h = maxW > 0 ? Math.max(4, Math.round((s.weight / maxW) * 28)) : 4;
+            const isLast = i === last6.length - 1;
+            return (
+              <div key={i} style={{ width: 6, height: h, borderRadius: 2, background: isLast ? 'var(--accent)' : 'var(--border2)', transition: 'height 0.2s' }} />
+            );
+          })}
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, flexShrink: 0 }}>
-          {vol && <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>{vol}</div>}
-          <div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>{log.exercises.length} ex</div>
-        </div>
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--text3)" strokeWidth="2" strokeLinecap="round" style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: '0.15s', flexShrink: 0 }}>
-          <polyline points="3,5 7,9 11,5"/>
-        </svg>
+
+        <ChevronIcon open={expanded} />
       </button>
+
       {expanded && (
         <div style={{ borderTop: '1px solid var(--border)' }}>
-          {log.exercises.map((ex, i) => {
-            const wLabel = ex.weight > 0 ? ` · ${ex.weight}${ex.weightUnit}` : '';
-            const rLabel = ex.reps > 0 ? `${ex.reps} reps` : 'max';
+          {sessions.map((s, i) => {
+            const d = new Date(s.date + 'T12:00:00');
+            const label = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+            const prev = sessions[i - 1];
+            const delta = prev && prev.weight > 0 && s.weight > 0 ? s.weight - prev.weight : null;
             return (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 16px', borderBottom: i < log.exercises.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{ex.name}</div>
-                <div style={{ fontSize: 11, color: 'var(--text2)', fontFamily: 'var(--font-mono)' }}>{ex.sets}×{rLabel}{wLabel}</div>
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 14px', borderBottom: i < sessions.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                <div style={{ fontSize: 12, color: 'var(--text2)', fontFamily: 'var(--font-mono)' }}>{label}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {delta !== null && (
+                    <span style={{ fontSize: 10, fontWeight: 700, color: delta > 0 ? 'var(--green)' : delta < 0 ? 'var(--red)' : 'var(--text3)', fontFamily: 'var(--font-mono)' }}>
+                      {delta > 0 ? `+${delta}` : delta}
+                    </span>
+                  )}
+                  <span style={{ fontSize: 14, fontWeight: 900, fontFamily: 'var(--font-mono)', color: s.weight > 0 ? 'var(--accent)' : 'var(--text3)' }}>
+                    {s.weight > 0 ? `${s.weight}${s.weightUnit}` : '—'}
+                  </span>
+                </div>
               </div>
             );
           })}
-          <div style={{ padding: '10px 16px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end' }}>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Log history card ─── */
+function LogCard({ log, onDelete }) {
+  const [expanded, setExpanded] = useState(false);
+  const date = new Date(log.date + 'T12:00:00');
+  const dayAbbr = date.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
+  const dateFull = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const vol = log.totalVolume > 0
+    ? log.totalVolume >= 1000 ? `${(log.totalVolume / 1000).toFixed(1)}k` : `${log.totalVolume}`
+    : null;
+
+  return (
+    <div style={{ marginBottom: 8, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--bg2)', overflow: 'hidden' }}>
+      <button onClick={() => setExpanded((e) => !e)} style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left' }}>
+        {/* Date badge */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: 44, height: 44, borderRadius: 8, background: 'var(--bg3)', border: '1px solid var(--border2)', flexShrink: 0 }}>
+          <div style={{ fontSize: 8, fontWeight: 800, color: 'var(--text3)', letterSpacing: '0.1em', textTransform: 'uppercase', fontFamily: 'var(--font-mono)' }}>{dayAbbr}</div>
+          <div style={{ fontSize: 16, fontWeight: 900, color: 'var(--text)', fontFamily: 'var(--font-display)', lineHeight: 1.1 }}>{date.getDate()}</div>
+          <div style={{ fontSize: 8, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>{dateFull.split(' ')[0]}</div>
+        </div>
+
+        {/* Name / tag */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 16, fontWeight: 900, fontFamily: 'var(--font-display)', textTransform: 'uppercase', letterSpacing: '0.02em', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{log.dayName}</div>
+          {log.dayTag && <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 2 }}>{log.dayTag}</div>}
+          <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>{log.exercises.length} exercises</div>
+        </div>
+
+        {/* Volume */}
+        <div style={{ flexShrink: 0, textAlign: 'right' }}>
+          {vol && (
+            <>
+              <div style={{ fontSize: 20, fontWeight: 900, fontFamily: 'var(--font-mono)', color: 'var(--accent)', letterSpacing: '-0.02em', lineHeight: 1 }}>{vol}</div>
+              <div style={{ fontSize: 9, color: 'var(--text3)', fontFamily: 'var(--font-mono)', marginTop: 1 }}>kg vol</div>
+            </>
+          )}
+        </div>
+
+        <ChevronIcon open={expanded} />
+      </button>
+
+      {expanded && (
+        <div style={{ borderTop: '1px solid var(--border)' }}>
+          {log.exercises.map((ex, i) => {
+            const wLabel = ex.weight > 0 ? `${ex.weight}${ex.weightUnit}` : '—';
+            const rLabel = ex.reps > 0 ? ex.reps : 'max';
+            return (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 14px', borderBottom: i < log.exercises.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-display)', textTransform: 'uppercase', color: 'var(--text)', letterSpacing: '0.01em' }}>{ex.name}</div>
+                <div style={{ fontSize: 11, color: 'var(--text2)', fontFamily: 'var(--font-mono)', display: 'flex', gap: 8 }}>
+                  <span>{ex.sets}×{rLabel}</span>
+                  <span style={{ color: ex.weight > 0 ? 'var(--accent)' : 'var(--text3)', fontWeight: 700 }}>{wLabel}</span>
+                </div>
+              </div>
+            );
+          })}
+          <div style={{ padding: '10px 14px', display: 'flex', justifyContent: 'flex-end' }}>
             <button className="btn-icon" style={{ color: 'var(--red)' }} onClick={() => onDelete(log._id)}><TrashIcon /></button>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function SectionLabel({ children }) {
+  return (
+    <div style={{ fontSize: 10, fontWeight: 900, fontFamily: 'var(--font-mono)', color: 'var(--text3)', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+      {children}
+      <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
     </div>
   );
 }
@@ -103,15 +281,13 @@ export default function StatsPage() {
   const { storage, storageKey } = useStorage();
   const [sharing, setSharing] = useState(false);
   const [confirm, setConfirm] = useState(null);
+  const [progressionSearch, setProgressionSearch] = useState('');
   const weekCardRef = useRef(null);
 
   const { data: logs = [], isLoading } = useQuery({ queryKey: ['logs', storageKey], queryFn: storage.getLogs, staleTime: LOGS_STALE });
   const { data: weekLogs = [] } = useQuery({ queryKey: ['logs', 'week', storageKey], queryFn: storage.getWeekLogs, staleTime: LOGS_STALE });
 
-  const invalidateLogs = () => {
-    queryClient.invalidateQueries({ queryKey: ['logs'] });
-  };
-
+  const invalidateLogs = () => queryClient.invalidateQueries({ queryKey: ['logs'] });
   const deleteMutation = useMutation({ mutationFn: (id) => storage.deleteLog(id), onSuccess: invalidateLogs });
   const clearMutation = useMutation({ mutationFn: () => storage.clearLogs(), onSuccess: invalidateLogs });
 
@@ -124,8 +300,14 @@ export default function StatsPage() {
   const totalVolume = weekLogs.reduce((s, l) => s + (l.totalVolume || 0), 0);
   const volLabel = totalVolume >= 1000 ? `${(totalVolume / 1000).toFixed(1)}k` : `${totalVolume || 0}`;
 
+  const progressionData = buildProgressionMap(logs);
+  const filteredProgression = progressionSearch.trim()
+    ? progressionData.filter((e) => e.name.toLowerCase().includes(progressionSearch.toLowerCase()))
+    : progressionData;
+
   return (
     <div>
+      {/* Page header */}
       <div className="page-header">
         <div>
           <h1 className="page-title">Stats</h1>
@@ -137,45 +319,80 @@ export default function StatsPage() {
       </div>
 
       {isLoading ? <div className="spinner" /> : (
-        <>
-          <div style={{ margin: '16px 16px 0' }}>
-            <div style={{ borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg2)', overflow: 'hidden' }}>
-              <div style={{ background: 'var(--accent)', padding: '14px 16px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-                <div>
-                  <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#0a0a0a', opacity: 0.6, marginBottom: 2 }}>This Week</div>
-                  <div style={{ fontSize: 26, fontWeight: 800, color: '#0a0a0a', textTransform: 'uppercase' }}>{weekLogs.length} Workout{weekLogs.length !== 1 ? 's' : ''}</div>
-                </div>
-                <button className="btn" style={{ background: '#0a0a0a', color: 'var(--accent)', fontSize: 12, gap: 6 }} onClick={handleShare} disabled={sharing}>
+        <div style={{ padding: '16px 16px 0' }}>
+
+          {/* ── This Week ── */}
+          <SectionLabel>This Week</SectionLabel>
+          <div style={{ borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg2)', padding: '16px', marginBottom: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div>
+                <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text3)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 4 }}>Sessions</div>
+                <div style={{ fontSize: 52, fontWeight: 900, fontFamily: 'var(--font-display)', color: 'var(--accent)', lineHeight: 1, letterSpacing: '-0.01em' }}>{weekLogs.length}</div>
+                <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>this week</div>
+              </div>
+              <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-end' }}>
+                <button className="btn" style={{ background: 'transparent', border: '1px solid var(--border2)', color: 'var(--text2)', fontSize: 12, gap: 6 }} onClick={handleShare} disabled={sharing}>
                   <ShareIcon />{sharing ? 'Sharing…' : 'Share'}
                 </button>
-              </div>
-              <div style={{ display: 'flex' }}>
-                <div style={{ flex: 1, padding: '12px 16px', borderRight: '1px solid var(--border)' }}>
-                  <div style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>Volume</div>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--accent)' }}>{volLabel} <span style={{ fontSize: 13, color: 'var(--text2)' }}>kg</span></div>
-                </div>
-                <div style={{ flex: 1, padding: '12px 16px' }}>
-                  <div style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>Sessions</div>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)' }}>{weekLogs.length}<span style={{ fontSize: 13, color: 'var(--text2)' }}>/7</span></div>
-                </div>
+                {totalVolume > 0 && (
+                  <div>
+                    <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text3)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2, textAlign: 'right' }}>Volume</div>
+                    <div style={{ fontSize: 24, fontWeight: 900, fontFamily: 'var(--font-mono)', color: 'var(--text)', letterSpacing: '-0.02em' }}>
+                      {volLabel}<span style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 400, marginLeft: 3 }}>kg</span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
+            <WeekStrip weekLogs={weekLogs} />
           </div>
-          <div style={{ padding: '20px 16px 0' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 12 }}>History</div>
-            {logs.length === 0 ? (
-              <div className="empty-state">No workouts logged yet.<br/>Finish a workout to see it here.</div>
-            ) : (
-              logs.map((log) => <LogCard key={log._id} log={log} onDelete={(id) => deleteMutation.mutate(id)} />)
-            )}
-          </div>
-        </>
+
+          {/* ── Progression ── */}
+          {progressionData.length > 0 && (
+            <>
+              <SectionLabel>Progression</SectionLabel>
+              <div style={{ marginBottom: 10 }}>
+                <input
+                  type="text"
+                  placeholder="Search exercise..."
+                  value={progressionSearch}
+                  onChange={(e) => setProgressionSearch(e.target.value)}
+                  style={{
+                    width: '100%', padding: '9px 12px', borderRadius: 8,
+                    border: '1px solid var(--border2)', background: 'var(--bg3)',
+                    color: 'var(--text)', fontSize: 13, fontFamily: 'var(--font-display)',
+                    outline: 'none', boxSizing: 'border-box', marginBottom: 10,
+                  }}
+                />
+                {filteredProgression.length === 0 ? (
+                  <div style={{ textAlign: 'center', color: 'var(--text3)', fontSize: 13, padding: '12px 0' }}>No results</div>
+                ) : (
+                  filteredProgression.map((ex) => <ProgressionCard key={ex.name} exercise={ex} />)
+                )}
+              </div>
+            </>
+          )}
+
+          {/* ── History ── */}
+          <SectionLabel>History</SectionLabel>
+          {logs.length === 0 ? (
+            <div className="empty-state">No workouts logged yet.<br />Finish a workout to see it here.</div>
+          ) : (
+            logs.map((log) => <LogCard key={log._id} log={log} onDelete={(id) => deleteMutation.mutate(id)} />)
+          )}
+
+          <div style={{ height: 24 }} />
+        </div>
       )}
 
       <WeeklyShareCard logs={weekLogs} cardRef={weekCardRef} />
 
       {confirm === 'clear' && (
-        <ConfirmModal message="Delete all workout logs? This cannot be undone." onConfirm={() => { setConfirm(null); clearMutation.mutate(); }} onClose={() => setConfirm(null)} />
+        <ConfirmModal
+          message="Delete all workout logs? This cannot be undone."
+          onConfirm={() => { setConfirm(null); clearMutation.mutate(); }}
+          onClose={() => setConfirm(null)}
+        />
       )}
     </div>
   );

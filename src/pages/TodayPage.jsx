@@ -244,7 +244,10 @@ That's a good question! To give you a specific recommendation, what part of your
 
 function ExerciseRow({ ex, index, splitId, dayId, onToggle, readOnly, isCompleted }) {
   const queryClient = useQueryClient();
-  const { storage } = useStorage();
+  const { storage, storageKey } = useStorage();
+  const [editingWeight, setEditingWeight] = useState(false);
+  const [weightVal, setWeightVal] = useState(String(ex.weight ?? 0));
+  const [weightUnit, setWeightUnit] = useState(ex.weightUnit || 'kg');
   const effectiveChecked = isCompleted ? true : (ex.lastCheckedDate === TODAY_STR ? ex.checked : false);
 
   const toggleMutation = useMutation({
@@ -255,32 +258,129 @@ function ExerciseRow({ ex, index, splitId, dayId, onToggle, readOnly, isComplete
     },
   });
 
-  const weightLabel = ex.weight > 0 ? `${ex.weight}${ex.weightUnit}` : '';
-  const repsLabel = ex.untilFailure ? 'Until Failure' : ex.reps > 0 ? `${ex.reps} reps` : 'max reps';
+  const weightMutation = useMutation({
+    mutationFn: ({ weight, unit }) => storage.updateExercise(splitId, dayId, ex._id, { weight: +weight, weightUnit: unit }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
+      setEditingWeight(false);
+    },
+  });
+
+  const repsLabel = ex.untilFailure ? '∞' : (ex.reps > 0 ? ex.reps : 'max');
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: '1px solid var(--border)', opacity: toggleMutation.isPending ? 0.5 : 1, transition: 'opacity 0.15s' }}>
-      <label 
-        className={`checkbox-wrap ${effectiveChecked ? 'checked' : ''} ${readOnly ? 'readonly' : ''}`}
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 10,
+      padding: '12px 16px', borderBottom: '1px solid var(--border)',
+      opacity: (toggleMutation.isPending) ? 0.5 : 1,
+      transition: 'opacity 0.15s',
+      background: effectiveChecked ? 'rgba(255,255,255,0.01)' : 'transparent',
+    }}>
+      {/* Circular checkbox */}
+      <div
         onClick={() => !readOnly && !toggleMutation.isPending && toggleMutation.mutate()}
-        style={{ cursor: readOnly ? 'default' : 'pointer' }}
+        style={{
+          width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
+          border: `2px solid ${effectiveChecked ? 'var(--accent)' : 'var(--border2)'}`,
+          background: effectiveChecked ? 'var(--accent)' : 'transparent',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: readOnly ? 'default' : 'pointer',
+          transition: 'all 0.15s',
+        }}
       >
-        <div className="checkbox-box">{effectiveChecked && <CheckIcon />}</div>
-      </label>
-      <ExerciseThumbnail imageUrl={ex.imageUrl} name={ex.name} size={56} />
+        {effectiveChecked && <CheckIcon />}
+      </div>
+
+      {/* Thumbnail */}
+      <ExerciseThumbnail imageUrl={ex.imageUrl} name={ex.name} size={48} />
+
+      {/* Name + meta */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: '0.01em', textDecoration: effectiveChecked ? 'line-through' : 'none', color: effectiveChecked ? 'var(--text3)' : 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {index + 1}. {ex.name}
+        <div style={{
+          fontSize: 15, fontWeight: 800,
+          fontFamily: 'var(--font-display)',
+          letterSpacing: '0.02em', textTransform: 'uppercase',
+          textDecoration: effectiveChecked ? 'line-through' : 'none',
+          color: effectiveChecked ? 'var(--text3)' : 'var(--text)',
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        }}>
+          {ex.name}
         </div>
-        <div style={{ fontSize: 12, color: 'var(--text2)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
-          {ex.sets}×{repsLabel}{weightLabel ? ` · ${weightLabel}` : ''}
+        <div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
+          {ex.sets} × {repsLabel}
         </div>
         {ex.muscleTargets?.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 5 }}>
-            {ex.muscleTargets.map((t) => <MusclePill key={t} target={t} />)}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 4 }}>
+            {ex.muscleTargets.slice(0, 3).map((t) => <MusclePill key={t} target={t} />)}
           </div>
         )}
       </div>
+
+      {/* Weight — tappable to edit */}
+      {editingWeight ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'flex-end', flexShrink: 0 }}>
+          <div style={{ display: 'flex', gap: 4 }}>
+            <input
+              type="number" min="0" step="0.5"
+              value={weightVal}
+              onChange={(e) => setWeightVal(e.target.value)}
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') weightMutation.mutate({ weight: weightVal, unit: weightUnit });
+                if (e.key === 'Escape') { setEditingWeight(false); setWeightVal(String(ex.weight ?? 0)); }
+              }}
+              style={{
+                width: 62, padding: '5px 8px', borderRadius: 6,
+                border: '1.5px solid var(--accent)',
+                background: 'var(--bg3)', color: 'var(--text)',
+                fontSize: 14, fontFamily: 'var(--font-mono)', textAlign: 'center', outline: 'none',
+              }}
+            />
+            <select
+              value={weightUnit}
+              onChange={(e) => setWeightUnit(e.target.value)}
+              style={{
+                padding: '5px 4px', borderRadius: 6, border: '1px solid var(--border2)',
+                background: 'var(--bg3)', color: 'var(--text2)', fontSize: 11, outline: 'none',
+              }}
+            >
+              <option value="kg">kg</option>
+              <option value="lbs">lbs</option>
+            </select>
+          </div>
+          <div style={{ display: 'flex', gap: 4 }}>
+            <button
+              onClick={() => weightMutation.mutate({ weight: weightVal, unit: weightUnit })}
+              disabled={weightMutation.isPending}
+              style={{ padding: '3px 12px', borderRadius: 4, border: 'none', background: 'var(--accent)', color: '#0a0a0a', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}
+            >✓</button>
+            <button
+              onClick={() => { setEditingWeight(false); setWeightVal(String(ex.weight ?? 0)); setWeightUnit(ex.weightUnit || 'kg'); }}
+              style={{ padding: '3px 10px', borderRadius: 4, border: '1px solid var(--border2)', background: 'transparent', color: 'var(--text3)', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}
+            >✕</button>
+          </div>
+        </div>
+      ) : (
+        <div
+          onClick={() => !readOnly && setEditingWeight(true)}
+          title={readOnly ? '' : 'Tap to update weight'}
+          style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'flex-end',
+            cursor: readOnly ? 'default' : 'pointer', flexShrink: 0, minWidth: 44,
+          }}
+        >
+          <div style={{
+            fontSize: 24, fontWeight: 900, fontFamily: 'var(--font-mono)',
+            color: ex.weight > 0 ? 'var(--accent)' : 'var(--text3)',
+            letterSpacing: '-0.03em', lineHeight: 1,
+          }}>
+            {ex.weight > 0 ? ex.weight : '—'}
+          </div>
+          <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)', marginTop: 1 }}>
+            {ex.weight > 0 ? ex.weightUnit : (readOnly ? '' : 'tap')}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -573,29 +673,31 @@ Coach:`;
       <div style={{ margin: '0 16px 12px', borderRadius: 10, border: `1px solid ${isToday ? 'var(--accent)' : 'var(--border)'}`, overflow: 'hidden', background: 'var(--bg2)' }}>
         <button
           onClick={() => !day.isRest && setOpen((o) => !o)}
-          style={{ width: '100%', background: isToday ? 'rgba(232,255,90,0.05)' : 'transparent', border: 'none', cursor: day.isRest ? 'default' : 'pointer', padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}
+          style={{ width: '100%', background: isToday ? 'rgba(232,255,90,0.04)' : 'transparent', border: 'none', cursor: day.isRest ? 'default' : 'pointer', padding: '16px 16px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, textAlign: 'left' }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-            {isToday && <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.1em', background: 'var(--accent)', color: '#0a0a0a', padding: '2px 6px', borderRadius: 3, flexShrink: 0 }}>TODAY</span>}
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: '0.01em', color: isToday ? 'var(--accent)' : 'var(--text)', textTransform: 'uppercase' }}>{day.name}</div>
-              {day.tag && <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 1, fontWeight: 500 }}>{day.tag}</div>}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {isToday && (
+              <div style={{ fontSize: 8, fontWeight: 900, letterSpacing: '0.18em', background: 'var(--accent)', color: '#0a0a0a', padding: '2px 6px', borderRadius: 2, textTransform: 'uppercase', display: 'inline-block', marginBottom: 6 }}>TODAY</div>
+            )}
+            <div style={{ fontSize: 28, fontWeight: 900, fontFamily: 'var(--font-display)', letterSpacing: '0.02em', textTransform: 'uppercase', lineHeight: 1, color: isToday ? 'var(--accent)' : day.isRest ? 'var(--text3)' : 'var(--text)' }}>
+              {day.name}
             </div>
+            {day.tag && <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 5, fontWeight: 500 }}>{day.tag}</div>}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-            {day.isRest ? <span className="tag">Rest</span> : (
+            {day.isRest ? (
+              <span style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Rest</span>
+            ) : (
               <>
                 {isCompleted ? (
-                  <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--green)', letterSpacing: '0.05em', textTransform: 'uppercase', background: 'rgba(68,255,136,0.1)', padding: '3px 8px', borderRadius: 4 }}>
-                    Completed
-                  </span>
+                  <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--green)', letterSpacing: '0.08em', textTransform: 'uppercase', background: 'rgba(68,255,136,0.1)', padding: '4px 8px', borderRadius: 4 }}>✓ Done</span>
                 ) : isPast ? (
-                  <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--text3)', letterSpacing: '0.05em', textTransform: 'uppercase', background: 'rgba(255,255,255,0.03)', padding: '3px 8px', borderRadius: 4 }}>
-                    Skipped
+                  <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', background: 'rgba(255,255,255,0.03)', padding: '4px 8px', borderRadius: 4 }}>Skipped</span>
+                ) : total > 0 ? (
+                  <span style={{ fontSize: 18, fontWeight: 900, fontFamily: 'var(--font-mono)', color: checkedCount === total ? 'var(--green)' : checkedCount > 0 ? 'var(--accent)' : 'var(--text3)' }}>
+                    {checkedCount}<span style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 400 }}>/{total}</span>
                   </span>
-                ) : (
-                  total > 0 && <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: checkedCount === total ? 'var(--green)' : 'var(--text2)' }}>{checkedCount}/{total}</span>
-                )}
+                ) : null}
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--text3)" strokeWidth="2" strokeLinecap="round" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: '0.15s' }}>
                   <polyline points="4,6 8,10 12,6" />
                 </svg>
@@ -1104,7 +1206,7 @@ export default function TodayPage() {
           </div>
         </div>
       </div>
-      <div style={{ paddingTop: 16 }}>
+      <div style={{ paddingTop: 12 }}>
         {days.length === 0 ? (
           <div className="empty-state">This split has no days yet</div>
         ) : (
