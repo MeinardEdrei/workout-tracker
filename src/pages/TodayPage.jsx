@@ -298,6 +298,9 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
   const [weightVal, setWeightVal] = useState(String(ex.weight ?? 0));
   const [weightUnit, setWeightUnit] = useState(ex.weightUnit || 'kg');
   const [syncPrompt, setSyncPrompt] = useState(null);
+  const [editingSetsReps, setEditingSetsReps] = useState(false);
+  const [setsVal, setSetsVal] = useState(String(ex.sets ?? 3));
+  const [repsVal, setRepsVal] = useState(String(ex.reps ?? 0));
   const effectiveChecked = isCompleted ? true : (ex.lastCheckedDate === TODAY_STR ? ex.checked : false);
 
   const toggleMutation = useMutation({
@@ -330,6 +333,14 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
       if (otherDays.length > 0) {
         setSyncPrompt({ otherDays, oldWeight: oldW, newWeight: newW, unit });
       }
+    },
+  });
+
+  const setsRepsMutation = useMutation({
+    mutationFn: ({ sets, reps }) => storage.updateExercise(splitId, dayId, ex._id, { sets: +sets, reps: +reps }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
+      setEditingSetsReps(false);
     },
   });
 
@@ -382,9 +393,44 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
         }}>
           {ex.name}
         </div>
-        <div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
-          {ex.sets} × {repsLabel}
-        </div>
+        {editingSetsReps ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 3 }}>
+            <input
+              type="number" min="1" max="99"
+              value={setsVal}
+              onChange={(e) => setSetsVal(e.target.value)}
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') setsRepsMutation.mutate({ sets: setsVal, reps: repsVal });
+                if (e.key === 'Escape') { setEditingSetsReps(false); setSetsVal(String(ex.sets ?? 3)); setRepsVal(String(ex.reps ?? 0)); }
+              }}
+              style={{ width: 38, padding: '3px 5px', borderRadius: 5, border: '1.5px solid var(--accent)', background: 'var(--bg3)', color: 'var(--text)', fontSize: 12, fontFamily: 'var(--font-mono)', textAlign: 'center', outline: 'none' }}
+            />
+            <span style={{ fontSize: 11, color: 'var(--text3)' }}>×</span>
+            <input
+              type="number" min="0" max="999"
+              value={repsVal}
+              onChange={(e) => setRepsVal(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') setsRepsMutation.mutate({ sets: setsVal, reps: repsVal });
+                if (e.key === 'Escape') { setEditingSetsReps(false); setSetsVal(String(ex.sets ?? 3)); setRepsVal(String(ex.reps ?? 0)); }
+              }}
+              style={{ width: 38, padding: '3px 5px', borderRadius: 5, border: '1.5px solid var(--accent)', background: 'var(--bg3)', color: 'var(--text)', fontSize: 12, fontFamily: 'var(--font-mono)', textAlign: 'center', outline: 'none' }}
+            />
+            <button onClick={() => setsRepsMutation.mutate({ sets: setsVal, reps: repsVal })} disabled={setsRepsMutation.isPending}
+              style={{ padding: '2px 7px', borderRadius: 4, border: 'none', background: 'var(--accent)', color: '#0a0a0a', fontWeight: 900, fontSize: 11, cursor: 'pointer' }}>✓</button>
+            <button onClick={() => { setEditingSetsReps(false); setSetsVal(String(ex.sets ?? 3)); setRepsVal(String(ex.reps ?? 0)); }}
+              style={{ padding: '2px 6px', borderRadius: 4, border: '1px solid var(--border2)', background: 'transparent', color: 'var(--text3)', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>✕</button>
+          </div>
+        ) : (
+          <div
+            onClick={() => !readOnly && !ex.untilFailure && setEditingSetsReps(true)}
+            title={readOnly || ex.untilFailure ? '' : 'Tap to edit sets & reps'}
+            style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)', marginTop: 2, cursor: (readOnly || ex.untilFailure) ? 'default' : 'pointer', display: 'inline-block' }}
+          >
+            {ex.sets} × {repsLabel}
+          </div>
+        )}
         {ex.muscleTargets?.length > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 4 }}>
             {ex.muscleTargets.slice(0, 3).map((t) => <MusclePill key={t} target={t} />)}
