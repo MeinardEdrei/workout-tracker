@@ -336,3 +336,21 @@ html, body, #root {
   .btn { padding: 7px 11px; font-size: 12px; }
   .btn-icon { padding: 6px; }
 }
+
+/* ── Split card action row — tighter on all screens ─────────────────────── */
+.split-card-actions .btn-icon {
+  padding: 5px;
+}
+.split-card-actions .btn-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ── Responsive: narrow phones (≤ 380px) ────────────────────────────────── */
+@media (max-width: 380px) {
+  .page-title { font-size: 22px; }
+  .page-subtitle { font-size: 11px; }
+  .btn { padding: 7px 10px; font-size: 11px; }
+  .split-card-actions .btn-icon { padding: 4px; }
+  .split-card-actions .btn-icon svg { width: 13px; height: 13px; }
+}

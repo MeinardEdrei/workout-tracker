@@ -6,6 +6,7 @@ import SplitShareModal from '../components/SplitShareModal';
 import SplitEditor from './EditPage';
 import BrowseSplitsPage from './BrowseSplitsPage';
 import { setSplitVisibility, reapplySplit as reapplySplitApi } from '../api/index';
+import AiChatBubble from '../components/AiChatBubble';
 
 const API = import.meta.env.VITE_API_URL || '';
 
@@ -65,28 +66,6 @@ function ShopIcon() {
       <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
       <line x1="3" y1="6" x2="21" y2="6" />
       <path d="M16 10a4 4 0 0 1-8 0" />
-    </svg>
-  );
-}
-function SparkleIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" />
-    </svg>
-  );
-}
-function SendIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="22" y1="2" x2="11" y2="13" />
-      <polygon points="22,2 15,22 11,13 2,9" />
-    </svg>
-  );
-}
-function XIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
     </svg>
   );
 }
@@ -728,7 +707,7 @@ Coach:`;
                   </button>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{
-                      fontSize: 18, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.01em',
+                      fontSize: 16, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.01em',
                       color: split.isActive ? 'var(--accent)' : 'var(--text)',
                       whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                     }}>
@@ -741,7 +720,7 @@ Coach:`;
                       {split.sourceId && <span style={{ color: 'var(--text3)', fontSize: 10 }}>↺ from community</span>}
                     </div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
+                  <div className="split-card-actions" style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
                     {/* Re-apply from source */}
                     {isLoggedIn && split.sourceId && (
                       <button
@@ -867,188 +846,36 @@ Coach:`;
       )}
 
       {/* ── Floating AI Chat Bubble ────────────────────────────────────────── */}
-      <>
-        {/* Backdrop when open */}
-        {showAiChat && (
-          <div
-            onClick={() => setShowAiChat(false)}
-            style={{ position: 'fixed', inset: 0, zIndex: 298, background: 'rgba(0,0,0,0.3)' }}
-          />
-        )}
-
-        {/* Chat panel */}
-        {showAiChat && (
-          <div style={{
-            position: 'fixed',
-            bottom: 'calc(var(--nav-height) + 72px)',
-            right: 16,
-            width: 'min(360px, calc(100vw - 32px))',
-            maxHeight: 'min(520px, calc(100dvh - var(--nav-height) - 100px))',
-            background: 'var(--bg2)',
-            border: '1px solid rgba(232,255,90,0.2)',
-            borderRadius: 14,
-            boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-            zIndex: 299,
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-            animation: 'fadeIn 0.15s ease',
-          }}>
-            {/* Panel header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', borderBottom: '1px solid rgba(232,255,90,0.1)', background: 'linear-gradient(135deg, rgba(232,255,90,0.06) 0%, transparent 100%)', flexShrink: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 14 }}>✨</span>
-                <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>AI Split Advisor</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <button
-                  onClick={() => setShowSettings(!showSettings)}
-                  style={{ background: 'none', border: 'none', color: 'var(--text3)', fontSize: 10, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.04em' }}
-                  title="API Settings"
-                >
-                  🔑 {apiKey ? 'Key set' : 'Setup'}
-                </button>
-                <button
-                  onClick={() => {
-                    const welcome = [{ sender: 'coach', text: "### AI Split Advisor\nWelcome! I can help you analyze your training splits, balance your workload, schedule rest days, or recommend alternative programs.\n\nHere are some things you can ask me:\n- **Is my split too much volume?**\n- **What's a better alternative for my split?**\n- **What do others usually do for this type of split?**\n- **How should I program rest days?**" }];
-                    setChatHistory(welcome);
-                    localStorage.setItem('ai_splits_chat_history', JSON.stringify(welcome));
-                  }}
-                  disabled={loadingAi}
-                  style={{ background: 'none', border: 'none', color: 'var(--text3)', fontSize: 12, cursor: 'pointer', lineHeight: 1 }}
-                  title="Restart chat"
-                >
-                  ↺
-                </button>
-                <button
-                  onClick={() => setShowAiChat(false)}
-                  style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 2 }}
-                >
-                  <XIcon />
-                </button>
-              </div>
-            </div>
-
-            {/* API Key Setup Panel */}
-            {showSettings && (
-              <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', background: 'var(--bg3)', fontSize: 12, flexShrink: 0 }}>
-                <div style={{ fontWeight: 700, color: 'var(--accent)', marginBottom: 4 }}>Gemini API Settings</div>
-                <div style={{ color: 'var(--text2)', marginBottom: 8, lineHeight: 1.4 }}>
-                  Free API key unlocks full Q&A.{' '}
-                  <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>Get one here</a>
-                </div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <input
-                    type="password"
-                    placeholder="Paste API key…"
-                    value={apiKey}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setApiKey(val);
-                      if (val.trim()) localStorage.setItem('user_gemini_api_key', val.trim());
-                      else localStorage.removeItem('user_gemini_api_key');
-                    }}
-                    style={{ flex: 1, background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text)', padding: '5px 8px', fontSize: 12 }}
-                  />
-                  <button onClick={() => { setApiKey(''); localStorage.removeItem('user_gemini_api_key'); }} style={{ padding: '5px 10px', background: 'var(--red)', border: 'none', borderRadius: 4, color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 11 }}>Clear</button>
-                </div>
-              </div>
-            )}
-
-            {/* Messages */}
-            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, padding: '12px 14px' }}>
-              {chatHistory.map((msg, idx) => {
-                const isUser = msg.sender === 'user';
-                return (
-                  <div key={idx} style={{
-                    alignSelf: isUser ? 'flex-end' : 'flex-start',
-                    background: isUser ? 'var(--bg4)' : 'rgba(255,255,255,0.02)',
-                    border: isUser ? '1px solid var(--border2)' : '1px solid rgba(255,255,255,0.05)',
-                    padding: '9px 12px',
-                    borderRadius: isUser ? '12px 12px 0 12px' : '12px 12px 12px 0',
-                    maxWidth: '90%',
-                    fontSize: 12.5,
-                  }}>
-                    {renderMarkdown(msg.text)}
-                  </div>
-                );
-              })}
-              {loadingAi && (
-                <div style={{ alignSelf: 'flex-start', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', padding: '9px 12px', borderRadius: '12px 12px 12px 0', fontSize: 12, display: 'flex', alignItems: 'center', gap: 7, color: 'var(--text3)' }}>
-                  <span style={{ display: 'inline-block', width: 8, height: 8, border: '1.5px solid var(--text3)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.6s linear infinite' }} />
-                  Analyzing…
-                </div>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-
-            {/* Quick replies */}
-            {!loadingAi && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, padding: '0 14px 10px', flexShrink: 0 }}>
-                {[
-                  ['Critique active split', 'Critique my active split'],
-                  ["Better split?", 'What is a better alternative for my split?'],
-                  ['Program rest?', 'How should I program rest days?'],
-                  ['Popular splits', 'What are the most popular training splits?'],
-                ].map(([label, prompt]) => (
-                  <button
-                    key={label}
-                    onClick={() => handleSendAdvisorReply(prompt)}
-                    style={{ background: 'rgba(232,255,90,0.05)', border: '1px solid rgba(232,255,90,0.15)', borderRadius: 12, padding: '4px 9px', fontSize: 10.5, color: 'var(--accent)', cursor: 'pointer' }}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Input */}
-            <form onSubmit={(e) => { e.preventDefault(); handleSendAdvisorReply(); }} style={{ display: 'flex', gap: 6, padding: '0 14px 12px', flexShrink: 0 }}>
-              <input
-                type="text"
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                placeholder="Ask about your splits…"
-                style={{ flex: 1, background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', padding: '8px 12px', fontSize: 13, outline: 'none', minWidth: 0 }}
-              />
-              <button
-                type="submit"
-                disabled={!inputText.trim() || loadingAi}
-                style={{ padding: '8px 12px', background: 'var(--accent)', border: 'none', borderRadius: 8, color: '#0a0a0a', cursor: 'pointer', display: 'flex', alignItems: 'center', opacity: (!inputText.trim() || loadingAi) ? 0.4 : 1, flexShrink: 0 }}
-              >
-                <SendIcon />
-              </button>
-            </form>
-          </div>
-        )}
-
-        {/* FAB bubble */}
-        <button
-          onClick={() => setShowAiChat((v) => !v)}
-          style={{
-            position: 'fixed',
-            bottom: 'calc(var(--nav-height) + 12px)',
-            right: 16,
-            width: 52,
-            height: 52,
-            borderRadius: '50%',
-            background: showAiChat ? 'var(--bg3)' : 'var(--accent)',
-            border: showAiChat ? '1px solid var(--border2)' : 'none',
-            color: showAiChat ? 'var(--text2)' : '#0a0a0a',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 300,
-            boxShadow: showAiChat ? 'none' : '0 4px 16px rgba(232,255,90,0.3)',
-            transition: 'all 0.2s ease',
-            WebkitTapHighlightColor: 'transparent',
-          }}
-          title="AI Split Advisor"
-        >
-          {showAiChat ? <XIcon /> : <SparkleIcon />}
-        </button>
-      </>
+      <AiChatBubble
+        title="AI Split Advisor"
+        messages={chatHistory}
+        loadingAi={loadingAi}
+        inputText={inputText}
+        onInputChange={setInputText}
+        onSend={handleSendAdvisorReply}
+        onRestart={() => {
+          const welcome = [{ sender: 'coach', text: "### AI Split Advisor\nWelcome! I can help you analyze your training splits, balance your workload, schedule rest days, or recommend alternative programs.\n\nHere are some things you can ask me:\n- **Is my split too much volume?**\n- **What's a better alternative for my split?**\n- **What do others usually do for this type of split?**\n- **How should I program rest days?**" }];
+          setChatHistory(welcome);
+          localStorage.setItem('ai_splits_chat_history', JSON.stringify(welcome));
+        }}
+        quickReplies={[
+          { label: 'Critique active split', prompt: 'Critique my active split' },
+          { label: 'Better split?', prompt: 'What is a better alternative for my split?' },
+          { label: 'Program rest?', prompt: 'How should I program rest days?' },
+          { label: 'Popular splits', prompt: 'What are the most popular training splits?' },
+        ]}
+        apiKey={apiKey}
+        onApiKeyChange={(val) => {
+          setApiKey(val);
+          if (val.trim()) localStorage.setItem('user_gemini_api_key', val.trim());
+          else localStorage.removeItem('user_gemini_api_key');
+        }}
+        showSettings={showSettings}
+        onToggleSettings={() => setShowSettings((v) => !v)}
+        messagesEndRef={messagesEndRef}
+        open={showAiChat}
+        onToggle={() => setShowAiChat((v) => !v)}
+      />
 
       {modal?.type === 'add' && <SplitModal title="New Split" onConfirm={handleCreate} onClose={() => setModal(null)} />}
       {modal?.type === 'rename' && <SplitModal title="Rename Split" initial={modal.split.name} onConfirm={handleRename} onClose={() => setModal(null)} />}

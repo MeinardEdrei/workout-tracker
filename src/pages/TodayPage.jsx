@@ -74,6 +74,39 @@ function CompletionScreen({ log, onClose, onShare, sharing }) {
           </button>
         </div>
       </div>
+
+      {/* AI Coach bubble — always visible on today tab */}
+      <AiChatBubble
+        title="AI Coach"
+        badge={aiApiKey ? 'Search Enabled' : undefined}
+        messages={aiMessages}
+        loadingAi={aiLoadingAi}
+        inputText={aiInputText}
+        onInputChange={setAiInputText}
+        onSend={handleAiSendReply}
+        onRestart={handleAiCritique}
+        quickReplies={aiQuickReplies}
+        apiKey={aiApiKey}
+        onApiKeyChange={(val) => {
+          setAiApiKey(val);
+          if (val.trim()) localStorage.setItem('user_gemini_api_key', val.trim());
+          else localStorage.removeItem('user_gemini_api_key');
+        }}
+        showSettings={aiShowSettings}
+        onToggleSettings={() => setAiShowSettings((v) => !v)}
+        messagesEndRef={aiMessagesEndRef}
+        open={showAiChat}
+        onToggle={() => setShowAiChat((v) => !v)}
+        onInitialCritique={!aiCritique ? handleAiCritique : null}
+      />
+
+      {aiPendingAction && (
+        <ActionPermissionModal
+          pendingAction={aiPendingAction}
+          onAllow={handleAiActionApproved}
+          onDeny={handleAiActionDenied}
+        />
+      )}
     </div>
   );
 }
@@ -626,36 +659,12 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
   const [sharing, setSharing] = useState(false);
   const shareCardRef = useRef(null);
 
-  // AI-related state
-  const cacheKey = logForDate ? logForDate._id : day._id;
-  const [critique, setCritique] = useState(() => localStorage.getItem('ai_critique_' + cacheKey) || '');
-  const [loadingAi, setLoadingAi] = useState(false);
-  const [chatHistory, setChatHistory] = useState(() => {
-    const saved = localStorage.getItem('ai_chat_history_' + cacheKey);
-    return saved ? JSON.parse(saved) : [];
-  });
-  const [inputText, setInputText] = useState('');
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('user_gemini_api_key') || '');
-  const [showSettings, setShowSettings] = useState(false);
-  const [pendingAction, setPendingAction] = useState(null);
-
-  const messagesEndRef = useRef(null);
 
   useEffect(() => {
     setExercises(day.exercises || []);
   }, [day.exercises]);
 
-  // Sync critique and chat history when logForDate or day._id changes
-  useEffect(() => {
-    setCritique(localStorage.getItem('ai_critique_' + cacheKey) || '');
-    const saved = localStorage.getItem('ai_chat_history_' + cacheKey);
-    setChatHistory(saved ? JSON.parse(saved) : []);
-  }, [logForDate, day._id]);
 
-  // Scroll to bottom on new messages
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chatHistory, critique, loadingAi]);
 
   useEffect(() => {
     if (!open || logForDate) return;
@@ -727,225 +736,6 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
     finally { setSharing(false); }
   }
 
-  async function handleAiCritique() {
-    setLoadingAi(true);
-
-    const targetExs = logForDate ? logForDate.exercises : (day.exercises || []);
-    const externalApiKey = localStorage.getItem('user_gemini_api_key');
-
-    const splitContext = externalApiKey ? buildSplitContext(splitDays, logs, splitName) : '';
-
-    const critiquePrompt = externalApiKey
-      ? `Analyze my ${logForDate ? 'completed' : 'planned'} workout session and give me a thorough, insightful critique. Reference my full split structure and history to give context-aware feedback. Mention progression, balance, and any research-backed tips.
-
-Today's session — Day: ${day.name}${day.tag ? ` (${day.tag})` : ''}
-Exercises ${logForDate ? 'done' : 'planned'}:
-${targetExs.map(e => `- ${e.name}: ${e.sets}×${e.reps || 'max'} reps${e.weight ? ` @ ${e.weight}${e.weightUnit}` : ''}`).join('\n')}`
-      : `Analyze this ${logForDate ? 'completed' : 'planned'} workout. Keep it under 100 words with bullet points.
-
-Split: ${splitName} | Day: ${day.name}
-Exercises: ${targetExs.map(e => `${e.name} ${e.sets}×${e.reps || 'max'}`).join(', ')}`;
-
-    try {
-      let result = '';
-      const hasAi = window.ai;
-
-      if (externalApiKey) {
-        result = await callExternalGeminiApi(externalApiKey, FLEXIBLE_SYSTEM_PROMPT + splitContext, [], critiquePrompt, true);
-      } else if (hasAi) {
-        let session = null;
-        if (window.ai.languageModel) {
-          session = await window.ai.languageModel.create({ systemPrompt: RESTRICTED_SYSTEM_PROMPT });
-        } else if (window.ai.assistant) {
-          session = await window.ai.assistant.create();
-        } else if (window.ai.createTextSession) {
-          session = await window.ai.createTextSession();
-        }
-        if (session) { result = await session.prompt(critiquePrompt); session.destroy?.(); }
-      }
-
-      if (result && result.trim()) {
-        const tag = externalApiKey ? '\n\n*✨ Powered by Gemini + Google Search*' : '\n\n*✨ Powered by Gemini Nano (Offline)*';
-        const withTag = result.trim() + tag;
-        localStorage.setItem('ai_critique_' + cacheKey, withTag);
-        setCritique(withTag);
-      } else {
-        const localResult = generateOnDeviceCritique(logForDate || { ...day, date: dateStr, splitName }, logs) + '\n\n*✨ Powered by Local Analysis Engine*';
-        localStorage.setItem('ai_critique_' + cacheKey, localResult);
-        setCritique(localResult);
-      }
-    } catch (err) {
-      console.error('Gemini AI failed, falling back to local analysis:', err);
-      const localResult = generateOnDeviceCritique(logForDate || { ...day, date: dateStr, splitName }, logs) + '\n\n*✨ Powered by Local Analysis Engine*';
-      localStorage.setItem('ai_critique_' + cacheKey, localResult);
-      setCritique(localResult);
-    } finally {
-      setLoadingAi(false);
-    }
-  }
-
-  async function handleSendReply(textToSend) {
-    const text = textToSend || inputText;
-    if (!text.trim() || loadingAi) return;
-
-    const updatedHistory = [...chatHistory, { sender: 'user', text: text.trim() }];
-    setChatHistory(updatedHistory);
-    setInputText('');
-    setLoadingAi(true);
-
-    const externalApiKey = localStorage.getItem('user_gemini_api_key');
-    const isLocalEngine = critique.includes('Local Analysis Engine');
-
-    try {
-      let reply = '';
-      if (externalApiKey) {
-        const systemPrompt = FLEXIBLE_SYSTEM_PROMPT + buildSplitContext(splitDays, logs, splitName);
-        const contents = historyToContents(chatHistory);
-        contents.push({ role: 'user', parts: [{ text: text.trim() }] });
-
-        const data = await callGeminiRaw(externalApiKey, systemPrompt, contents, [
-          ...SPLIT_FUNCTIONS,
-          { google_search: {} },
-        ]);
-
-        const fc = extractFunctionCall(data);
-        if (fc) {
-          // AI wants to make a change — pause and ask permission
-          const modelParts = data.candidates?.[0]?.content?.parts || [];
-          setPendingAction({
-            functionCall: fc,
-            geminiContents: [...contents, { role: 'model', parts: modelParts }],
-            updatedHistory,
-            systemPrompt,
-          });
-          setLoadingAi(false);
-          return;
-        }
-
-        reply = extractText(data);
-      } else if (window.ai && !isLocalEngine) {
-        const targetExs = logForDate ? logForDate.exercises : (day.exercises || []);
-        const promptText = `You are a gym coach. Answer concisely in under 120 words with bullet points.
-Split: ${splitName} | Day: ${day.name} | Exercises: ${targetExs.map(e => e.name).join(', ')}
-User: ${text.trim()}
-Coach:`;
-        let session = null;
-        if (window.ai.languageModel) session = await window.ai.languageModel.create({ systemPrompt: RESTRICTED_SYSTEM_PROMPT });
-        else if (window.ai.assistant) session = await window.ai.assistant.create();
-        else if (window.ai.createTextSession) session = await window.ai.createTextSession();
-        if (session) { reply = await session.prompt(promptText); session.destroy?.(); }
-      }
-
-      if (reply && reply.trim()) {
-        const finalHistory = [...updatedHistory, { sender: 'coach', text: reply.trim() }];
-        setChatHistory(finalHistory);
-        localStorage.setItem('ai_chat_history_' + cacheKey, JSON.stringify(finalHistory));
-      } else {
-        const localReply = generateLocalCoachResponse(text.trim(), logForDate || { ...day, date: dateStr, splitName }, logs);
-        const finalHistory = [...updatedHistory, { sender: 'coach', text: localReply }];
-        setChatHistory(finalHistory);
-        localStorage.setItem('ai_chat_history_' + cacheKey, JSON.stringify(finalHistory));
-      }
-    } catch (err) {
-      console.error(err);
-      const localReply = generateLocalCoachResponse(text.trim(), logForDate || { ...day, date: dateStr, splitName }, logs);
-      const finalHistory = [...updatedHistory, { sender: 'coach', text: localReply }];
-      setChatHistory(finalHistory);
-      localStorage.setItem('ai_chat_history_' + cacheKey, JSON.stringify(finalHistory));
-    } finally {
-      setLoadingAi(false);
-    }
-  }
-
-  async function executeAction(functionCall) {
-    const { name, args } = functionCall;
-    if (name !== 'update_exercise') throw new Error(`Unknown function: ${name}`);
-
-    const targetDay = (splitDays || []).find(d =>
-      d.name.toLowerCase() === args.dayName.toLowerCase() ||
-      d.name.toLowerCase().includes(args.dayName.toLowerCase())
-    );
-    if (!targetDay) throw new Error(`Day "${args.dayName}" not found`);
-
-    const targetEx = (targetDay.exercises || []).find(e =>
-      e.name.toLowerCase() === args.exerciseName.toLowerCase() ||
-      e.name.toLowerCase().includes(args.exerciseName.toLowerCase())
-    );
-    if (!targetEx) throw new Error(`Exercise "${args.exerciseName}" not found in ${args.dayName}`);
-
-    const patch = {};
-    if (args.sets !== undefined) patch.sets = +args.sets;
-    if (args.reps !== undefined) patch.reps = +args.reps;
-    if (args.weight !== undefined) patch.weight = +args.weight;
-    if (args.weightUnit !== undefined) patch.weightUnit = args.weightUnit;
-    if (args.untilFailure !== undefined) patch.untilFailure = args.untilFailure;
-
-    await storage.updateExercise(splitId, targetDay._id, targetEx._id, patch);
-    return `Updated ${args.exerciseName} on ${args.dayName}: ${Object.entries(patch).map(([k, v]) => `${k}=${v}`).join(', ')}`;
-  }
-
-  async function handleActionApproved() {
-    if (!pendingAction) return;
-    const { functionCall, geminiContents, updatedHistory, systemPrompt } = pendingAction;
-    setPendingAction(null);
-    setLoadingAi(true);
-
-    try {
-      const result = await executeAction(functionCall);
-      queryClient.invalidateQueries({ queryKey: ['splits'] });
-
-      // Send function result back to Gemini for natural language wrap-up
-      const contentsWithResult = [
-        ...geminiContents,
-        { role: 'user', parts: [{ functionResponse: { name: functionCall.name, response: { result } } }] },
-      ];
-      const externalApiKey = localStorage.getItem('user_gemini_api_key');
-      const data = await callGeminiRaw(externalApiKey, systemPrompt, contentsWithResult, [{ google_search: {} }]);
-      const reply = extractText(data) || 'Done! The change has been applied to your split.';
-      const finalHistory = [...updatedHistory, { sender: 'coach', text: reply }];
-      setChatHistory(finalHistory);
-      localStorage.setItem('ai_chat_history_' + cacheKey, JSON.stringify(finalHistory));
-    } catch (err) {
-      console.error(err);
-      const finalHistory = [...updatedHistory, { sender: 'coach', text: `Sorry, I couldn't apply that change: ${err.message}` }];
-      setChatHistory(finalHistory);
-      localStorage.setItem('ai_chat_history_' + cacheKey, JSON.stringify(finalHistory));
-    } finally {
-      setLoadingAi(false);
-    }
-  }
-
-  async function handleActionDenied() {
-    if (!pendingAction) return;
-    const { functionCall, geminiContents, updatedHistory, systemPrompt } = pendingAction;
-    setPendingAction(null);
-    setLoadingAi(true);
-
-    try {
-      const externalApiKey = localStorage.getItem('user_gemini_api_key');
-      const contentsWithDenial = [
-        ...geminiContents,
-        { role: 'user', parts: [{ functionResponse: { name: functionCall.name, response: { result: 'User denied this change. Do not retry it.' } } }] },
-      ];
-      const data = await callGeminiRaw(externalApiKey, systemPrompt, contentsWithDenial, [{ google_search: {} }]);
-      const reply = extractText(data) || 'Understood, no changes were made.';
-      const finalHistory = [...updatedHistory, { sender: 'coach', text: reply }];
-      setChatHistory(finalHistory);
-      localStorage.setItem('ai_chat_history_' + cacheKey, JSON.stringify(finalHistory));
-    } catch {
-      const finalHistory = [...updatedHistory, { sender: 'coach', text: 'Understood, no changes were made.' }];
-      setChatHistory(finalHistory);
-      localStorage.setItem('ai_chat_history_' + cacheKey, JSON.stringify(finalHistory));
-    } finally {
-      setLoadingAi(false);
-    }
-  }
-
-  // Combine initial critique and replies into a single chat window
-  const chatMessages = critique ? [
-    { sender: 'coach', text: critique },
-    ...chatHistory
-  ] : [];
 
   return (
     <>
@@ -1002,361 +792,6 @@ Coach:`;
               </div>
             )}
             
-            {/* AI Chat / Critique block */}
-            {critique ? (
-              <div style={{
-                margin: '12px 16px',
-                padding: '16px',
-                background: 'linear-gradient(135deg, rgba(232,255,90,0.03) 0%, rgba(0,0,0,0.4) 100%)',
-                border: '1px solid rgba(232,255,90,0.15)',
-                borderRadius: 8,
-                boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-                position: 'relative'
-              }}>
-                <div style={{
-                  position: 'absolute',
-                  top: -20,
-                  right: -20,
-                  width: 60,
-                  height: 60,
-                  background: 'var(--accent)',
-                  opacity: 0.05,
-                  filter: 'blur(20px)',
-                  borderRadius: '50%',
-                  pointerEvents: 'none'
-                }} />
-
-                {/* Chat Header */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, borderBottom: '1px solid rgba(232,255,90,0.1)', paddingBottom: 6 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 16 }}>✨</span>
-                    <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      {apiKey ? 'AI Coach · Search Enabled' : 'AI Coach'}
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <button 
-                      onClick={() => setShowSettings(!showSettings)}
-                      style={{ background: 'none', border: 'none', color: 'var(--text3)', fontSize: 11, cursor: 'pointer', transition: 'color 0.15s' }}
-                      onMouseEnter={(e) => e.target.style.color = 'var(--accent)'}
-                      onMouseLeave={(e) => e.target.style.color = 'var(--text3)'}
-                      title="API Settings"
-                    >
-                      🔑 {apiKey ? 'Configured' : 'Setup Key'}
-                    </button>
-                    <button 
-                      onClick={handleAiCritique} 
-                      disabled={loadingAi}
-                      style={{ background: 'none', border: 'none', color: 'var(--text3)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', cursor: 'pointer', transition: 'color 0.15s' }}
-                      onMouseEnter={(e) => e.target.style.color = 'var(--accent)'}
-                      onMouseLeave={(e) => e.target.style.color = 'var(--text3)'}
-                    >
-                      {loadingAi ? 'Analyzing…' : '🔄 Restart'}
-                    </button>
-                  </div>
-                </div>
-
-                {/* API Key Setup Panel */}
-                {showSettings && (
-                  <div style={{
-                    padding: 12,
-                    background: 'var(--bg3)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 8,
-                    marginBottom: 12,
-                    fontSize: 12
-                  }}>
-                    <div style={{ fontWeight: 700, color: 'var(--accent)', marginBottom: 4 }}>Gemini API Settings</div>
-                    <div style={{ color: 'var(--text2)', marginBottom: 8, lineHeight: 1.3 }}>
-                      Provide a free API key to unlock full, random Q&A capabilities without Chrome setup.
-                      <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', marginLeft: 4, textDecoration: 'underline' }}>
-                        Get free key here
-                      </a>
-                    </div>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <input 
-                        type="password"
-                        placeholder="Paste AI Studio API Key..."
-                        value={apiKey}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setApiKey(val);
-                          if (val.trim()) {
-                            localStorage.setItem('user_gemini_api_key', val.trim());
-                          } else {
-                            localStorage.removeItem('user_gemini_api_key');
-                          }
-                        }}
-                        style={{
-                          flex: 1,
-                          background: 'var(--bg2)',
-                          border: '1px solid var(--border)',
-                          borderRadius: 4,
-                          color: 'var(--text)',
-                          padding: '6px 10px',
-                          fontSize: 12
-                        }}
-                      />
-                      <button 
-                        onClick={() => {
-                          setApiKey('');
-                          localStorage.removeItem('user_gemini_api_key');
-                        }}
-                        style={{
-                          padding: '6px 10px',
-                          background: 'var(--red)',
-                          border: 'none',
-                          borderRadius: 4,
-                          color: '#fff',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          fontSize: 11
-                        }}
-                      >
-                        Clear
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Messages list */}
-                <div style={{ maxHeight: 300, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 12, paddingRight: 4 }}>
-                  {chatMessages.map((msg, idx) => {
-                    const isUser = msg.sender === 'user';
-                    return (
-                      <div 
-                        key={idx}
-                        style={{
-                          alignSelf: isUser ? 'flex-end' : 'flex-start',
-                          background: isUser ? 'var(--bg4)' : 'rgba(255,255,255,0.01)',
-                          border: isUser ? '1px solid var(--border2)' : '1px solid rgba(255,255,255,0.04)',
-                          padding: '10px 14px',
-                          borderRadius: isUser ? '12px 12px 0 12px' : '12px 12px 12px 0',
-                          maxWidth: '88%',
-                          fontSize: 13,
-                          boxShadow: '0 2px 6px rgba(0,0,0,0.1)'
-                        }}
-                      >
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                          {renderMarkdown(msg.text)}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  
-                  {loadingAi && (
-                    <div style={{
-                      alignSelf: 'flex-start',
-                      background: 'rgba(255,255,255,0.01)',
-                      border: '1px solid rgba(255,255,255,0.04)',
-                      padding: '10px 14px',
-                      borderRadius: '12px 12px 12px 0',
-                      fontSize: 13,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      color: 'var(--text3)'
-                    }}>
-                      <span style={{
-                        display: 'inline-block', width: 8, height: 8,
-                        border: '1.5px solid var(--text3)', borderTopColor: 'transparent',
-                        borderRadius: '50%', animation: 'spin 0.6s linear infinite'
-                      }} />
-                      Coach is writing...
-                    </div>
-                  )}
-                  
-                  <div ref={messagesEndRef} />
-                </div>
-
-                {/* Quick Replies presets */}
-                {!loadingAi && (() => {
-                  const hasKey = !!apiKey;
-                  const suggestions = hasKey ? [
-                    'How much protein should I eat today?',
-                    'Best pre-workout foods to eat?',
-                    'How does creatine actually work?',
-                    'Should I do cardio on rest days?',
-                    'Latest research on muscle recovery?',
-                    'What supplements are worth it?',
-                  ] : [
-                    'Is this split too much volume?',
-                    "What's a better split?",
-                    'What do others do?',
-                  ];
-                  return (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-                      {suggestions.map((s) => (
-                        <button
-                          key={s}
-                          onClick={() => handleSendReply(s)}
-                          style={{ background: 'rgba(232,255,90,0.05)', border: '1px solid rgba(232,255,90,0.15)', borderRadius: 12, padding: '4px 10px', fontSize: 11, color: 'var(--accent)', cursor: 'pointer', transition: 'all 0.15s' }}
-                          onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(232,255,90,0.12)'; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(232,255,90,0.05)'; }}
-                        >
-                          {s}
-                        </button>
-                      ))}
-                    </div>
-                  );
-                })()}
-
-                {/* Chat Input Field */}
-                <form
-                  onSubmit={(e) => { e.preventDefault(); handleSendReply(); }}
-                  style={{ display: 'flex', gap: 6 }}
-                >
-                  <input
-                    type="text"
-                    value={inputText}
-                    onChange={(e) => setInputText(e.target.value)}
-                    placeholder={apiKey ? 'Ask anything — fitness, nutrition, research…' : 'Ask about your workout…'}
-                    style={{
-                      flex: 1,
-                      background: 'var(--bg3)',
-                      border: '1px solid var(--border)',
-                      borderRadius: 6,
-                      color: 'var(--text)',
-                      padding: '8px 12px',
-                      fontSize: 13,
-                      outline: 'none'
-                    }}
-                  />
-                  <button 
-                    type="submit" 
-                    disabled={!inputText.trim() || loadingAi}
-                    style={{
-                      padding: '8px 14px',
-                      background: 'var(--accent)',
-                      border: 'none',
-                      borderRadius: 6,
-                      color: '#0a0a0a',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      fontSize: 13,
-                      opacity: (!inputText.trim() || loadingAi) ? 0.5 : 1
-                    }}
-                  >
-                    Send
-                  </button>
-                </form>
-              </div>
-            ) : (
-              <div style={{ padding: '12px 16px 0', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <button 
-                  className="btn" 
-                  onClick={handleAiCritique}
-                  disabled={loadingAi}
-                  style={{
-                    width: '100%',
-                    background: 'rgba(232,255,90,0.08)',
-                    color: 'var(--accent)',
-                    border: '1px solid rgba(232,255,90,0.2)',
-                    fontSize: 13,
-                    padding: '10px 12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 6,
-                    cursor: 'pointer',
-                    borderRadius: 8,
-                    transition: 'all 0.2s'
-                  }}
-                  onMouseEnter={(e) => { e.target.style.background = 'rgba(232,255,90,0.15)'; e.target.style.borderColor = 'var(--accent)'; }}
-                  onMouseLeave={(e) => { e.target.style.background = 'rgba(232,255,90,0.08)'; e.target.style.borderColor = 'rgba(232,255,90,0.2)'; }}
-                >
-                  {loadingAi ? (
-                    <>
-                      <span style={{
-                        display: 'inline-block', width: 12, height: 12, marginRight: 6,
-                        border: '1.5px solid var(--accent)', borderTopColor: 'transparent',
-                        borderRadius: '50%', animation: 'spin 0.6s linear infinite'
-                      }} />
-                      Analyzing workout...
-                    </>
-                  ) : (
-                    <>
-                      <span>✨</span> Get AI Coach Critique & Insights
-                    </>
-                  )}
-                </button>
-
-                {/* Inline API settings toggle when there is no critique yet */}
-                <div style={{ display: 'flex', justifyContent: 'center', marginTop: 2 }}>
-                  <button 
-                    onClick={() => setShowSettings(!showSettings)}
-                    style={{ background: 'none', border: 'none', color: 'var(--text3)', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
-                    onMouseEnter={(e) => e.target.style.color = 'var(--accent)'}
-                    onMouseLeave={(e) => e.target.style.color = 'var(--text3)'}
-                  >
-                    🔑 {apiKey ? 'Gemini API Configured' : 'Setup Gemini API Key (Optional)'}
-                  </button>
-                </div>
-
-                {showSettings && (
-                  <div style={{
-                    padding: 12,
-                    background: 'var(--bg3)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 8,
-                    fontSize: 12,
-                    marginTop: 6
-                  }}>
-                    <div style={{ fontWeight: 700, color: 'var(--accent)', marginBottom: 4 }}>Gemini API Settings</div>
-                    <div style={{ color: 'var(--text2)', marginBottom: 8, lineHeight: 1.3 }}>
-                      Provide a free API key to unlock full, random Q&A capabilities without Chrome setup.
-                      <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', marginLeft: 4, textDecoration: 'underline' }}>
-                        Get free key here
-                      </a>
-                    </div>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <input 
-                        type="password"
-                        placeholder="Paste AI Studio API Key..."
-                        value={apiKey}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setApiKey(val);
-                          if (val.trim()) {
-                            localStorage.setItem('user_gemini_api_key', val.trim());
-                          } else {
-                            localStorage.removeItem('user_gemini_api_key');
-                          }
-                        }}
-                        style={{
-                          flex: 1,
-                          background: 'var(--bg2)',
-                          border: '1px solid var(--border)',
-                          borderRadius: 4,
-                          color: 'var(--text)',
-                          padding: '6px 10px',
-                          fontSize: 12
-                        }}
-                      />
-                      <button 
-                        onClick={() => {
-                          setApiKey('');
-                          localStorage.removeItem('user_gemini_api_key');
-                        }}
-                        style={{
-                          padding: '6px 10px',
-                          background: 'var(--red)',
-                          border: 'none',
-                          borderRadius: 4,
-                          color: '#fff',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          fontSize: 11
-                        }}
-                      >
-                        Clear
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
             {isCompleted && (
               <div style={{ 
                 padding: '14px 16px', 
@@ -1396,7 +831,6 @@ Coach:`;
 
       {completedLog && <DailyShareCard log={completedLog} cardRef={shareCardRef} />}
       {completedLog && <CompletionScreen log={completedLog} onClose={() => setCompletedLog(null)} onShare={handleShare} sharing={sharing} />}
-      {pendingAction && <ActionPermissionModal pendingAction={pendingAction} onAllow={handleActionApproved} onDeny={handleActionDenied} />}
     </>
   );
 }
@@ -1464,6 +898,206 @@ export default function TodayPage() {
       }
     });
   }, [splits, logs, isLoading, activeSplit, days, queryClient, storage]);
+
+  // ── AI Coach state (lifted from DayCard) ─────────────────────────────────
+  const todayDay = days[todayIndex] || null;
+  const todayDateStr = todayDay ? (() => { const d = new Date(); return d.toISOString().slice(0, 10); })() : null;
+  const todayLog = todayDay ? logs.find((l) => l.date === todayDateStr) : null;
+  const aiCacheKey = todayLog ? todayLog._id : (todayDay ? todayDay._id : 'none');
+
+  const [aiCritique, setAiCritique] = useState(() => localStorage.getItem('ai_critique_' + aiCacheKey) || '');
+  const [aiChatHistory, setAiChatHistory] = useState(() => {
+    const saved = localStorage.getItem('ai_chat_history_' + aiCacheKey);
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [aiInputText, setAiInputText] = useState('');
+  const [aiLoadingAi, setAiLoadingAi] = useState(false);
+  const [aiApiKey, setAiApiKey] = useState(() => localStorage.getItem('user_gemini_api_key') || '');
+  const [aiShowSettings, setAiShowSettings] = useState(false);
+  const [aiPendingAction, setAiPendingAction] = useState(null);
+  const [showAiChat, setShowAiChat] = useState(false);
+  const aiMessagesEndRef = useRef(null);
+
+  useEffect(() => {
+    setAiCritique(localStorage.getItem('ai_critique_' + aiCacheKey) || '');
+    const saved = localStorage.getItem('ai_chat_history_' + aiCacheKey);
+    setAiChatHistory(saved ? JSON.parse(saved) : []);
+  }, [aiCacheKey]);
+
+  useEffect(() => {
+    aiMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [aiChatHistory, aiCritique, aiLoadingAi]);
+
+  async function handleAiCritique() {
+    if (!todayDay || !activeSplit) return;
+    setAiLoadingAi(true);
+    const targetExs = todayLog ? todayLog.exercises : (todayDay.exercises || []);
+    const externalApiKey = localStorage.getItem('user_gemini_api_key');
+    const splitContext = externalApiKey ? buildSplitContext(days, logs, activeSplit.name) : '';
+    const critiquePrompt = externalApiKey
+      ? `Analyze my ${todayLog ? 'completed' : 'planned'} workout session and give me a thorough, insightful critique. Reference my full split structure and history to give context-aware feedback. Mention progression, balance, and any research-backed tips.
+
+Today's session — Day: ${todayDay.name}${todayDay.tag ? ` (${todayDay.tag})` : ''}
+Exercises ${todayLog ? 'done' : 'planned'}:
+${targetExs.map(e => `- ${e.name}: ${e.sets}×${e.reps || 'max'} reps${e.weight ? ` @ ${e.weight}${e.weightUnit}` : ''}`).join('\n')}`
+      : `Analyze this ${todayLog ? 'completed' : 'planned'} workout. Keep it under 100 words with bullet points.
+
+Split: ${activeSplit.name} | Day: ${todayDay.name}
+Exercises: ${targetExs.map(e => `${e.name} ${e.sets}×${e.reps || 'max'}`).join(', ')}`;
+
+    try {
+      let result = '';
+      if (externalApiKey) {
+        result = await callExternalGeminiApi(externalApiKey, FLEXIBLE_SYSTEM_PROMPT + splitContext, [], critiquePrompt, true);
+      } else if (window.ai) {
+        let session = null;
+        if (window.ai.languageModel) session = await window.ai.languageModel.create({ systemPrompt: RESTRICTED_SYSTEM_PROMPT });
+        else if (window.ai.assistant) session = await window.ai.assistant.create();
+        else if (window.ai.createTextSession) session = await window.ai.createTextSession();
+        if (session) { result = await session.prompt(critiquePrompt); session.destroy?.(); }
+      }
+      if (result && result.trim()) {
+        const tag = externalApiKey ? '\n\n*✨ Powered by Gemini + Google Search*' : '\n\n*✨ Powered by Gemini Nano (Offline)*';
+        const withTag = result.trim() + tag;
+        localStorage.setItem('ai_critique_' + aiCacheKey, withTag);
+        setAiCritique(withTag);
+      } else {
+        const local = generateOnDeviceCritique(todayLog || { ...todayDay, date: todayDateStr, splitName: activeSplit.name }, logs) + '\n\n*✨ Powered by Local Analysis Engine*';
+        localStorage.setItem('ai_critique_' + aiCacheKey, local);
+        setAiCritique(local);
+      }
+    } catch {
+      const local = generateOnDeviceCritique(todayLog || { ...todayDay, date: todayDateStr, splitName: activeSplit.name }, logs) + '\n\n*✨ Powered by Local Analysis Engine*';
+      localStorage.setItem('ai_critique_' + aiCacheKey, local);
+      setAiCritique(local);
+    } finally {
+      setAiLoadingAi(false);
+    }
+  }
+
+  async function handleAiSendReply(textToSend) {
+    const text = textToSend || aiInputText;
+    if (!text.trim() || aiLoadingAi) return;
+    const updatedHistory = [...aiChatHistory, { sender: 'user', text: text.trim() }];
+    setAiChatHistory(updatedHistory);
+    setAiInputText('');
+    setAiLoadingAi(true);
+    const externalApiKey = localStorage.getItem('user_gemini_api_key');
+    const isLocalEngine = aiCritique.includes('Local Analysis Engine');
+    try {
+      let reply = '';
+      if (externalApiKey) {
+        const systemPrompt = FLEXIBLE_SYSTEM_PROMPT + buildSplitContext(days, logs, activeSplit.name);
+        const contents = historyToContents(aiChatHistory);
+        contents.push({ role: 'user', parts: [{ text: text.trim() }] });
+        const data = await callGeminiRaw(externalApiKey, systemPrompt, contents, [...SPLIT_FUNCTIONS, { google_search: {} }]);
+        const fc = extractFunctionCall(data);
+        if (fc) {
+          const modelParts = data.candidates?.[0]?.content?.parts || [];
+          setAiPendingAction({ functionCall: fc, geminiContents: [...contents, { role: 'model', parts: modelParts }], updatedHistory, systemPrompt });
+          setAiLoadingAi(false);
+          return;
+        }
+        reply = extractText(data);
+      } else if (window.ai && !isLocalEngine) {
+        const targetExs = todayLog ? todayLog.exercises : (todayDay?.exercises || []);
+        const promptText = `You are a gym coach. Answer concisely in under 120 words with bullet points.
+Split: ${activeSplit.name} | Day: ${todayDay?.name} | Exercises: ${targetExs.map(e => e.name).join(', ')}
+User: ${text.trim()}
+Coach:`;
+        let session = null;
+        if (window.ai.languageModel) session = await window.ai.languageModel.create({ systemPrompt: RESTRICTED_SYSTEM_PROMPT });
+        else if (window.ai.assistant) session = await window.ai.assistant.create();
+        else if (window.ai.createTextSession) session = await window.ai.createTextSession();
+        if (session) { reply = await session.prompt(promptText); session.destroy?.(); }
+      }
+      if (reply && reply.trim()) {
+        const finalHistory = [...updatedHistory, { sender: 'coach', text: reply.trim() }];
+        setAiChatHistory(finalHistory);
+        localStorage.setItem('ai_chat_history_' + aiCacheKey, JSON.stringify(finalHistory));
+      } else {
+        const local = generateLocalCoachResponse(text.trim(), todayLog || { ...todayDay, date: todayDateStr, splitName: activeSplit.name }, logs);
+        const finalHistory = [...updatedHistory, { sender: 'coach', text: local }];
+        setAiChatHistory(finalHistory);
+        localStorage.setItem('ai_chat_history_' + aiCacheKey, JSON.stringify(finalHistory));
+      }
+    } catch {
+      const local = generateLocalCoachResponse(text.trim(), todayLog || { ...todayDay, date: todayDateStr, splitName: activeSplit.name }, logs);
+      const finalHistory = [...updatedHistory, { sender: 'coach', text: local }];
+      setAiChatHistory(finalHistory);
+      localStorage.setItem('ai_chat_history_' + aiCacheKey, JSON.stringify(finalHistory));
+    } finally {
+      setAiLoadingAi(false);
+    }
+  }
+
+  async function handleAiActionApproved() {
+    if (!aiPendingAction) return;
+    const { functionCall, geminiContents, updatedHistory, systemPrompt } = aiPendingAction;
+    setAiPendingAction(null);
+    setAiLoadingAi(true);
+    try {
+      const targetDay = (days || []).find(d => d.name.toLowerCase() === functionCall.args.dayName?.toLowerCase() || d.name.toLowerCase().includes(functionCall.args.dayName?.toLowerCase()));
+      if (!targetDay) throw new Error(`Day not found`);
+      const targetEx = (targetDay.exercises || []).find(e => e.name.toLowerCase() === functionCall.args.exerciseName?.toLowerCase() || e.name.toLowerCase().includes(functionCall.args.exerciseName?.toLowerCase()));
+      if (!targetEx) throw new Error(`Exercise not found`);
+      const patch = {};
+      const a = functionCall.args;
+      if (a.sets !== undefined) patch.sets = +a.sets;
+      if (a.reps !== undefined) patch.reps = +a.reps;
+      if (a.weight !== undefined) patch.weight = +a.weight;
+      if (a.weightUnit !== undefined) patch.weightUnit = a.weightUnit;
+      if (a.untilFailure !== undefined) patch.untilFailure = a.untilFailure;
+      await storage.updateExercise(activeSplit._id, targetDay._id, targetEx._id, patch);
+      queryClient.invalidateQueries({ queryKey: ['splits'] });
+      const contentsWithResult = [...geminiContents, { role: 'user', parts: [{ functionResponse: { name: functionCall.name, response: { result: `Updated ${a.exerciseName} on ${a.dayName}` } } }] }];
+      const externalApiKey = localStorage.getItem('user_gemini_api_key');
+      const data = await callGeminiRaw(externalApiKey, systemPrompt, contentsWithResult, [{ google_search: {} }]);
+      const reply = extractText(data) || 'Done! The change has been applied.';
+      const finalHistory = [...updatedHistory, { sender: 'coach', text: reply }];
+      setAiChatHistory(finalHistory);
+      localStorage.setItem('ai_chat_history_' + aiCacheKey, JSON.stringify(finalHistory));
+    } catch (err) {
+      const finalHistory = [...updatedHistory, { sender: 'coach', text: `Sorry, could not apply that change: ${err.message}` }];
+      setAiChatHistory(finalHistory);
+      localStorage.setItem('ai_chat_history_' + aiCacheKey, JSON.stringify(finalHistory));
+    } finally {
+      setAiLoadingAi(false);
+    }
+  }
+
+  async function handleAiActionDenied() {
+    if (!aiPendingAction) return;
+    const { functionCall, geminiContents, updatedHistory, systemPrompt } = aiPendingAction;
+    setAiPendingAction(null);
+    setAiLoadingAi(true);
+    try {
+      const externalApiKey = localStorage.getItem('user_gemini_api_key');
+      const contentsWithDenial = [...geminiContents, { role: 'user', parts: [{ functionResponse: { name: functionCall.name, response: { result: 'User denied this change.' } } }] }];
+      const data = await callGeminiRaw(externalApiKey, systemPrompt, contentsWithDenial, [{ google_search: {} }]);
+      const reply = extractText(data) || 'Understood, no changes were made.';
+      const finalHistory = [...updatedHistory, { sender: 'coach', text: reply }];
+      setAiChatHistory(finalHistory);
+      localStorage.setItem('ai_chat_history_' + aiCacheKey, JSON.stringify(finalHistory));
+    } catch {
+      const finalHistory = [...updatedHistory, { sender: 'coach', text: 'Understood, no changes were made.' }];
+      setAiChatHistory(finalHistory);
+      localStorage.setItem('ai_chat_history_' + aiCacheKey, JSON.stringify(finalHistory));
+    } finally {
+      setAiLoadingAi(false);
+    }
+  }
+
+  const aiMessages = aiCritique ? [{ sender: 'coach', text: aiCritique }, ...aiChatHistory] : [];
+  const aiQuickReplies = aiApiKey ? [
+    { label: 'How much protein today?', prompt: 'How much protein should I eat today?' },
+    { label: 'Pre-workout foods?', prompt: 'Best pre-workout foods to eat?' },
+    { label: 'Creatine?', prompt: 'How does creatine actually work?' },
+    { label: 'Cardio on rest days?', prompt: 'Should I do cardio on rest days?' },
+  ] : [
+    { label: 'Too much volume?', prompt: 'Is this split too much volume?' },
+    { label: 'Better split?', prompt: "What's a better split?" },
+  ];
 
   if (isLoading) return <div className="spinner" />;
   if (error) return <div className="empty-state">Error: {error.message}</div>;
