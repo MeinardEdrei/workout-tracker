@@ -6,6 +6,7 @@ import DailyShareCard from '../components/DailyShareCard';
 import { MusclePill } from '../components/MusclePill';
 import ExerciseThumbnail from '../components/ExerciseThumbnail';
 import { createPortal } from 'react-dom';
+import AiChatBubble from '../components/AiChatBubble';
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const TODAY_DOW = new Date().getDay();
@@ -74,39 +75,6 @@ function CompletionScreen({ log, onClose, onShare, sharing }) {
           </button>
         </div>
       </div>
-
-      {/* AI Coach bubble — always visible on today tab */}
-      <AiChatBubble
-        title="AI Coach"
-        badge={aiApiKey ? 'Search Enabled' : undefined}
-        messages={aiMessages}
-        loadingAi={aiLoadingAi}
-        inputText={aiInputText}
-        onInputChange={setAiInputText}
-        onSend={handleAiSendReply}
-        onRestart={handleAiCritique}
-        quickReplies={aiQuickReplies}
-        apiKey={aiApiKey}
-        onApiKeyChange={(val) => {
-          setAiApiKey(val);
-          if (val.trim()) localStorage.setItem('user_gemini_api_key', val.trim());
-          else localStorage.removeItem('user_gemini_api_key');
-        }}
-        showSettings={aiShowSettings}
-        onToggleSettings={() => setAiShowSettings((v) => !v)}
-        messagesEndRef={aiMessagesEndRef}
-        open={showAiChat}
-        onToggle={() => setShowAiChat((v) => !v)}
-        onInitialCritique={!aiCritique ? handleAiCritique : null}
-      />
-
-      {aiPendingAction && (
-        <ActionPermissionModal
-          pendingAction={aiPendingAction}
-          onAllow={handleAiActionApproved}
-          onDeny={handleAiActionDenied}
-        />
-      )}
     </div>
   );
 }
@@ -1148,6 +1116,36 @@ Coach:`;
           })
         )}
       </div>
+      <AiChatBubble
+        title="AI Coach"
+        badge={aiApiKey ? 'Search Enabled' : undefined}
+        messages={aiMessages}
+        loadingAi={aiLoadingAi}
+        inputText={aiInputText}
+        onInputChange={setAiInputText}
+        onSend={handleAiSendReply}
+        onRestart={handleAiCritique}
+        quickReplies={aiQuickReplies}
+        apiKey={aiApiKey}
+        onApiKeyChange={(val) => {
+          setAiApiKey(val);
+          if (val.trim()) localStorage.setItem('user_gemini_api_key', val.trim());
+          else localStorage.removeItem('user_gemini_api_key');
+        }}
+        showSettings={aiShowSettings}
+        onToggleSettings={() => setAiShowSettings((v) => !v)}
+        messagesEndRef={aiMessagesEndRef}
+        open={showAiChat}
+        onToggle={() => setShowAiChat((v) => !v)}
+        onInitialCritique={!aiCritique ? handleAiCritique : null}
+      />
+      {aiPendingAction && (
+        <ActionPermissionModal
+          pendingAction={aiPendingAction}
+          onAllow={handleAiActionApproved}
+          onDeny={handleAiActionDenied}
+        />
+      )}
     </div>
   );
 }
