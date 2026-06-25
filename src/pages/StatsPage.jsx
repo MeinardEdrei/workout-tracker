@@ -364,12 +364,17 @@ function WeekStrip({ weekLogs }) {
 /* ─── Exercise progression section ─── */
 function buildProgressionMap(logs) {
   const map = {};
-  logs.forEach((log) => {
+  // logs are sorted newest-first; iterate so earliest entries win on dedupe
+  [...logs].reverse().forEach((log) => {
     (log.exercises || []).forEach((ex) => {
       if (!ex.name) return;
       const key = ex.name.trim().toLowerCase();
       if (!map[key]) map[key] = { name: ex.name.trim(), sessions: [] };
-      map[key].sessions.push({ date: log.date, weight: ex.weight ?? 0, weightUnit: ex.weightUnit || 'kg' });
+      // dedupe by date — keep last entry per date
+      const existing = map[key].sessions.findIndex((s) => s.date === log.date);
+      const entry = { date: log.date, weight: ex.weight ?? 0, weightUnit: ex.weightUnit || 'kg', sets: ex.sets || 0, reps: ex.reps || 0 };
+      if (existing >= 0) map[key].sessions[existing] = entry;
+      else map[key].sessions.push(entry);
     });
   });
   return Object.values(map)
@@ -391,9 +396,11 @@ function buildProgressionMap(logs) {
 function ProgressionCard({ exercise }) {
   const [expanded, setExpanded] = useState(false);
   const sessions = exercise.sessions;
-  const last6 = sessions.slice(-6);
-  const first = sessions.find((s) => s.weight > 0);
-  const last = [...sessions].reverse().find((s) => s.weight > 0);
+  // Only use sessions with actual weight for the chart — 0-weight sessions are rest/unlogged
+  const weightedSessions = sessions.filter((s) => s.weight > 0);
+  const last6 = weightedSessions.slice(-6);
+  const first = weightedSessions[0];
+  const last = weightedSessions[weightedSessions.length - 1];
 
   const trend = !first || !last ? '→'
     : last.weight > first.weight ? '↑'
@@ -465,14 +472,25 @@ function ProgressionCard({ exercise }) {
   );
 }
 
+/* ─── Derive volume unit from a log's exercises (returns 'kg', 'lbs', or 'mixed') ─── */
+function volUnit(exercises) {
+  const units = [...new Set((exercises || []).filter((e) => e.weight > 0).map((e) => e.weightUnit || 'kg'))];
+  if (units.length === 0) return 'kg';
+  if (units.length === 1) return units[0];
+  return 'mixed';
+}
+
 /* ─── Log history card ─── */
 function LogCard({ log, onDelete }) {
   const [expanded, setExpanded] = useState(false);
   const date = new Date(log.date + 'T12:00:00');
   const dayAbbr = date.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
   const dateFull = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  const vol = log.totalVolume > 0
-    ? log.totalVolume >= 1000 ? `${(log.totalVolume / 1000).toFixed(1)}k` : `${log.totalVolume}`
+  const unit = volUnit(log.exercises);
+  // Recompute volume from exercises to avoid stale stored values
+  const computedVol = (log.exercises || []).reduce((s, ex) => s + (ex.sets || 0) * (ex.reps || 0) * (ex.weight || 0), 0);
+  const vol = computedVol > 0
+    ? computedVol >= 1000 ? `${(computedVol / 1000).toFixed(1)}k` : `${computedVol}`
     : null;
 
   return (
@@ -497,7 +515,7 @@ function LogCard({ log, onDelete }) {
           {vol && (
             <>
               <div style={{ fontSize: 20, fontWeight: 900, fontFamily: 'var(--font-mono)', color: 'var(--accent)', letterSpacing: '-0.02em', lineHeight: 1 }}>{vol}</div>
-              <div style={{ fontSize: 9, color: 'var(--text3)', fontFamily: 'var(--font-mono)', marginTop: 1 }}>kg vol</div>
+              <div style={{ fontSize: 9, color: 'var(--text3)', fontFamily: 'var(--font-mono)', marginTop: 1 }}>{unit !== 'mixed' ? unit : 'vol'}</div>
             </>
           )}
         </div>
@@ -559,8 +577,11 @@ export default function StatsPage() {
     finally { setSharing(false); }
   }
 
-  const totalVolume = weekLogs.reduce((s, l) => s + (l.totalVolume || 0), 0);
+  // Recompute from exercises so the unit is always correct
+  const allWeekExercises = weekLogs.flatMap((l) => l.exercises || []);
+  const totalVolume = allWeekExercises.reduce((s, ex) => s + (ex.sets || 0) * (ex.reps || 0) * (ex.weight || 0), 0);
   const volLabel = totalVolume >= 1000 ? `${(totalVolume / 1000).toFixed(1)}k` : `${totalVolume || 0}`;
+  const weekVolUnit = volUnit(allWeekExercises);
 
   const progressionData = buildProgressionMap(logs);
   const filteredProgression = progressionSearch.trim()
@@ -600,7 +621,7 @@ export default function StatsPage() {
                   <div>
                     <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text3)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2, textAlign: 'right' }}>Volume</div>
                     <div style={{ fontSize: 24, fontWeight: 900, fontFamily: 'var(--font-mono)', color: 'var(--text)', letterSpacing: '-0.02em' }}>
-                      {volLabel}<span style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 400, marginLeft: 3 }}>kg</span>
+                      {volLabel}<span style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 400, marginLeft: 3 }}>{weekVolUnit !== 'mixed' ? weekVolUnit : ''}</span>
                     </div>
                   </div>
                 )}

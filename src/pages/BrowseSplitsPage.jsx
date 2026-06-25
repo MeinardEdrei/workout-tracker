@@ -163,71 +163,68 @@ export default function BrowseSplitsPage({ onBack }) {
                   overflow: 'hidden',
                 }}
               >
-                {/* Card header */}
+                {/* Card header — top row: avatar + name + chevron */}
                 <div
                   onClick={() => toggleExpand(split._id)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', cursor: 'pointer', userSelect: 'none' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px 8px', cursor: 'pointer', userSelect: 'none' }}
                 >
                   {/* Avatar */}
                   <div style={{ flexShrink: 0 }}>
                     {split.userId?.avatar ? (
-                      <img
-                        src={split.userId.avatar}
-                        alt={split.userId.name}
-                        style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover', display: 'block', border: '1.5px solid var(--border2)' }}
+                      <img src={split.userId.avatar} alt={split.userId.name}
+                        style={{ width: 34, height: 34, borderRadius: '50%', objectFit: 'cover', display: 'block', border: '1.5px solid var(--border2)' }}
                       />
                     ) : (
-                      <div style={{
-                        width: 32, height: 32, borderRadius: '50%', background: 'var(--accent)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 13, fontWeight: 800, color: '#0a0a0a', flexShrink: 0,
-                      }}>
+                      <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: '#0a0a0a', flexShrink: 0 }}>
                         {(split.userId?.name || '?')[0].toUpperCase()}
                       </div>
                     )}
                   </div>
 
-                  {/* Info */}
+                  {/* Name + creator */}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 15, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.01em', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {split.name}
                     </div>
-                    <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 2, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '2px 6px' }}>
-                      <span>{split.userId?.name || 'Unknown'}</span>
-                      <span style={{ color: 'var(--border2)' }}>·</span>
-                      <span>{sortedDays.length} days</span>
-                      {tags.length > 0 && (
-                        <>
-                          <span style={{ color: 'var(--border2)' }}>·</span>
-                          <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{tags.slice(0, 3).join(' / ')}</span>
-                        </>
-                      )}
+                    <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 1 }}>
+                      by {split.userId?.name || 'Unknown'}
                     </div>
                   </div>
 
-                  {/* Add button + chevron */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, marginLeft: 4 }} onClick={(e) => e.stopPropagation()}>
-                    <button
-                      onClick={() => !isAdded && !isCopying && copyMutation.mutate(split._id)}
-                      disabled={isAdded || isCopying}
-                      style={{
-                        padding: '5px 9px', borderRadius: 6, fontSize: 11, fontWeight: 700,
-                        fontFamily: 'var(--font-display)', textTransform: 'uppercase', letterSpacing: '0.04em',
-                        cursor: isAdded || isCopying ? 'default' : 'pointer',
-                        border: 'none',
-                        background: isAdded ? 'rgba(232,255,90,0.12)' : 'var(--accent)',
-                        color: isAdded ? 'var(--accent)' : '#0a0a0a',
-                        display: 'flex', alignItems: 'center', gap: 4,
-                        transition: 'all 0.15s',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {isCopying ? <><InlineSpinner /> Adding…</> : isAdded ? 'Added ✓' : '+ Add'}
-                    </button>
-                    <div style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); toggleExpand(split._id); }}>
-                      <ChevronIcon expanded={isExpanded} />
-                    </div>
+                  <ChevronIcon expanded={isExpanded} />
+                </div>
+
+                {/* Second row: meta pills + add button */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 14px 12px', gap: 8 }}>
+                  {/* Pills */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, minWidth: 0 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text3)', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 4, padding: '2px 7px', whiteSpace: 'nowrap' }}>
+                      {trainingDays.length} training {trainingDays.length === 1 ? 'day' : 'days'}
+                    </span>
+                    {tags.slice(0, 3).map((tag) => (
+                      <span key={tag} style={{ fontSize: 10, fontWeight: 700, color: 'var(--accent)', background: 'rgba(232,255,90,0.07)', border: '1px solid rgba(232,255,90,0.15)', borderRadius: 4, padding: '2px 7px', whiteSpace: 'nowrap' }}>
+                        {tag}
+                      </span>
+                    ))}
                   </div>
+
+                  {/* Add button */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); !isAdded && !isCopying && copyMutation.mutate(split._id); }}
+                    disabled={isAdded || isCopying}
+                    style={{
+                      padding: '6px 14px', borderRadius: 6, fontSize: 12, fontWeight: 700,
+                      fontFamily: 'var(--font-display)', textTransform: 'uppercase', letterSpacing: '0.04em',
+                      cursor: isAdded || isCopying ? 'default' : 'pointer',
+                      border: isAdded ? '1px solid rgba(232,255,90,0.2)' : 'none',
+                      background: isAdded ? 'transparent' : 'var(--accent)',
+                      color: isAdded ? 'var(--accent)' : '#0a0a0a',
+                      display: 'flex', alignItems: 'center', gap: 5,
+                      transition: 'all 0.15s', whiteSpace: 'nowrap', flexShrink: 0,
+                    }}
+                  >
+                    {isCopying ? <><InlineSpinner /> Adding…</> : isAdded ? '✓ Added' : '+ Add'}
+                  </button>
                 </div>
 
                 {/* Expanded day list */}
