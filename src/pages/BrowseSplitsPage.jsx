@@ -206,12 +206,12 @@ export default function BrowseSplitsPage({ onBack }) {
                   </div>
 
                   {/* Add button + chevron */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, marginLeft: 4 }} onClick={(e) => e.stopPropagation()}>
                     <button
                       onClick={() => !isAdded && !isCopying && copyMutation.mutate(split._id)}
                       disabled={isAdded || isCopying}
                       style={{
-                        padding: '5px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700,
+                        padding: '5px 9px', borderRadius: 6, fontSize: 11, fontWeight: 700,
                         fontFamily: 'var(--font-display)', textTransform: 'uppercase', letterSpacing: '0.04em',
                         cursor: isAdded || isCopying ? 'default' : 'pointer',
                         border: 'none',
@@ -224,7 +224,7 @@ export default function BrowseSplitsPage({ onBack }) {
                     >
                       {isCopying ? <><InlineSpinner /> Adding…</> : isAdded ? 'Added ✓' : '+ Add'}
                     </button>
-                    <div onClick={(e) => { e.stopPropagation(); toggleExpand(split._id); }}>
+                    <div style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); toggleExpand(split._id); }}>
                       <ChevronIcon expanded={isExpanded} />
                     </div>
                   </div>

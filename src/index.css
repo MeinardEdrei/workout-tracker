@@ -328,3 +328,11 @@ html, body, #root {
   outline: none;
   cursor: pointer;
 }
+
+/* ── Responsive: small devices (≤ 360px) ─────────────────────────────────── */
+@media (max-width: 360px) {
+  .page-title { font-size: 22px; }
+  .page-subtitle { font-size: 11px; }
+  .btn { padding: 7px 11px; font-size: 12px; }
+  .btn-icon { padding: 6px; }
+}
