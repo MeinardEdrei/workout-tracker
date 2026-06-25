@@ -4,6 +4,8 @@ import { useStorage } from '../hooks/useStorage';
 import { useAuth } from '../context/AuthContext';
 import SplitShareModal from '../components/SplitShareModal';
 import SplitEditor from './EditPage';
+import BrowseSplitsPage from './BrowseSplitsPage';
+import { setSplitVisibility, reapplySplit as reapplySplitApi } from '../api/index';
 
 const API = import.meta.env.VITE_API_URL || '';
 
@@ -37,6 +39,32 @@ function ShareIcon() {
       <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
       <polyline points="16 6 12 2 8 6" />
       <line x1="12" y1="2" x2="12" y2="15" />
+    </svg>
+  );
+}
+function GlobeIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+    </svg>
+  );
+}
+function LockIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  );
+}
+function ShopIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <path d="M16 10a4 4 0 0 1-8 0" />
     </svg>
   );
 }
@@ -264,11 +292,18 @@ export default function SplitsPage() {
   const [modal, setModal] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
   const [editingSplitId, setEditingSplitId] = useState(null);
+  const [browsing, setBrowsing] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
   const [signInFailed, setSignInFailed] = useState(false);
   const [shareModal, setShareModal] = useState(null);
+  const [toast, setToast] = useState(null);
   const signInTimer = useRef(null);
+
+  function showToast(message, type = 'success') {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  }
 
   const { data: splits = [], isLoading } = useQuery({
     queryKey: ['splits', storageKey],
@@ -390,6 +425,16 @@ Coach:`;
   const renameMutation = useMutation({ mutationFn: ({ id, name }) => storage.renameSplit(id, name), onSuccess: invalidate });
   const deleteMutation = useMutation({ mutationFn: (id) => storage.deleteSplit(id), onSuccess: invalidate });
 
+  const visibilityMutation = useMutation({
+    mutationFn: ({ id, isPublic }) => setSplitVisibility(id, isPublic),
+    onSuccess: invalidate,
+  });
+  const reapplyMutation = useMutation({
+    mutationFn: (id) => reapplySplitApi(id),
+    onSuccess: () => { invalidate(); showToast('Split updated from source!'); },
+    onError: (err) => showToast(err.message || 'Reapply failed', 'error'),
+  });
+
   async function handleActivate(split) {
     if (split.isActive || actionLoading) return;
     setActionLoading(split._id);
@@ -425,8 +470,27 @@ Coach:`;
     return <SplitEditor splitId={editingSplitId} onBack={() => setEditingSplitId(null)} />;
   }
 
+  if (browsing) {
+    return <BrowseSplitsPage onBack={() => setBrowsing(false)} />;
+  }
+
   return (
     <div>
+      {/* Generic toast */}
+      {toast && (
+        <div style={{
+          position: 'fixed', bottom: 76, left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--bg2)', border: `1px solid ${toast.type === 'error' ? 'var(--red)' : 'var(--accent)'}`,
+          color: 'var(--text)', padding: '8px 14px', borderRadius: 20,
+          fontSize: 12, fontWeight: 600, zIndex: 400, whiteSpace: 'nowrap',
+          display: 'flex', alignItems: 'center', gap: 7,
+          animation: 'fadeIn 0.15s ease',
+        }}>
+          {toast.message}
+          <button onClick={() => setToast(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', fontSize: 14 }}>✕</button>
+        </div>
+      )}
+
       {/* Sign-in status toast */}
       {signingIn && (
         <div style={{
@@ -564,6 +628,24 @@ Coach:`;
             </button>
           )}
 
+          {/* Browse community splits */}
+          <button
+            onClick={() => isLoggedIn ? setBrowsing(true) : handleSignIn()}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              padding: '6px 10px', borderRadius: 6,
+              background: 'transparent', border: '1px solid var(--border2)',
+              color: 'var(--text2)', cursor: 'pointer',
+              fontSize: 11, fontWeight: 600, letterSpacing: '0.04em',
+              fontFamily: 'var(--font-display)', textTransform: 'uppercase',
+              transition: 'all 0.15s', whiteSpace: 'nowrap',
+              WebkitTapHighlightColor: 'transparent',
+            }}
+            title="Browse community splits"
+          >
+            <ShopIcon /> Browse
+          </button>
+
           {/* Primary action: always accent, always prominent */}
           <button className="btn btn-accent" onClick={() => setModal({ type: 'add' })}>
             <PlusIcon /> New
@@ -631,9 +713,37 @@ Coach:`;
                     <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 2, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span>{split.days?.length || 0} days</span>
                       {split.isActive && <span style={{ color: 'var(--accent)', fontWeight: 700, letterSpacing: '0.05em', fontSize: 10, textTransform: 'uppercase' }}>● Active</span>}
+                      {split.isPublic && <span style={{ color: 'var(--accent)', fontWeight: 700, letterSpacing: '0.05em', fontSize: 10, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 3 }}><GlobeIcon /> Public</span>}
+                      {split.sourceId && <span style={{ color: 'var(--text3)', fontSize: 10 }}>↺ from community</span>}
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={(e) => e.stopPropagation()}>
+                    {/* Re-apply from source */}
+                    {isLoggedIn && split.sourceId && (
+                      <button
+                        className="btn-icon"
+                        onClick={() => reapplyMutation.mutate(split._id)}
+                        disabled={reapplyMutation.isPending && reapplyMutation.variables === split._id}
+                        title="Re-apply from source"
+                        style={{ color: 'var(--accent)' }}
+                      >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="1 4 1 10 7 10" />
+                          <path d="M3.51 15a9 9 0 1 0 .49-4.95" />
+                        </svg>
+                      </button>
+                    )}
+                    {/* Visibility toggle */}
+                    {isLoggedIn && (
+                      <button
+                        className="btn-icon"
+                        onClick={() => visibilityMutation.mutate({ id: split._id, isPublic: !split.isPublic })}
+                        title={split.isPublic ? 'Make private' : 'Make public'}
+                        style={{ color: split.isPublic ? 'var(--accent)' : 'var(--text3)' }}
+                      >
+                        {split.isPublic ? <GlobeIcon /> : <LockIcon />}
+                      </button>
+                    )}
                     <button className="btn-icon" onClick={() => setModal({ type: 'rename', split })} title="Rename">
                       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M11.5 2.5a1.5 1.5 0 0 1 2.12 2.12L5 13.24l-3 .76.76-3L11.5 2.5Z" />

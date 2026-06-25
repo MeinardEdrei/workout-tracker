@@ -28,6 +28,8 @@ const SplitSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
     isActive: { type: Boolean, default: false },
+    isPublic: { type: Boolean, default: false },
+    sourceId: { type: mongoose.Schema.Types.ObjectId, ref: 'Split', default: null },
     days: [DaySchema],
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
   },

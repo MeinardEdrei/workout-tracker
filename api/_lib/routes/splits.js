@@ -81,6 +81,131 @@ router.patch('/:id/activate', async (req, res) => {
   }
 });
 
+// ─── PUBLIC SPLITS ────────────────────────────────────────────────────────────
+
+router.get('/public', async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = 20;
+    const skip = (page - 1) * limit;
+    const splits = await Split.find({ isPublic: true, userId: { $ne: req.userId } })
+      .sort({ updatedAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate('userId', 'name avatar');
+    const total = await Split.countDocuments({ isPublic: true, userId: { $ne: req.userId } });
+    const result = splits.map((s) => {
+      const obj = sortExercises(s);
+      obj.days = obj.days.map((d) => ({
+        ...d,
+        exercises: d.exercises.map(({ name, sets, reps, untilFailure, muscleTargets, order }) => ({
+          name, sets, reps, untilFailure, muscleTargets, order,
+        })),
+      }));
+      return obj;
+    });
+    res.json({ splits: result, total, page, pages: Math.ceil(total / limit) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/public/:id/copy', async (req, res) => {
+  try {
+    const source = await Split.findOne({ _id: req.params.id, isPublic: true });
+    if (!source) return res.status(404).json({ error: 'Public split not found' });
+    const copiedDays = source.days.map((d) => ({
+      name: d.name,
+      tag: d.tag,
+      isRest: d.isRest,
+      dayOrder: d.dayOrder,
+      exercises: d.exercises.map((e) => ({
+        name: e.name,
+        sets: e.sets,
+        reps: e.reps,
+        untilFailure: e.untilFailure,
+        weight: 0,
+        weightUnit: 'kg',
+        checked: false,
+        lastCheckedDate: '',
+        order: e.order,
+        muscleTargets: e.muscleTargets || [],
+      })),
+    }));
+    const newSplit = new Split({
+      name: source.name,
+      days: copiedDays,
+      userId: req.userId,
+      isPublic: false,
+      sourceId: source._id,
+    });
+    await newSplit.save();
+    res.status(201).json(sortExercises(newSplit));
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.patch('/:id/visibility', async (req, res) => {
+  try {
+    const split = await Split.findOneAndUpdate(
+      { _id: req.params.id, userId: req.userId },
+      { isPublic: !!req.body.isPublic },
+      { new: true }
+    );
+    if (!split) return res.status(404).json({ error: 'Split not found' });
+    res.json(sortExercises(split));
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.post('/:id/reapply', async (req, res) => {
+  try {
+    const split = await Split.findOne({ _id: req.params.id, userId: req.userId });
+    if (!split) return res.status(404).json({ error: 'Split not found' });
+    if (!split.sourceId) return res.status(400).json({ error: 'This split has no source to reapply from' });
+    const source = await Split.findOne({ _id: split.sourceId, isPublic: true });
+    if (!source) return res.status(404).json({ error: 'Source split is no longer public' });
+
+    // Build a map of existing exercise weights by name for preservation
+    const weightMap = {};
+    split.days.forEach((d) => {
+      d.exercises.forEach((e) => {
+        if (!weightMap[e.name]) weightMap[e.name] = { weight: e.weight, weightUnit: e.weightUnit, imageUrl: e.imageUrl, imageSource: e.imageSource };
+      });
+    });
+
+    split.days = source.days.map((d) => ({
+      name: d.name,
+      tag: d.tag,
+      isRest: d.isRest,
+      dayOrder: d.dayOrder,
+      exercises: d.exercises.map((e) => {
+        const saved = weightMap[e.name] || {};
+        return {
+          name: e.name,
+          sets: e.sets,
+          reps: e.reps,
+          untilFailure: e.untilFailure,
+          weight: saved.weight ?? 0,
+          weightUnit: saved.weightUnit ?? 'kg',
+          checked: false,
+          lastCheckedDate: '',
+          order: e.order,
+          muscleTargets: e.muscleTargets || [],
+          imageUrl: saved.imageUrl ?? '',
+          imageSource: saved.imageSource ?? '',
+        };
+      }),
+    }));
+    await split.save();
+    res.json(sortExercises(split));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── DAYS ─────────────────────────────────────────────────────────────────────
 
 router.get('/:id/days', async (req, res) => {

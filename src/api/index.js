@@ -37,6 +37,10 @@ export const createSplit = (name) => req('POST', '/api/splits', { name });
 export const renameSplit = (id, name) => req('PUT', `/api/splits/${id}`, { name });
 export const deleteSplit = (id) => req('DELETE', `/api/splits/${id}`);
 export const activateSplit = (id) => req('PATCH', `/api/splits/${id}/activate`);
+export const setSplitVisibility = (id, isPublic) => req('PATCH', `/api/splits/${id}/visibility`, { isPublic });
+export const getPublicSplits = (page = 1) => req('GET', `/api/splits/public?page=${page}&limit=20`);
+export const copyPublicSplit = (id) => req('POST', `/api/splits/public/${id}/copy`);
+export const reapplySplit = (id) => req('POST', `/api/splits/${id}/reapply`);
 
 // ─── Days ─────────────────────────────────────────────────────────────────────
 export const getDays = (splitId) => req('GET', `/api/splits/${splitId}/days`);
