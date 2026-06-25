@@ -8,6 +8,7 @@ const logsRouter = require('./_lib/routes/logs');
 const authRouter = require('./_lib/routes/auth');
 const adminRouter = require('./_lib/routes/admin');
 const exercisesRouter = require('./_lib/routes/exercises');
+const inviteRouter = require('./_lib/routes/invite');
 
 const app = express();
 
@@ -42,6 +43,7 @@ app.use('/api/admin', adminRouter);
 app.use('/api/splits', splitsRouter);
 app.use('/api/logs', logsRouter);
 app.use('/api/exercises', exercisesRouter);
+app.use('/api/invite', inviteRouter);
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 
 if (process.env.NODE_ENV !== 'production') {

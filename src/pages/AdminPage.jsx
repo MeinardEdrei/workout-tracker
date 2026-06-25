@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   getAdminUsers, deleteAdminUser,
   getAllowedEmails, addAllowedEmail, deleteAllowedEmail,
+  generateInvite, getInvites, deleteInvite,
 } from '../api';
 
 function TrashIcon() {
@@ -17,6 +18,21 @@ function PlusIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
       <line x1="8" y1="3" x2="8" y2="13" /><line x1="3" y1="8" x2="13" y2="8" />
+    </svg>
+  );
+}
+function CopyIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
+}
+function LinkIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
     </svg>
   );
 }
@@ -45,6 +61,7 @@ export default function AdminPage() {
   const [newEmail, setNewEmail] = useState('');
   const [newNote, setNewNote] = useState('');
   const [addError, setAddError] = useState('');
+  const [copiedId, setCopiedId] = useState(null);
 
   if (!isAdmin) {
     return <div className="empty-state">Access denied.</div>;
@@ -58,6 +75,10 @@ export default function AdminPage() {
   const { data: allowed = [], isLoading: allowedLoading } = useQuery({
     queryKey: ['admin', 'allowed'],
     queryFn: getAllowedEmails,
+  });
+  const { data: invites = [], isLoading: invitesLoading } = useQuery({
+    queryKey: ['admin', 'invites'],
+    queryFn: getInvites,
   });
 
   // ── Mutations ────────────────────────────────────────────────────────────────
@@ -79,11 +100,27 @@ export default function AdminPage() {
     mutationFn: (id) => deleteAllowedEmail(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'allowed'] }),
   });
+  const generateInviteMutation = useMutation({
+    mutationFn: generateInvite,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'invites'] }),
+  });
+  const deleteInviteMutation = useMutation({
+    mutationFn: (id) => deleteInvite(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'invites'] }),
+  });
 
   async function handleAddEmail(e) {
     e.preventDefault();
     if (!newEmail.trim()) return;
     addEmailMutation.mutate({ email: newEmail.trim(), note: newNote.trim() });
+  }
+
+  function copyLink(invite) {
+    const url = `${window.location.origin}/invite/${invite.token}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedId(invite._id);
+      setTimeout(() => setCopiedId(null), 2000);
+    });
   }
 
   const labelStyle = {
@@ -154,6 +191,67 @@ export default function AdminPage() {
                   </button>
                 </div>
               ))
+            )}
+          </div>
+        )}
+
+        {/* ── Invite Links ──────────────────────────────────────────────────── */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          <div style={labelStyle}>Invite Links</div>
+          <button
+            className="btn btn-accent"
+            style={{ gap: 5, fontSize: 11, padding: '5px 10px', marginBottom: 10 }}
+            onClick={() => generateInviteMutation.mutate()}
+            disabled={generateInviteMutation.isPending}
+          >
+            <LinkIcon /> {generateInviteMutation.isPending ? 'Generating…' : 'New Invite'}
+          </button>
+        </div>
+
+        {invitesLoading ? <div className="spinner" /> : (
+          <div style={{ background: 'var(--bg2)', borderRadius: 8, border: '1px solid var(--border)', overflow: 'hidden', marginBottom: 24 }}>
+            {invites.length === 0 ? (
+              <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>No invite links yet</div>
+            ) : (
+              invites.map((inv) => {
+                const expired = new Date(inv.expiresAt) < new Date();
+                const used = !!inv.usedAt;
+                return (
+                  <div key={inv._id} style={{ display: 'flex', alignItems: 'center', gap: 8, ...cellStyle }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: used || expired ? 'var(--text3)' : 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        /invite/{inv.token.slice(0, 12)}…
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>
+                        {used
+                          ? <span style={{ color: 'var(--accent)' }}>Used by {inv.usedByEmail}</span>
+                          : expired
+                          ? <span style={{ color: 'var(--red)' }}>Expired</span>
+                          : <span>Expires {new Date(inv.expiresAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                        }
+                      </div>
+                    </div>
+                    {!used && !expired && (
+                      <button
+                        className="btn-icon"
+                        onClick={() => copyLink(inv)}
+                        style={{ color: copiedId === inv._id ? 'var(--accent)' : 'var(--text2)', flexShrink: 0 }}
+                        title="Copy link"
+                      >
+                        {copiedId === inv._id ? '✓' : <CopyIcon />}
+                      </button>
+                    )}
+                    <button
+                      className="btn-icon"
+                      style={{ color: 'var(--red)', flexShrink: 0 }}
+                      onClick={() => deleteInviteMutation.mutate(inv._id)}
+                      disabled={deleteInviteMutation.isPending}
+                    >
+                      <TrashIcon />
+                    </button>
+                  </div>
+                );
+              })
             )}
           </div>
         )}

@@ -1,8 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const { requireAuth, requireAdmin } = require('../middleware/auth');
+const crypto = require('crypto');
 const User = require('../models/User');
 const AllowedEmail = require('../models/AllowedEmail');
+const InviteToken = require('../models/InviteToken');
 const Split = require('../models/Split');
 const WorkoutLog = require('../models/WorkoutLog');
 
@@ -63,6 +65,39 @@ router.delete('/allowed/:id', async (req, res) => {
   try {
     await AllowedEmail.findByIdAndDelete(req.params.id);
     res.json({ message: 'Removed' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/invite — generate an invite link token
+router.post('/invite', async (req, res) => {
+  try {
+    const token = crypto.randomBytes(16).toString('hex');
+    const days = parseInt(req.body.days) || 7;
+    const expiresAt = new Date(Date.now() + days * 86400000);
+    const invite = await InviteToken.create({ token, expiresAt });
+    res.status(201).json(invite);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/invites — list all invite tokens
+router.get('/invites', async (_req, res) => {
+  try {
+    const invites = await InviteToken.find().sort({ createdAt: -1 });
+    res.json(invites);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/admin/invites/:id
+router.delete('/invites/:id', async (req, res) => {
+  try {
+    await InviteToken.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Deleted' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

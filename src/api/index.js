@@ -30,6 +30,11 @@ export const deleteAdminUser = (id) => req('DELETE', `/api/admin/users/${id}`);
 export const getAllowedEmails = () => req('GET', '/api/admin/allowed');
 export const addAllowedEmail = (data) => req('POST', '/api/admin/allowed', data);
 export const deleteAllowedEmail = (id) => req('DELETE', `/api/admin/allowed/${id}`);
+export const generateInvite = () => req('POST', '/api/admin/invite');
+export const getInvites = () => req('GET', '/api/admin/invites');
+export const deleteInvite = (id) => req('DELETE', `/api/admin/invites/${id}`);
+export const validateInviteToken = (token) => req('GET', `/api/invite/${token}`);
+export const claimInviteToken = (token, email) => req('POST', `/api/invite/${token}/claim`, { email });
 
 // ─── Splits ───────────────────────────────────────────────────────────────────
 export const getSplits = () => req('GET', '/api/splits');

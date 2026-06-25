@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import './index.css';
 import { useAuth } from './context/AuthContext';
+import InvitePage from './pages/InvitePage';
 import TodayPage from './pages/TodayPage';
 import SplitsPage from './pages/SplitsPage';
 import StatsPage from './pages/StatsPage';
@@ -283,6 +284,9 @@ function AuthCorner() {
 }
 
 export default function App() {
+  const inviteMatch = window.location.pathname.match(/^\/invite\/([a-f0-9]+)$/i);
+  if (inviteMatch) return <InvitePage token={inviteMatch[1]} />;
+
   const { loading, isAdmin } = useAuth();
   const [tab, setTab] = useState('today');
 
