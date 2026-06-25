@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useStorage } from '../hooks/useStorage';
 import { useAuth } from '../context/AuthContext';
@@ -297,6 +298,13 @@ export default function SplitsPage() {
   const [showAiChat, setShowAiChat] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [menuOpenId, setMenuOpenId] = useState(null);
+  const [menuAnchor, setMenuAnchor] = useState({ top: 0, right: 0 });
+
+  function openMenu(e, splitId) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setMenuAnchor({ top: rect.bottom + 6, right: window.innerWidth - rect.right });
+    setMenuOpenId(splitId);
+  }
   const [signingIn, setSigningIn] = useState(false);
   const [signInFailed, setSignInFailed] = useState(false);
   const [shareModal, setShareModal] = useState(null);
@@ -725,157 +733,14 @@ Coach:`;
 
                   {/* Right controls: ⋯ menu + chevron */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
-                    {/* ⋯ overflow menu */}
-                    <div style={{ position: 'relative' }}>
-                      <button
-                        className="btn-icon"
-                        onClick={() => setMenuOpenId(menuOpenId === split._id ? null : split._id)}
-                        style={{ color: 'var(--text3)', padding: '6px 8px', fontSize: 18, lineHeight: 1, letterSpacing: '0.05em' }}
-                        title="More actions"
-                      >
-                        ···
-                      </button>
-
-                      {menuOpenId === split._id && (
-                        <>
-                          {/* Backdrop */}
-                          <div style={{ position: 'fixed', inset: 0, zIndex: 199 }} onClick={() => setMenuOpenId(null)} />
-                          {/* Dropdown */}
-                          <div style={{
-                            position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 200,
-                            background: 'var(--bg2)', border: '1px solid var(--border)',
-                            borderRadius: 12, overflow: 'hidden',
-                            boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-                            minWidth: 200,
-                            animation: 'fadeIn 0.12s ease',
-                          }}>
-                            {/* Visibility toggle — prominent at top */}
-                            {isLoggedIn && (
-                              <button
-                                onClick={() => { visibilityMutation.mutate({ id: split._id, isPublic: !split.isPublic }); setMenuOpenId(null); }}
-                                disabled={visibilityMutation.isPending}
-                                style={{
-                                  width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                  padding: '13px 16px', background: 'none', border: 'none',
-                                  borderBottom: '1px solid var(--border)', cursor: 'pointer',
-                                  color: 'var(--text)', gap: 10,
-                                }}
-                              >
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                                  <span style={{ color: split.isPublic ? 'var(--accent)' : 'var(--text3)' }}>
-                                    {split.isPublic ? <GlobeIcon /> : <LockIcon />}
-                                  </span>
-                                  <div style={{ textAlign: 'left' }}>
-                                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
-                                      {split.isPublic ? 'Public' : 'Private'}
-                                    </div>
-                                    <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 1 }}>
-                                      {split.isPublic ? 'Visible in Browse' : 'Only you can see this'}
-                                    </div>
-                                  </div>
-                                </div>
-                                {/* Toggle pill */}
-                                <div style={{
-                                  width: 36, height: 20, borderRadius: 10, flexShrink: 0,
-                                  background: split.isPublic ? 'var(--accent)' : 'var(--bg3)',
-                                  border: `1px solid ${split.isPublic ? 'var(--accent)' : 'var(--border2)'}`,
-                                  position: 'relative', transition: 'background 0.2s',
-                                }}>
-                                  <div style={{
-                                    position: 'absolute', top: 2,
-                                    left: split.isPublic ? 18 : 2,
-                                    width: 14, height: 14, borderRadius: '50%',
-                                    background: split.isPublic ? '#0a0a0a' : 'var(--text3)',
-                                    transition: 'left 0.2s',
-                                  }} />
-                                </div>
-                              </button>
-                            )}
-
-                            {/* Re-apply */}
-                            {isLoggedIn && split.sourceId && (
-                              <button
-                                onClick={() => { reapplyMutation.mutate(split._id); setMenuOpenId(null); }}
-                                disabled={reapplyMutation.isPending}
-                                style={{
-                                  width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-                                  padding: '11px 16px', background: 'none', border: 'none',
-                                  borderBottom: '1px solid var(--border)', cursor: 'pointer',
-                                  color: 'var(--accent)', fontSize: 13, fontWeight: 600,
-                                }}
-                              >
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                  <polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 .49-4.95" />
-                                </svg>
-                                Re-apply from source
-                              </button>
-                            )}
-
-                            {/* Edit */}
-                            <button
-                              onClick={() => { setEditingSplitId(split._id); setMenuOpenId(null); }}
-                              style={{
-                                width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-                                padding: '11px 16px', background: 'none', border: 'none',
-                                cursor: 'pointer', color: 'var(--text)', fontSize: 13, fontWeight: 600,
-                              }}
-                            >
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z" />
-                              </svg>
-                              Edit Days
-                            </button>
-
-                            {/* Rename */}
-                            <button
-                              onClick={() => { setModal({ type: 'rename', split }); setMenuOpenId(null); }}
-                              style={{
-                                width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-                                padding: '11px 16px', background: 'none', border: 'none',
-                                cursor: 'pointer', color: 'var(--text)', fontSize: 13, fontWeight: 600,
-                              }}
-                            >
-                              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M11.5 2.5a1.5 1.5 0 0 1 2.12 2.12L5 13.24l-3 .76.76-3L11.5 2.5Z" />
-                              </svg>
-                              Rename
-                            </button>
-
-                            {/* Share */}
-                            <button
-                              onClick={() => { setShareModal(split); setMenuOpenId(null); }}
-                              style={{
-                                width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-                                padding: '11px 16px', background: 'none', border: 'none',
-                                borderBottom: '1px solid var(--border)',
-                                cursor: 'pointer', color: 'var(--text)', fontSize: 13, fontWeight: 600,
-                              }}
-                            >
-                              <ShareIcon />
-                              Share Card
-                            </button>
-
-                            {/* Delete */}
-                            <button
-                              onClick={() => { setModal({ type: 'delete', split }); setMenuOpenId(null); }}
-                              style={{
-                                width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-                                padding: '11px 16px', background: 'none', border: 'none',
-                                cursor: 'pointer', color: 'var(--red)', fontSize: 13, fontWeight: 600,
-                              }}
-                            >
-                              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                                <polyline points="2,4 14,4" /><path d="M5 4V2h6v2" /><path d="M3 4l1 10h8l1-10" />
-                              </svg>
-                              Delete
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-
-                    {/* Chevron */}
+                    <button
+                      className="btn-icon"
+                      onClick={(e) => openMenu(e, split._id)}
+                      style={{ color: 'var(--text3)', padding: '6px 8px', fontSize: 18, lineHeight: 1, letterSpacing: '0.05em' }}
+                      title="More actions"
+                    >
+                      ···
+                    </button>
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--text3)" strokeWidth="2" strokeLinecap="round"
                       style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: '0.15s', flexShrink: 0 }}>
                       <polyline points="4,6 8,10 12,6" />
@@ -991,6 +856,146 @@ Coach:`;
       {modal?.type === 'rename' && <SplitModal title="Rename Split" initial={modal.split.name} onConfirm={handleRename} onClose={() => setModal(null)} />}
       {modal?.type === 'delete' && <ConfirmModal message={`Delete "${modal.split.name}"? This cannot be undone.`} onConfirm={handleDelete} onClose={() => setModal(null)} />}
       {shareModal && <SplitShareModal split={shareModal} onClose={() => setShareModal(null)} />}
+
+      {/* ── Portal dropdown — escapes overflow:hidden on split cards ── */}
+      {menuOpenId && (() => {
+        const s = splits.find((x) => x._id === menuOpenId);
+        if (!s) return null;
+        return createPortal(
+          <>
+            <div style={{ position: 'fixed', inset: 0, zIndex: 199 }} onClick={() => setMenuOpenId(null)} />
+            <div style={{
+              position: 'fixed', top: menuAnchor.top, right: menuAnchor.right, zIndex: 200,
+              background: 'var(--bg2)', border: '1px solid var(--border)',
+              borderRadius: 12, overflow: 'hidden',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+              minWidth: 210,
+              animation: 'fadeIn 0.12s ease',
+            }}>
+              {/* Visibility toggle */}
+              {isLoggedIn && (
+                <button
+                  onClick={() => { visibilityMutation.mutate({ id: s._id, isPublic: !s.isPublic }); setMenuOpenId(null); }}
+                  disabled={visibilityMutation.isPending}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '13px 16px', background: 'none', border: 'none',
+                    borderBottom: '1px solid var(--border)', cursor: 'pointer', gap: 10,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                    <span style={{ color: s.isPublic ? 'var(--accent)' : 'var(--text3)', flexShrink: 0 }}>
+                      {s.isPublic ? <GlobeIcon /> : <LockIcon />}
+                    </span>
+                    <div style={{ textAlign: 'left' }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
+                        {s.isPublic ? 'Public' : 'Private'}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 1 }}>
+                        {s.isPublic ? 'Visible in Browse' : 'Only you can see this'}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{
+                    width: 36, height: 20, borderRadius: 10, flexShrink: 0,
+                    background: s.isPublic ? 'var(--accent)' : 'var(--bg3)',
+                    border: `1px solid ${s.isPublic ? 'var(--accent)' : 'var(--border2)'}`,
+                    position: 'relative', transition: 'background 0.2s',
+                  }}>
+                    <div style={{
+                      position: 'absolute', top: 2,
+                      left: s.isPublic ? 18 : 2,
+                      width: 14, height: 14, borderRadius: '50%',
+                      background: s.isPublic ? '#0a0a0a' : 'var(--text3)',
+                      transition: 'left 0.2s',
+                    }} />
+                  </div>
+                </button>
+              )}
+
+              {/* Re-apply */}
+              {isLoggedIn && s.sourceId && (
+                <button
+                  onClick={() => { reapplyMutation.mutate(s._id); setMenuOpenId(null); }}
+                  disabled={reapplyMutation.isPending}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '11px 16px', background: 'none', border: 'none',
+                    borderBottom: '1px solid var(--border)', cursor: 'pointer',
+                    color: 'var(--accent)', fontSize: 13, fontWeight: 600,
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 .49-4.95" />
+                  </svg>
+                  Re-apply from source
+                </button>
+              )}
+
+              {/* Edit */}
+              <button
+                onClick={() => { setEditingSplitId(s._id); setMenuOpenId(null); }}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '11px 16px', background: 'none', border: 'none',
+                  cursor: 'pointer', color: 'var(--text)', fontSize: 13, fontWeight: 600,
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z" />
+                </svg>
+                Edit Days
+              </button>
+
+              {/* Rename */}
+              <button
+                onClick={() => { setModal({ type: 'rename', split: s }); setMenuOpenId(null); }}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '11px 16px', background: 'none', border: 'none',
+                  cursor: 'pointer', color: 'var(--text)', fontSize: 13, fontWeight: 600,
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M11.5 2.5a1.5 1.5 0 0 1 2.12 2.12L5 13.24l-3 .76.76-3L11.5 2.5Z" />
+                </svg>
+                Rename
+              </button>
+
+              {/* Share */}
+              <button
+                onClick={() => { setShareModal(s); setMenuOpenId(null); }}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '11px 16px', background: 'none', border: 'none',
+                  borderBottom: '1px solid var(--border)',
+                  cursor: 'pointer', color: 'var(--text)', fontSize: 13, fontWeight: 600,
+                }}
+              >
+                <ShareIcon />
+                Share Card
+              </button>
+
+              {/* Delete */}
+              <button
+                onClick={() => { setModal({ type: 'delete', split: s }); setMenuOpenId(null); }}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '11px 16px', background: 'none', border: 'none',
+                  cursor: 'pointer', color: 'var(--red)', fontSize: 13, fontWeight: 600,
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="2,4 14,4" /><path d="M5 4V2h6v2" /><path d="M3 4l1 10h8l1-10" />
+                </svg>
+                Delete
+              </button>
+            </div>
+          </>,
+          document.body
+        );
+      })()}
     </div>
   );
 }
