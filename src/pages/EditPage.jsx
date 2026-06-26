@@ -859,35 +859,24 @@ function SwapExerciseModal({ currentExName, onConfirm, onClose }) {
   );
 }
 
-/* ─── Inline exercise editor ─── */
-function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDelete, dragHandleProps }) {
-  const queryClient = useQueryClient();
+/* ─── Edit Exercise Modal ─── */
+function EditExerciseModal({ ex, splitId, dayId, onConfirm, onClose, onUpdate }) {
   const { storage, storageKey } = useStorage();
-  const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
-    name: ex.name, sets: ex.sets, reps: ex.reps ?? 10, weight: ex.weight, weightUnit: ex.weightUnit,
+    name: ex.name,
+    sets: ex.sets,
+    reps: ex.reps ?? 10,
+    weight: ex.weight,
+    weightUnit: ex.weightUnit,
     muscleTargets: ex.muscleTargets || [],
     untilFailure: ex.untilFailure || false,
   });
-  const [saving, setSaving] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
+  const [currentImageUrl, setCurrentImageUrl] = useState(ex.imageUrl || '');
   const [imgFetching, setImgFetching] = useState(false);
   const [imgUploading, setImgUploading] = useState(false);
   const [toast, setToast] = useState(null);
-  const [currentImageUrl, setCurrentImageUrl] = useState(ex.imageUrl || '');
-  const [suggestions, setSuggestions] = useState([]);
-  const [deleteConfirm, setDeleteConfirm] = useState(false);
-  const [syncPrompt, setSyncPrompt] = useState(null);
   const fileInputRef = useRef(null);
-  const [showSwapModal, setShowSwapModal] = useState(false);
-
-  const swapMutation = useMutation({
-    mutationFn: (updatedData) => storage.updateExercise(splitId, dayId, ex._id, updatedData),
-    onSuccess: (updated) => {
-      queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
-      onUpdate(updated);
-      setShowSwapModal(false);
-    },
-  });
 
   const { data: logs = [] } = useQuery({
     queryKey: ['logs', storageKey],
@@ -920,14 +909,19 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
     return list;
   }, [logs]);
 
-  function openEdit() {
-    setForm({
-      name: ex.name, sets: ex.sets, reps: ex.reps ?? 10, weight: ex.weight,
-      weightUnit: ex.weightUnit, muscleTargets: ex.muscleTargets || [],
-      untilFailure: ex.untilFailure || false,
-    });
-    setCurrentImageUrl(ex.imageUrl || '');
-    setEditing(true);
+  function set(k, v) { setForm((f) => ({ ...f, [k]: v })); }
+
+  function showToast(msg, type = 'error') {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  }
+
+  function toggleTarget(target) {
+    set('muscleTargets',
+      form.muscleTargets.includes(target)
+        ? form.muscleTargets.filter((t) => t !== target)
+        : [...form.muscleTargets, target]
+    );
   }
 
   function handleSelectSuggestion(s) {
@@ -986,61 +980,6 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
       handleFetchImage();
     }
   }, []);
-
-  function set(k, v) { setForm((f) => ({ ...f, [k]: v })); }
-
-  function showToast(msg, type = 'error') {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 3000);
-  }
-
-  function toggleTarget(target) {
-    set('muscleTargets',
-      form.muscleTargets.includes(target)
-        ? form.muscleTargets.filter((t) => t !== target)
-        : [...form.muscleTargets, target]
-    );
-  }
-
-  async function save() {
-    setSaving(true);
-    const oldWeight = ex.weight ?? 0;
-    const newWeight = +form.weight;
-    try {
-      const updated = await storage.updateExercise(splitId, dayId, ex._id, {
-        ...form,
-        sets: +form.sets,
-        reps: form.untilFailure ? null : +form.reps,
-        weight: newWeight,
-      });
-      onUpdate(updated);
-      setEditing(false);
-
-      if (newWeight !== oldWeight) {
-        const otherDays = (splitDays || [])
-          .filter((d) => d._id !== dayId && !d.isRest)
-          .flatMap((d) =>
-            (d.exercises || [])
-              .filter((e) => e.name.toLowerCase() === ex.name.toLowerCase())
-              .map((e) => ({ dayName: d.name, dayId: d._id, exId: e._id }))
-          );
-        if (otherDays.length > 0) {
-          setSyncPrompt({ otherDays, oldWeight, newWeight, unit: form.weightUnit });
-        }
-      }
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleSync() {
-    if (!syncPrompt) return;
-    for (const { dayId: dId, exId } of syncPrompt.otherDays) {
-      await storage.updateExercise(splitId, dId, exId, { weight: syncPrompt.newWeight, weightUnit: syncPrompt.unit });
-    }
-    queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
-    setSyncPrompt(null);
-  }
 
   async function handleFetchImage() {
     if (!form.name.trim()) return;
@@ -1114,19 +1053,34 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
     }
   }
 
-  if (editing) {
-    return (
-      <div style={{ background: 'var(--bg3)' }}>
-        <div style={{ padding: '12px 14px 0' }}>
-          <div style={{ position: 'relative', marginBottom: 8 }}>
+  function submit(e) {
+    e.preventDefault();
+    if (!form.name.trim()) return;
+    onConfirm({
+      ...form,
+      name: form.name.trim(),
+      sets: +form.sets,
+      reps: form.untilFailure ? null : +form.reps,
+      weight: +form.weight,
+    });
+  }
+
+  return createPortal(
+    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal">
+        <div className="modal-title">Edit Exercise</div>
+        <form onSubmit={submit}>
+          <div style={{ position: 'relative', marginBottom: 12 }}>
+            <div style={{ ...LABEL, marginBottom: 4 }}>Exercise Name</div>
             <input
               className="input"
               value={form.name}
-              onChange={(e) => set('name', capitalizeWords(e.target.value))}
+              onChange={(e) => setForm(f => ({ ...f, name: capitalizeWords(e.target.value) }))}
               onBlur={() => setTimeout(() => setSuggestions([]), 150)}
-              style={{ fontSize: 14, width: '100%' }}
+              placeholder="Exercise name"
               autoFocus
               autoComplete="off"
+              style={{ width: '100%', margin: 0 }}
             />
             {suggestions.length > 0 && (
               <div style={{ 
@@ -1168,115 +1122,193 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
               </div>
             )}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 80px', gap: 6, marginBottom: 6 }}>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
             <div>
-              <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 3 }}>sets</div>
-              <input className="input" type="number" min="0" step="1" value={form.sets} onChange={(e) => set('sets', e.target.value)} style={{ fontSize: 14, padding: '6px 8px' }} />
+              <div style={{ ...LABEL, marginBottom: 4 }}>sets</div>
+              <input className="input" type="number" min="0" step="1" value={form.sets} onChange={(e) => setForm(f => ({ ...f, sets: e.target.value }))} />
             </div>
             <div>
-              <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 3 }}>reps</div>
+              <div style={{ ...LABEL, marginBottom: 4 }}>reps</div>
               {form.untilFailure ? (
-                <div style={{ height: 36, display: 'flex', alignItems: 'center', padding: '0 8px', borderRadius: 8, border: '1px solid var(--border2)', fontSize: 10, fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.05em' }}>TO FAILURE</div>
+                <div style={{ height: 44, display: 'flex', alignItems: 'center', padding: '0 10px', borderRadius: 8, border: '1px solid var(--border2)', fontSize: 11, fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.05em' }}>TO FAILURE</div>
               ) : (
-                <input className="input" type="number" min="0" step="1" value={form.reps} onChange={(e) => set('reps', e.target.value)} style={{ fontSize: 14, padding: '6px 8px' }} />
+                <input className="input" type="number" min="0" step="1" value={form.reps} onChange={(e) => setForm(f => ({ ...f, reps: e.target.value }))} />
               )}
             </div>
             <div>
-              <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 3 }}>weight</div>
-              <input className="input" type="number" min="0" step="0.5" value={form.weight} onChange={(e) => set('weight', e.target.value)} style={{ fontSize: 14, padding: '6px 8px' }} />
-            </div>
-            <div>
-              <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 3 }}>Unit</div>
-              <select className="select" value={form.weightUnit} onChange={(e) => set('weightUnit', e.target.value)} style={{ width: '100%', fontSize: 14, padding: '6px 8px' }}>
-                <option value="kg">kg</option>
-                <option value="lbs">lbs</option>
-              </select>
+              <div style={{ ...LABEL, marginBottom: 4 }}>weight</div>
+              <input className="input" type="number" min="0" step="0.5" value={form.weight} onChange={(e) => setForm(f => ({ ...f, weight: e.target.value }))} />
             </div>
           </div>
 
-          {/* Until failure toggle */}
-          <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
-            <PickerPill label="Specific reps" selected={!form.untilFailure} onClick={() => set('untilFailure', false)} small />
-            <PickerPill label="Until failure" selected={form.untilFailure} onClick={() => set('untilFailure', true)} small />
+          <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+            <button type="button" className={`btn ${!form.untilFailure ? 'btn-accent' : ''}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setForm(f => ({ ...f, untilFailure: false }))}>Specific reps</button>
+            <button type="button" className={`btn ${form.untilFailure ? 'btn-accent' : ''}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setForm(f => ({ ...f, untilFailure: true }))}>Until failure</button>
           </div>
 
-          {/* Muscle target picker in inline editor */}
-          <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Targets (optional)</div>
           <div style={{ marginBottom: 12 }}>
+            <div style={{ ...LABEL, marginBottom: 4 }}>Unit</div>
+            <select className="select" style={{ width: '100%', margin: 0 }} value={form.weightUnit} onChange={(e) => setForm(f => ({ ...f, weightUnit: e.target.value }))}>
+              <option value="kg">kg</option>
+              <option value="lbs">lbs</option>
+            </select>
+          </div>
+
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ ...LABEL, marginBottom: 4 }}>Targets (optional)</div>
             <MuscleTargetPicker selected={form.muscleTargets} onToggle={toggleTarget} />
           </div>
 
-          {/* Image manager */}
-          <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Exercise Image</div>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 10 }}>
-            <div style={{ position: 'relative', flexShrink: 0 }}>
-              <ExerciseThumbnail imageUrl={currentImageUrl} name={form.name} size={72} />
-              {currentImageUrl && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ ...LABEL, marginBottom: 8 }}>Exercise Image</div>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+              <div style={{ position: 'relative', flexShrink: 0 }}>
+                <ExerciseThumbnail imageUrl={currentImageUrl} name={form.name} size={72} />
+                {currentImageUrl && (
+                  <button
+                    type="button"
+                    onClick={handleClearImage}
+                    title="Remove image"
+                    style={{
+                      position: 'absolute', top: -6, right: -6,
+                      width: 20, height: 20, borderRadius: '50%',
+                      background: 'var(--red)', border: 'none',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      cursor: 'pointer', color: '#fff',
+                    }}
+                  >
+                    <XSmallIcon />
+                  </button>
+                )}
+                {(imgFetching || imgUploading) && (
+                  <div style={{
+                    position: 'absolute', inset: 0, borderRadius: 8,
+                    background: 'rgba(0,0,0,0.6)', display: 'flex',
+                    alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <span style={{ width: 20, height: 20, border: '2px solid var(--accent)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.6s linear infinite', display: 'inline-block' }} />
+                  </div>
+                )}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
                 <button
                   type="button"
-                  onClick={handleClearImage}
-                  title="Remove image"
-                  style={{
-                    position: 'absolute', top: -6, right: -6,
-                    width: 20, height: 20, borderRadius: '50%',
-                    background: 'var(--red)', border: 'none',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    cursor: 'pointer', color: '#fff',
-                  }}
+                  className="btn btn-ghost"
+                  style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 5, justifyContent: 'center' }}
+                  onClick={handleFetchImage}
+                  disabled={imgFetching || imgUploading}
                 >
-                  <XSmallIcon />
+                  <SearchImageIcon />
+                  {imgFetching ? 'Searching…' : 'Fetch from library'}
                 </button>
-              )}
-              {(imgFetching || imgUploading) && (
-                <div style={{
-                  position: 'absolute', inset: 0, borderRadius: 8,
-                  background: 'rgba(0,0,0,0.6)', display: 'flex',
-                  alignItems: 'center', justifyContent: 'center',
-                }}>
-                  <span style={{ width: 20, height: 20, border: '2px solid var(--accent)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.6s linear infinite', display: 'inline-block' }} />
-                </div>
-              )}
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 5, justifyContent: 'center' }}
-                onClick={handleFetchImage}
-                disabled={imgFetching || imgUploading}
-              >
-                <SearchImageIcon />
-                {imgFetching ? 'Searching…' : 'Fetch from library'}
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 5, justifyContent: 'center' }}
-                onClick={() => fileInputRef.current?.click()}
-                disabled={imgFetching || imgUploading}
-              >
-                <UploadIcon />
-                {imgUploading ? 'Uploading…' : currentImageUrl ? 'Replace image' : 'Upload custom'}
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                onChange={handleFileUpload}
-                style={{ display: 'none' }}
-              />
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 5, justifyContent: 'center' }}
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={imgFetching || imgUploading}
+                >
+                  <UploadIcon />
+                  {imgUploading ? 'Uploading…' : currentImageUrl ? 'Replace image' : 'Upload custom'}
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={handleFileUpload}
+                  style={{ display: 'none' }}
+                />
+              </div>
             </div>
           </div>
-        </div>
 
-        {toast && <Toast message={toast.msg} type={toast.type} />}
+          {toast && <Toast message={toast.msg} type={toast.type} />}
 
-        <div style={{ display: 'flex', gap: 6, padding: '10px 14px', borderTop: '1px solid var(--border)', position: 'sticky', bottom: 0, background: 'var(--bg3)' }}>
-          <button className="btn btn-ghost" style={{ fontSize: 12, flex: 1 }} onClick={() => setEditing(false)} disabled={saving}>Cancel</button>
-          <button className="btn btn-accent" style={{ fontSize: 12, flex: 1 }} onClick={save} disabled={saving}>Save</button>
-        </div>
+          <div className="modal-actions" style={{ marginTop: 16 }}>
+            <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
+            <button type="submit" className="btn btn-accent">Save</button>
+          </div>
+        </form>
       </div>
-    );
+    </div>,
+    document.body
+  );
+}
+
+/* ─── Exercise edit row ─── */
+function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDelete, dragHandleProps }) {
+  const queryClient = useQueryClient();
+  const { storage, storageKey } = useStorage();
+  const [editing, setEditing] = useState(false);
+  const [currentImageUrl, setCurrentImageUrl] = useState(ex.imageUrl || '');
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [syncPrompt, setSyncPrompt] = useState(null);
+  const [showSwapModal, setShowSwapModal] = useState(false);
+
+  const swapMutation = useMutation({
+    mutationFn: (updatedData) => storage.updateExercise(splitId, dayId, ex._id, updatedData),
+    onSuccess: (updated) => {
+      queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
+      onUpdate(updated);
+      setShowSwapModal(false);
+    },
+  });
+
+  useEffect(() => {
+    if (!currentImageUrl && !ex.placeholderUsed && ex.name) {
+      api.fetchExerciseImage(ex.name).then(result => {
+        if (result.success && result.imageUrl) {
+          storage.updateExercise(splitId, dayId, ex._id, {
+            imageUrl: result.imageUrl, imageSource: 'auto', placeholderUsed: false
+          }).then(updated => {
+            setCurrentImageUrl(result.imageUrl);
+            onUpdate(updated);
+          });
+        } else {
+          storage.updateExercise(splitId, dayId, ex._id, { placeholderUsed: true });
+        }
+      }).catch(() => {});
+    }
+  }, []);
+
+  async function handleSave(updatedForm) {
+    const oldWeight = ex.weight ?? 0;
+    const newWeight = +updatedForm.weight;
+    try {
+      const updated = await storage.updateExercise(splitId, dayId, ex._id, {
+        ...updatedForm,
+        sets: +updatedForm.sets,
+        reps: updatedForm.untilFailure ? null : +updatedForm.reps,
+        weight: newWeight,
+      });
+      onUpdate(updated);
+      setEditing(false);
+
+      if (newWeight !== oldWeight) {
+        const otherDays = (splitDays || [])
+          .filter((d) => d._id !== dayId && !d.isRest)
+          .flatMap((d) =>
+            (d.exercises || [])
+              .filter((e) => e.name.toLowerCase() === ex.name.toLowerCase())
+              .map((e) => ({ dayName: d.name, dayId: d._id, exId: e._id }))
+          );
+        if (otherDays.length > 0) {
+          setSyncPrompt({ otherDays, oldWeight, newWeight, unit: updatedForm.weightUnit });
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function handleSync() {
+    if (!syncPrompt) return;
+    for (const { dayId: dId, exId } of syncPrompt.otherDays) {
+      await storage.updateExercise(splitId, dId, exId, { weight: syncPrompt.newWeight, weightUnit: syncPrompt.unit });
+    }
+    queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
+    setSyncPrompt(null);
   }
 
   const weightLabel = ex.weight > 0 ? ` · ${ex.weight}${ex.weightUnit}` : '';
@@ -1291,7 +1323,7 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
       >
         <GripIcon />
       </div>
-      <ExerciseThumbnail imageUrl={currentImageUrl} name={ex.name} size={48} />
+      <ExerciseThumbnail imageUrl={currentImageUrl || ex.imageUrl} name={ex.name} size={48} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 15, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {index + 1}. {ex.name}
@@ -1306,8 +1338,23 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
         )}
       </div>
       <button className="btn-icon" style={{ flexShrink: 0 }} onClick={() => setShowSwapModal(true)} title="Switch/Swap"><SwapIcon /></button>
-      <button className="btn-icon" style={{ flexShrink: 0 }} onClick={openEdit} title="Edit"><EditPencil /></button>
+      <button className="btn-icon" style={{ flexShrink: 0 }} onClick={() => setEditing(true)} title="Edit"><EditPencil /></button>
       <button className="btn-icon" style={{ color: 'var(--red)', flexShrink: 0 }} onClick={() => setDeleteConfirm(true)} title="Delete"><TrashIcon /></button>
+      
+      {editing && (
+        <EditExerciseModal
+          ex={ex}
+          splitId={splitId}
+          dayId={dayId}
+          onConfirm={handleSave}
+          onClose={() => setEditing(false)}
+          onUpdate={(updated) => {
+            setCurrentImageUrl(updated.imageUrl || '');
+            onUpdate(updated);
+          }}
+        />
+      )}
+
       {syncPrompt && (
         <WeightSyncModal
           exName={ex.name}
