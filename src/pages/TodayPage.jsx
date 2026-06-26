@@ -858,7 +858,7 @@ export default function TodayPage() {
     queryFn: storage.getSplits,
   });
 
-  const { data: logs = [] } = useQuery({
+  const { data: logs = [], isLoading: isLoadingLogs } = useQuery({
     queryKey: ['logs', storageKey],
     queryFn: storage.getLogs,
   });
@@ -876,7 +876,7 @@ export default function TodayPage() {
   }
 
   useEffect(() => {
-    if (isLoading || !activeSplit || days.length === 0) return;
+    if (isLoading || isLoadingLogs || !activeSplit || days.length === 0) return;
 
     let logsInvalidated = false;
     days.forEach((day, i) => {
