@@ -668,7 +668,17 @@ Coach:`;
       {isLoading ? (
         <div className="spinner" />
       ) : splits.length === 0 ? (
-        <div className="empty-state">No splits yet.<br />Tap New to create one.</div>
+        <div className="empty-state" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '40px 20px', textAlign: 'center' }}>
+          <div style={{ color: 'var(--text2)', lineHeight: 1.5 }}>No splits yet.<br />Create your own training split or browse community programs to get started.</div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+            <button className="btn btn-accent" style={{ fontSize: 12, padding: '8px 14px', gap: 6 }} onClick={() => setModal({ type: 'add' })}>
+              <PlusIcon /> New Split
+            </button>
+            <button className="btn" style={{ fontSize: 12, padding: '8px 14px', background: 'transparent', border: '1px solid var(--border2)', color: 'var(--text2)', gap: 6 }} onClick={() => isLoggedIn ? setBrowsing(true) : handleSignIn()}>
+              <ShopIcon /> Browse Community
+            </button>
+          </div>
+        </div>
       ) : (
         <div style={{ padding: '16px 16px 0' }}>
           {splits.map((split) => {
