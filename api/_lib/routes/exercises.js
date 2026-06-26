@@ -46,23 +46,92 @@ router.post('/fetch-image', async (req, res) => {
   }
 
   try {
-    const query = exerciseName.toLowerCase().trim();
+    const normalizeName = (str) => {
+      return str.toLowerCase()
+        .replace(/\bdb\b/g, 'dumbbell')
+        .replace(/\bbb\b/g, 'barbell')
+        .replace(/\brdl\b/g, 'romanian deadlift')
+        .replace(/\bohp\b/g, 'overhead press')
+        .replace(/\bpushups?\b/g, 'push up')
+        .replace(/\bpullups?\b/g, 'pull up')
+        .replace(/\bchinups?\b/g, 'chin up')
+        .replace(/\bups\b/g, 'up')
+        .replace(/[\(\)\-\+,]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    };
 
+    const query = normalizeName(exerciseName);
     const exercises = await getExercises();
 
-    // Prefer exact name match, fall back to contains
-    const exact = exercises.find(e => e.name.toLowerCase() === query);
-    const contains = exercises.find(e => e.name.toLowerCase().includes(query) || query.includes(e.name.toLowerCase()));
-    const match = exact || contains;
+    let bestMatch = null;
+    let bestScore = 0;
 
-    console.log('[fetch-image] query:', query, '| match:', match ? match.name : 'none');
+    for (const e of exercises) {
+      const target = normalizeName(e.name);
+      
+      // 1. Exact match (highest priority)
+      if (target === query) {
+        bestMatch = e;
+        bestScore = 2; // high score to override partials
+        break;
+      }
 
-    if (!match || !match.images || !match.images.length) {
-      return res.json({ success: false, usePlaceholder: true });
+      // 2. Token match score
+      const queryWords = query.split(' ').filter(w => w.length > 1);
+      if (queryWords.length === 0) continue;
+
+      let matchedWords = 0;
+      for (const qw of queryWords) {
+        if (target.includes(qw)) {
+          matchedWords++;
+        }
+      }
+
+      const score = matchedWords / queryWords.length;
+      
+      // Require at least 60% of the query words to match
+      if (score >= 0.6 && score > bestScore) {
+        bestMatch = e;
+        bestScore = score;
+      }
     }
 
-    const imageUrl = `${FREE_EXERCISE_IMAGES}/${match.images[0]}`;
-    return res.json({ success: true, imageUrl });
+    console.log('[fetch-image] query:', exerciseName, '| match:', bestMatch ? bestMatch.name : 'none', '| score:', bestScore);
+
+    if (bestMatch && bestMatch.images && bestMatch.images.length > 0) {
+      const imageUrl = `${FREE_EXERCISE_IMAGES}/${bestMatch.images[0]}`;
+      return res.json({ success: true, imageUrl });
+    }
+
+    // Fallback: Query wger API
+    try {
+      console.log(`[fetch-image] Fallback: Querying wger for: "${exerciseName}"`);
+      const searchUrl = `https://wger.de/api/v2/exercise/?search=${encodeURIComponent(exerciseName)}`;
+      const wgerRes = await fetch(searchUrl, { headers: { 'Accept': 'application/json' } });
+      if (wgerRes.ok) {
+        const wgerData = await wgerRes.json();
+        if (wgerData.results && wgerData.results.length > 0) {
+          // Loop through first 3 search results to find one with an image
+          for (const item of wgerData.results.slice(0, 3)) {
+            const imgUrl = `https://wger.de/api/v2/exerciseimage/?exercise=${item.id}`;
+            const imgRes = await fetch(imgUrl, { headers: { 'Accept': 'application/json' } });
+            if (imgRes.ok) {
+              const imgData = await imgRes.json();
+              if (imgData.results && imgData.results.length > 0) {
+                const imageInfo = imgData.results.find(i => i.is_main) || imgData.results[0];
+                console.log(`[fetch-image] wger matched ID: ${item.id} | image: ${imageInfo.image}`);
+                return res.json({ success: true, imageUrl: imageInfo.image });
+              }
+            }
+          }
+        }
+      }
+    } catch (wgerErr) {
+      console.error('[fetch-image] wger fallback error:', wgerErr.message);
+    }
+
+    return res.json({ success: false, usePlaceholder: true });
   } catch (err) {
     console.error('[fetch-image] error:', err.message);
     return res.json({ success: false, usePlaceholder: true });

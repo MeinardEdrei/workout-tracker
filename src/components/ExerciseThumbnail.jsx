@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 function DumbbellIcon() {
   return (
@@ -53,7 +53,13 @@ function Lightbox({ imageUrl, name, onClose }) {
 
 export default function ExerciseThumbnail({ imageUrl, name, size = 80 }) {
   const [lightboxOpen, setLightboxOpen] = useState(false);
-  const hasImage = !!imageUrl;
+  const [imageError, setImageError] = useState(false);
+
+  useEffect(() => {
+    setImageError(false);
+  }, [imageUrl]);
+
+  const hasImage = !!imageUrl && !imageError;
 
   return (
     <>
@@ -76,6 +82,7 @@ export default function ExerciseThumbnail({ imageUrl, name, size = 80 }) {
           <img
             src={imageUrl}
             alt={name}
+            onError={() => setImageError(true)}
             style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
             loading="lazy"
           />
