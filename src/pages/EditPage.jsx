@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useStorage } from '../hooks/useStorage';
 import { MusclePill, MUSCLE_COLORS, MUSCLE_GROUPS } from '../components/MusclePill';
@@ -437,8 +437,93 @@ function AddDayModal({ existingDays = [], onConfirm, onClose }) {
 }
 
 function AddExerciseModal({ onConfirm, onClose }) {
-  const [form, setForm] = useState({ name: '', sets: 3, reps: 10, weight: 0, weightUnit: 'kg', muscleTargets: [], untilFailure: false });
+  const { storage, storageKey } = useStorage();
+  const [form, setForm] = useState({ name: '', sets: 3, reps: 10, weight: 0, weightUnit: 'kg', muscleTargets: [], untilFailure: false, imageUrl: '', placeholderUsed: false });
+  const [suggestions, setSuggestions] = useState([]);
+
+  const { data: logs = [] } = useQuery({
+    queryKey: ['logs', storageKey],
+    queryFn: storage.getLogs,
+  });
+
+  const pastExercises = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+    (logs || []).forEach((log) => {
+      (log.exercises || []).forEach((ex) => {
+        if (!ex.name) return;
+        const lowerName = ex.name.trim().toLowerCase();
+        if (!seen.has(lowerName)) {
+          seen.add(lowerName);
+          list.push({
+            name: ex.name.trim(),
+            imageUrl: ex.imageUrl || '',
+            muscleTargets: ex.muscleTargets || [],
+            sets: ex.sets || 3,
+            reps: ex.reps || 10,
+            weight: ex.weight || 0,
+            weightUnit: ex.weightUnit || 'kg',
+            untilFailure: ex.untilFailure || false,
+            isCustom: true
+          });
+        }
+      });
+    });
+    return list;
+  }, [logs]);
+
+  useEffect(() => {
+    const q = form.name.trim();
+    if (q.length < 2) { setSuggestions([]); return; }
+    const timer = setTimeout(async () => {
+      try {
+        const userMatches = pastExercises.filter(e => 
+          e.name.toLowerCase().includes(q.toLowerCase())
+        );
+        const dbMatches = await api.suggestExercises(q);
+        const combined = [...userMatches];
+        dbMatches.forEach(db => {
+          const dbName = typeof db === 'string' ? db : db.name;
+          const dbImg = typeof db === 'string' ? null : db.imageUrl;
+          if (!combined.some(c => c.name.toLowerCase() === dbName.toLowerCase())) {
+            combined.push({
+              name: dbName,
+              imageUrl: dbImg,
+              isCustom: false
+            });
+          }
+        });
+        setSuggestions(combined.slice(0, 10));
+      } catch {
+        const userMatches = pastExercises.filter(e => 
+          e.name.toLowerCase().includes(q.toLowerCase())
+        );
+        setSuggestions(userMatches.slice(0, 10));
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [form.name, pastExercises]);
+
   function set(k, v) { setForm((f) => ({ ...f, [k]: v })); }
+
+  function handleSelectSuggestion(s) {
+    if (s.isCustom) {
+      setForm({
+        name: s.name,
+        sets: s.sets,
+        reps: s.reps ?? 10,
+        weight: s.weight,
+        weightUnit: s.weightUnit,
+        muscleTargets: s.muscleTargets,
+        untilFailure: s.untilFailure,
+        imageUrl: s.imageUrl || '',
+        placeholderUsed: s.placeholderUsed || false,
+      });
+    } else {
+      setForm(f => ({ ...f, name: s.name, imageUrl: s.imageUrl || '', placeholderUsed: false }));
+    }
+    setSuggestions([]);
+  }
 
   function toggleTarget(target) {
     set('muscleTargets',
@@ -465,14 +550,57 @@ function AddExerciseModal({ onConfirm, onClose }) {
       <div className="modal">
         <div className="modal-title">New Exercise</div>
         <form onSubmit={submit}>
-          <input
-            className="input"
-            value={form.name}
-            onChange={(e) => set('name', capitalizeWords(e.target.value))}
-            placeholder="Exercise name"
-            autoFocus
-            style={{ marginBottom: 12 }}
-          />
+          <div style={{ position: 'relative', marginBottom: 12 }}>
+            <input
+              className="input"
+              value={form.name}
+              onChange={(e) => set('name', capitalizeWords(e.target.value))}
+              onBlur={() => setTimeout(() => setSuggestions([]), 150)}
+              placeholder="Exercise name"
+              autoFocus
+              autoComplete="off"
+              style={{ width: '100%', margin: 0 }}
+            />
+            {suggestions.length > 0 && (
+              <div style={{ 
+                position: 'absolute', top: '100%', left: 0, right: 0, 
+                background: 'var(--bg2)', border: '1px solid var(--border)', 
+                borderRadius: 8, zIndex: 150, overflow: 'hidden', marginTop: 2,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+              }}>
+                {suggestions.map((s, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      handleSelectSuggestion(s);
+                    }}
+                    style={{ 
+                      display: 'flex', width: '100%', alignItems: 'center', gap: 10,
+                      textAlign: 'left', padding: '8px 12px', fontSize: 13, 
+                      background: 'none', border: 'none', color: 'var(--text)', 
+                      cursor: 'pointer', borderBottom: '1px solid var(--border)' 
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg3)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
+                  >
+                    <ExerciseThumbnail imageUrl={s.imageUrl} name={s.name} size={28} />
+                    <span style={{ flex: 1, textTransform: 'uppercase', fontSize: 12, fontWeight: 700 }}>{s.name}</span>
+                    {s.isCustom && (
+                      <span style={{ 
+                        fontSize: 8, fontWeight: 800, color: 'var(--accent)', 
+                        background: 'rgba(232,255,90,0.08)', border: '1px solid rgba(232,255,90,0.2)',
+                        padding: '2px 6px', borderRadius: 4, textTransform: 'uppercase', letterSpacing: '0.04em'
+                      }}>
+                        Your History
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
             <div>
@@ -542,6 +670,37 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
   const [syncPrompt, setSyncPrompt] = useState(null);
   const fileInputRef = useRef(null);
 
+  const { data: logs = [] } = useQuery({
+    queryKey: ['logs', storageKey],
+    queryFn: storage.getLogs,
+  });
+
+  const pastExercises = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+    (logs || []).forEach((log) => {
+      (log.exercises || []).forEach((ex) => {
+        if (!ex.name) return;
+        const lowerName = ex.name.trim().toLowerCase();
+        if (!seen.has(lowerName)) {
+          seen.add(lowerName);
+          list.push({
+            name: ex.name.trim(),
+            imageUrl: ex.imageUrl || '',
+            muscleTargets: ex.muscleTargets || [],
+            sets: ex.sets || 3,
+            reps: ex.reps || 10,
+            weight: ex.weight || 0,
+            weightUnit: ex.weightUnit || 'kg',
+            untilFailure: ex.untilFailure || false,
+            isCustom: true
+          });
+        }
+      });
+    });
+    return list;
+  }, [logs]);
+
   function openEdit() {
     setForm({
       name: ex.name, sets: ex.sets, reps: ex.reps ?? 10, weight: ex.weight,
@@ -552,17 +711,56 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
     setEditing(true);
   }
 
+  function handleSelectSuggestion(s) {
+    if (s.isCustom) {
+      setForm({
+        name: s.name,
+        sets: s.sets,
+        reps: s.reps ?? 10,
+        weight: s.weight,
+        weightUnit: s.weightUnit,
+        muscleTargets: s.muscleTargets,
+        untilFailure: s.untilFailure,
+      });
+      setCurrentImageUrl(s.imageUrl);
+    } else {
+      set('name', s.name);
+      setCurrentImageUrl(s.imageUrl || '');
+    }
+    setSuggestions([]);
+  }
+
   useEffect(() => {
     const q = form.name.trim();
     if (q.length < 2) { setSuggestions([]); return; }
     const timer = setTimeout(async () => {
       try {
-        const results = await api.suggestExercises(q);
-        setSuggestions(results);
-      } catch { setSuggestions([]); }
+        const userMatches = pastExercises.filter(e => 
+          e.name.toLowerCase().includes(q.toLowerCase())
+        );
+        const dbMatches = await api.suggestExercises(q);
+        const combined = [...userMatches];
+        dbMatches.forEach(db => {
+          const dbName = typeof db === 'string' ? db : db.name;
+          const dbImg = typeof db === 'string' ? null : db.imageUrl;
+          if (!combined.some(c => c.name.toLowerCase() === dbName.toLowerCase())) {
+            combined.push({
+              name: dbName,
+              imageUrl: dbImg,
+              isCustom: false
+            });
+          }
+        });
+        setSuggestions(combined.slice(0, 10));
+      } catch {
+        const userMatches = pastExercises.filter(e => 
+          e.name.toLowerCase().includes(q.toLowerCase())
+        );
+        setSuggestions(userMatches.slice(0, 10));
+      }
     }, 300);
     return () => clearTimeout(timer);
-  }, [form.name]);
+  }, [form.name, pastExercises]);
 
   useEffect(() => {
     if (!currentImageUrl && !ex.placeholderUsed && ex.name) {
@@ -712,21 +910,40 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
               autoComplete="off"
             />
             {suggestions.length > 0 && (
-              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, zIndex: 50, overflow: 'hidden', marginTop: 2 }}>
-                {suggestions.map((s) => (
+              <div style={{ 
+                position: 'absolute', top: '100%', left: 0, right: 0, 
+                background: 'var(--bg2)', border: '1px solid var(--border)', 
+                borderRadius: 8, zIndex: 150, overflow: 'hidden', marginTop: 2,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+              }}>
+                {suggestions.map((s, idx) => (
                   <button
-                    key={s}
+                    key={idx}
                     type="button"
                     onMouseDown={(e) => {
                       e.preventDefault();
-                      set('name', s);
-                      setSuggestions([]);
+                      handleSelectSuggestion(s);
                     }}
-                    style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: 13, background: 'none', border: 'none', color: 'var(--text)', cursor: 'pointer', borderBottom: '1px solid var(--border)' }}
+                    style={{ 
+                      display: 'flex', width: '100%', alignItems: 'center', gap: 10,
+                      textAlign: 'left', padding: '8px 12px', fontSize: 13, 
+                      background: 'none', border: 'none', color: 'var(--text)', 
+                      cursor: 'pointer', borderBottom: '1px solid var(--border)' 
+                    }}
                     onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg3)'}
                     onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
                   >
-                    {s}
+                    <ExerciseThumbnail imageUrl={s.imageUrl} name={s.name} size={28} />
+                    <span style={{ flex: 1, textTransform: 'uppercase', fontSize: 12, fontWeight: 700 }}>{s.name}</span>
+                    {s.isCustom && (
+                      <span style={{ 
+                        fontSize: 8, fontWeight: 800, color: 'var(--accent)', 
+                        background: 'rgba(232,255,90,0.08)', border: '1px solid rgba(232,255,90,0.2)',
+                        padding: '2px 6px', borderRadius: 4, textTransform: 'uppercase', letterSpacing: '0.04em'
+                      }}>
+                        Your History
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>

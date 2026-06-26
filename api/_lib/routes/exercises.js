@@ -28,7 +28,10 @@ router.get('/suggest', async (req, res) => {
     const matches = exercises
       .filter(e => e.name.toLowerCase().includes(q))
       .slice(0, 8)
-      .map(e => e.name);
+      .map(e => {
+        const imageUrl = e.images && e.images.length ? `${FREE_EXERCISE_IMAGES}/${e.images[0]}` : null;
+        return { name: e.name, imageUrl };
+      });
     return res.json(matches);
   } catch (err) {
     console.error('[suggest] error:', err.message);

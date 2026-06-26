@@ -301,6 +301,9 @@ router.post('/:id/days/:dayId/exercises', async (req, res) => {
       lastCheckedDate: '',
       order: maxOrder + 1,
       muscleTargets: req.body.muscleTargets || [],
+      imageUrl: req.body.imageUrl || '',
+      imageSource: req.body.imageUrl ? 'auto' : '',
+      placeholderUsed: req.body.placeholderUsed === true,
     });
     await split.save();
     res.status(201).json(day.exercises[day.exercises.length - 1]);

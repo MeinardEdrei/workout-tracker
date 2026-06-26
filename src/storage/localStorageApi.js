@@ -147,6 +147,9 @@ export function createExercise(splitId, dayId, data) {
     lastCheckedDate: '',
     order: maxOrder + 1,
     muscleTargets: data.muscleTargets || [],
+    imageUrl: data.imageUrl || '',
+    imageSource: data.imageUrl ? 'auto' : '',
+    placeholderUsed: data.placeholderUsed || false,
   };
   if (!day.exercises) day.exercises = [];
   day.exercises.push(ex);
