@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useRegisterSW } from 'virtual:pwa-register/react';
 import './index.css';
 import { useAuth } from './context/AuthContext';
 import InvitePage from './pages/InvitePage';
@@ -283,6 +284,110 @@ function AuthCorner() {
   );
 }
 
+function ReloadPrompt() {
+  const {
+    needRefresh: [needRefresh, setNeedRefresh],
+    updateServiceWorker,
+  } = useRegisterSW({
+    onRegistered(r) {
+      if (r) {
+        // Proactively check for updates every 5 minutes
+        setInterval(() => {
+          r.update();
+        }, 5 * 60 * 1000);
+      }
+    },
+    onRegisterError(error) {
+      console.error('SW registration error', error);
+    },
+  });
+
+  const close = () => {
+    setNeedRefresh(false);
+  };
+
+  if (!needRefresh) return null;
+
+  return (
+    <div style={{
+      position: 'fixed',
+      bottom: 'calc(var(--nav-height) + 12px)',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      width: 'calc(100% - 32px)',
+      maxWidth: 448,
+      background: 'var(--bg2)',
+      border: '1px solid var(--accent)',
+      borderRadius: 12,
+      padding: '12px 16px',
+      zIndex: 250,
+      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+      animation: 'fadeIn 0.2s ease',
+    }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <div style={{
+          fontSize: 14,
+          fontWeight: 800,
+          color: 'var(--accent)',
+          letterSpacing: '0.05em',
+          textTransform: 'uppercase',
+        }}>
+          Update Available
+        </div>
+        <div style={{
+          fontSize: 12,
+          color: 'var(--text2)',
+          fontFamily: 'var(--font-mono)',
+        }}>
+          New features and improvements are ready.
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <button
+          onClick={() => updateServiceWorker(true)}
+          style={{
+            background: 'var(--accent)',
+            color: '#0a0a0a',
+            border: 'none',
+            borderRadius: 6,
+            padding: '6px 12px',
+            fontSize: 11,
+            fontWeight: 800,
+            cursor: 'pointer',
+            fontFamily: 'var(--font-display)',
+            letterSpacing: '0.05em',
+            textTransform: 'uppercase',
+            transition: 'opacity 0.2s',
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.opacity = 0.85}
+          onMouseLeave={(e) => e.currentTarget.style.opacity = 1}
+        >
+          Refresh
+        </button>
+        <button
+          onClick={close}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: 'var(--text3)',
+            cursor: 'pointer',
+            fontSize: 14,
+            padding: 4,
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.color = 'var(--text2)'}
+          onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text3)'}
+        >
+          ✕
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const inviteMatch = window.location.pathname.match(/^\/invite\/([a-f0-9]+)$/i);
   if (inviteMatch) return <InvitePage token={inviteMatch[1]} />;
@@ -334,6 +439,7 @@ export default function App() {
     <>
       {/* Auth error toast is global — shows on every tab */}
       <AuthErrorToast />
+      <ReloadPrompt />
       {/* AuthCorner floats over all tabs except Splits, which owns its header */}
       {tab !== 'splits' && <AuthCorner />}
       <div className="page">
