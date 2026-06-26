@@ -650,6 +650,215 @@ function AddExerciseModal({ onConfirm, onClose }) {
   );
 }
 
+function SwapIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="12 5 15 8 12 11" />
+      <path d="M3 8h12" />
+      <polyline points="4 11 1 8 4 5" />
+    </svg>
+  );
+}
+
+function SwapExerciseModal({ currentExName, onConfirm, onClose }) {
+  const { storage, storageKey } = useStorage();
+  const [form, setForm] = useState({ name: '', sets: 3, reps: 10, weight: 0, weightUnit: 'kg', muscleTargets: [], untilFailure: false });
+  const [suggestions, setSuggestions] = useState([]);
+
+  const { data: logs = [] } = useQuery({
+    queryKey: ['logs', storageKey],
+    queryFn: storage.getLogs,
+  });
+
+  const pastExercises = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+    (logs || []).forEach((log) => {
+      (log.exercises || []).forEach((ex) => {
+        if (!ex.name) return;
+        const lowerName = ex.name.trim().toLowerCase();
+        if (!seen.has(lowerName)) {
+          seen.add(lowerName);
+          list.push({
+            name: ex.name.trim(),
+            imageUrl: ex.imageUrl || '',
+            muscleTargets: ex.muscleTargets || [],
+            sets: ex.sets || 3,
+            reps: ex.reps || 10,
+            weight: ex.weight || 0,
+            weightUnit: ex.weightUnit || 'kg',
+            untilFailure: ex.untilFailure || false,
+            isCustom: true
+          });
+        }
+      });
+    });
+    return list;
+  }, [logs]);
+
+  useEffect(() => {
+    const q = form.name.trim();
+    if (q.length < 2) { setSuggestions([]); return; }
+    const timer = setTimeout(async () => {
+      try {
+        const userMatches = pastExercises.filter(e => 
+          e.name.toLowerCase().includes(q.toLowerCase())
+        );
+        const dbMatches = await api.suggestExercises(q);
+        const combined = [...userMatches];
+        dbMatches.forEach(db => {
+          const dbName = typeof db === 'string' ? db : db.name;
+          const dbImg = typeof db === 'string' ? null : db.imageUrl;
+          if (!combined.some(c => c.name.toLowerCase() === dbName.toLowerCase())) {
+            combined.push({
+              name: dbName,
+              imageUrl: dbImg,
+              isCustom: false
+            });
+          }
+        });
+        setSuggestions(combined.slice(0, 10));
+      } catch {
+        const userMatches = pastExercises.filter(e => 
+          e.name.toLowerCase().includes(q.toLowerCase())
+        );
+        setSuggestions(userMatches.slice(0, 10));
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [form.name, pastExercises]);
+
+  function handleSelectSuggestion(s) {
+    if (s.isCustom) {
+      setForm({
+        name: s.name,
+        sets: s.sets,
+        reps: s.reps ?? 10,
+        weight: s.weight,
+        weightUnit: s.weightUnit,
+        muscleTargets: s.muscleTargets,
+        untilFailure: s.untilFailure,
+        imageUrl: s.imageUrl || '',
+        placeholderUsed: s.placeholderUsed || false,
+      });
+    } else {
+      setForm(f => ({ ...f, name: s.name, imageUrl: s.imageUrl || '', placeholderUsed: false }));
+    }
+    setSuggestions([]);
+  }
+
+  function submit(e) {
+    e.preventDefault();
+    if (!form.name.trim()) return;
+    onConfirm({
+      ...form,
+      name: form.name.trim(),
+      sets: +form.sets,
+      reps: form.untilFailure ? null : +form.reps,
+      weight: +form.weight,
+    });
+  }
+
+  return createPortal(
+    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal">
+        <div className="modal-title">Swap Exercise</div>
+        <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 12 }}>
+          Swapping: <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{currentExName}</span>
+        </div>
+        <form onSubmit={submit}>
+          <div style={{ position: 'relative', marginBottom: 12 }}>
+            <input
+              className="input"
+              value={form.name}
+              onChange={(e) => setForm(f => ({ ...f, name: capitalizeWords(e.target.value) }))}
+              onBlur={() => setTimeout(() => setSuggestions([]), 150)}
+              placeholder="Search or enter new exercise name"
+              autoFocus
+              autoComplete="off"
+              style={{ width: '100%', margin: 0 }}
+            />
+            {suggestions.length > 0 && (
+              <div style={{ 
+                position: 'absolute', top: '100%', left: 0, right: 0, 
+                background: 'var(--bg2)', border: '1px solid var(--border)', 
+                borderRadius: 8, zIndex: 150, overflow: 'hidden', marginTop: 2,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+              }}>
+                {suggestions.map((s, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      handleSelectSuggestion(s);
+                    }}
+                    style={{ 
+                      display: 'flex', width: '100%', alignItems: 'center', gap: 10,
+                      textAlign: 'left', padding: '8px 12px', fontSize: 13, 
+                      background: 'none', border: 'none', color: 'var(--text)', 
+                      cursor: 'pointer', borderBottom: '1px solid var(--border)' 
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg3)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
+                  >
+                    <ExerciseThumbnail imageUrl={s.imageUrl} name={s.name} size={28} />
+                    <span style={{ flex: 1, textTransform: 'uppercase', fontSize: 12, fontWeight: 700 }}>{s.name}</span>
+                    {s.isCustom && (
+                      <span style={{ 
+                        fontSize: 8, fontWeight: 800, color: 'var(--accent)', 
+                        background: 'rgba(232,255,90,0.08)', border: '1px solid rgba(232,255,90,0.2)',
+                        padding: '2px 6px', borderRadius: 4, textTransform: 'uppercase', letterSpacing: '0.04em'
+                      }}>
+                        Your History
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
+            <div>
+              <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>sets</div>
+              <input className="input" type="number" min="0" step="1" value={form.sets} onChange={(e) => setForm(f => ({ ...f, sets: e.target.value }))} />
+            </div>
+            <div>
+              <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>reps</div>
+              {form.untilFailure ? (
+                <div style={{ height: 44, display: 'flex', alignItems: 'center', padding: '0 10px', borderRadius: 8, border: '1px solid var(--border2)', fontSize: 11, fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.05em' }}>TO FAILURE</div>
+              ) : (
+                <input className="input" type="number" min="0" step="1" value={form.reps} onChange={(e) => setForm(f => ({ ...f, reps: e.target.value }))} />
+              )}
+            </div>
+            <div>
+              <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>weight</div>
+              <input className="input" type="number" min="0" step="0.5" value={form.weight} onChange={(e) => setForm(f => ({ ...f, weight: e.target.value }))} />
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+            <button type="button" className={`btn ${!form.untilFailure ? 'btn-accent' : ''}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setForm(f => ({ ...f, untilFailure: false }))}>Specific reps</button>
+            <button type="button" className={`btn ${form.untilFailure ? 'btn-accent' : ''}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setForm(f => ({ ...f, untilFailure: true }))}>Until failure</button>
+          </div>
+
+          <select className="select" style={{ width: '100%', marginBottom: 16 }} value={form.weightUnit} onChange={(e) => setForm(f => ({ ...f, weightUnit: e.target.value }))}>
+            <option value="kg">kg</option>
+            <option value="lbs">lbs</option>
+          </select>
+
+          <div className="modal-actions" style={{ marginTop: 16 }}>
+            <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
+            <button type="submit" className="btn btn-accent">Swap</button>
+          </div>
+        </form>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 /* ─── Inline exercise editor ─── */
 function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDelete, dragHandleProps }) {
   const queryClient = useQueryClient();
@@ -669,6 +878,16 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [syncPrompt, setSyncPrompt] = useState(null);
   const fileInputRef = useRef(null);
+  const [showSwapModal, setShowSwapModal] = useState(false);
+
+  const swapMutation = useMutation({
+    mutationFn: (updatedData) => storage.updateExercise(splitId, dayId, ex._id, updatedData),
+    onSuccess: (updated) => {
+      queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
+      onUpdate(updated);
+      setShowSwapModal(false);
+    },
+  });
 
   const { data: logs = [] } = useQuery({
     queryKey: ['logs', storageKey],
@@ -1086,6 +1305,7 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
           </div>
         )}
       </div>
+      <button className="btn-icon" style={{ flexShrink: 0 }} onClick={() => setShowSwapModal(true)} title="Switch/Swap"><SwapIcon /></button>
       <button className="btn-icon" style={{ flexShrink: 0 }} onClick={openEdit} title="Edit"><EditPencil /></button>
       <button className="btn-icon" style={{ color: 'var(--red)', flexShrink: 0 }} onClick={() => setDeleteConfirm(true)} title="Delete"><TrashIcon /></button>
       {syncPrompt && (
@@ -1097,6 +1317,13 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
           otherDays={syncPrompt.otherDays}
           onSync={handleSync}
           onSkip={() => setSyncPrompt(null)}
+        />
+      )}
+      {showSwapModal && (
+        <SwapExerciseModal
+          currentExName={ex.name}
+          onConfirm={(updatedData) => swapMutation.mutate(updatedData)}
+          onClose={() => setShowSwapModal(false)}
         />
       )}
       {deleteConfirm && (
