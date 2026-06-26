@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useStorage } from '../hooks/useStorage';
-import WeeklyShareCard from '../components/WeeklyShareCard';
+import StatsShareModal from '../components/StatsShareModal';
 import { createPortal } from 'react-dom';
 
 const LOGS_STALE = 2 * 60 * 1000;
@@ -49,21 +49,7 @@ function ConfirmModal({ message, onConfirm, onClose }) {
   );
 }
 
-async function captureAndShare(ref, filename, title) {
-  const html2canvas = (await import('html2canvas')).default;
-  const canvas = await html2canvas(ref.current, { backgroundColor: '#0a0a0a', scale: 2, useCORS: true, logging: false });
-  canvas.toBlob(async (blob) => {
-    const file = new File([blob], filename, { type: 'image/png' });
-    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-      await navigator.share({ files: [file], title });
-    } else {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = filename; a.click();
-      URL.revokeObjectURL(url);
-    }
-  }, 'image/png');
-}
+
 
 /* ─── Activity Tracker (Monthly + Yearly) ─── */
 function ChevronLeftSmall() {
@@ -559,10 +545,9 @@ function SectionLabel({ children }) {
 export default function StatsPage() {
   const queryClient = useQueryClient();
   const { storage, storageKey } = useStorage();
-  const [sharing, setSharing] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
   const [confirm, setConfirm] = useState(null);
   const [progressionSearch, setProgressionSearch] = useState('');
-  const weekCardRef = useRef(null);
 
   const { data: logs = [], isLoading } = useQuery({ queryKey: ['logs', storageKey], queryFn: storage.getLogs, staleTime: LOGS_STALE });
   const { data: weekLogs = [] } = useQuery({ queryKey: ['logs', 'week', storageKey], queryFn: storage.getWeekLogs, staleTime: LOGS_STALE });
@@ -570,12 +555,6 @@ export default function StatsPage() {
   const invalidateLogs = () => queryClient.invalidateQueries({ queryKey: ['logs'] });
   const deleteMutation = useMutation({ mutationFn: (id) => storage.deleteLog(id), onSuccess: invalidateLogs });
   const clearMutation = useMutation({ mutationFn: () => storage.clearLogs(), onSuccess: invalidateLogs });
-
-  async function handleShare() {
-    setSharing(true);
-    try { await captureAndShare(weekCardRef, 'weekly-recap.png', 'My Weekly Workout Recap'); }
-    finally { setSharing(false); }
-  }
 
   // Recompute from exercises so the unit is always correct
   const allWeekExercises = weekLogs.flatMap((l) => l.exercises || []);
@@ -614,8 +593,8 @@ export default function StatsPage() {
                 <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>this week</div>
               </div>
               <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-end' }}>
-                <button className="btn" style={{ background: 'transparent', border: '1px solid var(--border2)', color: 'var(--text2)', fontSize: 12, gap: 6 }} onClick={handleShare} disabled={sharing}>
-                  <ShareIcon />{sharing ? 'Sharing…' : 'Share'}
+                <button className="btn" style={{ background: 'transparent', border: '1px solid var(--border2)', color: 'var(--text2)', fontSize: 12, gap: 6 }} onClick={() => setShowShareModal(true)}>
+                  <ShareIcon /> Share
                 </button>
                 {totalVolume > 0 && (
                   <div>
@@ -676,7 +655,12 @@ export default function StatsPage() {
         </div>
       )}
 
-      <WeeklyShareCard logs={weekLogs} cardRef={weekCardRef} />
+      {showShareModal && (
+        <StatsShareModal
+          logs={weekLogs}
+          onClose={() => setShowShareModal(false)}
+        />
+      )}
 
       {confirm === 'clear' && (
         <ConfirmModal
