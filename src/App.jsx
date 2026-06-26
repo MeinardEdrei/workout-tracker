@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import './index.css';
 import { useAuth } from './context/AuthContext';
 import InvitePage from './pages/InvitePage';
@@ -288,15 +288,45 @@ export default function App() {
   if (inviteMatch) return <InvitePage token={inviteMatch[1]} />;
 
   const { loading, isAdmin } = useAuth();
-  const [tab, setTab] = useState('today');
+  
+  const [tab, setTab] = useState(() => {
+    const saved = localStorage.getItem('wt_active_tab');
+    if (saved && ['today', 'splits', 'stats', 'calc', 'admin'].includes(saved)) {
+      return saved;
+    }
+    return 'today';
+  });
+
+  useEffect(() => {
+    if (tab === 'admin' && !isAdmin && !loading) {
+      setTab('today');
+    } else if (!loading) {
+      localStorage.setItem('wt_active_tab', tab);
+    }
+  }, [tab, isAdmin, loading]);
 
   const nav = isAdmin ? [...NAV, { id: 'admin', label: 'Admin' }] : NAV;
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-        <div className="spinner" />
-      </div>
+      <>
+        <AuthErrorToast />
+        <div className="page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="spinner" />
+        </div>
+        <nav className="bottom-nav" style={{ opacity: 0.6, pointerEvents: 'none' }}>
+          {NAV.map((n) => {
+            const Icon = ICONS[n.id];
+            const active = tab === n.id;
+            return (
+              <button key={n.id} className={`nav-btn ${active ? 'active' : ''}`} disabled>
+                <Icon active={active} />
+                {n.label}
+              </button>
+            );
+          })}
+        </nav>
+      </>
     );
   }
 
