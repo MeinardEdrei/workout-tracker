@@ -669,7 +669,7 @@ export default function StatsPage() {
           {logs.length === 0 ? (
             <div className="empty-state">No workouts logged yet.<br />Finish a workout to see it here.</div>
           ) : (
-            logs.map((log) => <LogCard key={log._id} log={log} onDelete={(id) => deleteMutation.mutate(id)} />)
+            logs.map((log) => <LogCard key={log._id} log={log} onDelete={(id) => setConfirm(id)} />)
           )}
 
           <div style={{ height: 24 }} />
@@ -682,6 +682,14 @@ export default function StatsPage() {
         <ConfirmModal
           message="Delete all workout logs? This cannot be undone."
           onConfirm={() => { setConfirm(null); clearMutation.mutate(); }}
+          onClose={() => setConfirm(null)}
+        />
+      )}
+
+      {confirm && confirm !== 'clear' && (
+        <ConfirmModal
+          message="Delete this workout log? This cannot be undone."
+          onConfirm={() => { deleteMutation.mutate(confirm); setConfirm(null); }}
           onClose={() => setConfirm(null)}
         />
       )}
