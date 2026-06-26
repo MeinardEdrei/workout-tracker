@@ -101,30 +101,21 @@ export default function BrowseSplitsPage({ onBack }) {
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
       {/* Header */}
-      <div className="page-header" style={{ padding: '24px 20px 16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-          <button
-            onClick={onBack}
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              color: 'var(--text2)', padding: '4px 2px', display: 'flex', alignItems: 'center',
-              WebkitTapHighlightColor: 'transparent',
-            }}
-          >
-            <BackIcon />
+      <div className="page-header">
+        <div>
+          <button className="back-btn" onClick={onBack} style={{ marginBottom: 4 }}>
+            <BackIcon /> Splits
           </button>
-          <div>
-            <h1 className="page-title">Browse Splits</h1>
-            <div className="page-subtitle" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <GlobeIcon />
-              <span>Community programs</span>
-            </div>
+          <h1 className="page-title">Browse Splits</h1>
+          <div className="page-subtitle" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <GlobeIcon />
+            <span>Community programs</span>
           </div>
         </div>
       </div>
 
       {/* Search */}
-      <div style={{ padding: '12px 16px 16px' }}>
+      <div style={{ padding: '20px 16px 16px' }}>
         <input
           className="input"
           placeholder="Search by name or creator…"
