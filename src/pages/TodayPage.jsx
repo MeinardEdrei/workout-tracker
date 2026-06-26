@@ -852,6 +852,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
 export default function TodayPage() {
   const { storage, storageKey } = useStorage();
   const queryClient = useQueryClient();
+  const savingDatesRef = useRef(new Set());
   const { data: splits = [], isLoading, error } = useQuery({
     queryKey: ['splits', storageKey],
     queryFn: storage.getSplits,
@@ -884,13 +885,19 @@ export default function TodayPage() {
       if (dateStr >= TODAY_STR) return; // Only past days
 
       const logForDate = logs.find((l) => l.date === dateStr);
-      if (logForDate) return; // Already completed
+      if (logForDate) {
+        savingDatesRef.current.delete(dateStr);
+        return; // Already completed
+      }
+
+      if (savingDatesRef.current.has(dateStr)) return;
 
       const checkedExs = (day.exercises || []).filter(
         (e) => e.checked && e.lastCheckedDate === dateStr
       );
 
       if (checkedExs.length > 0) {
+        savingDatesRef.current.add(dateStr);
         storage.saveLog({
           date: dateStr,
           splitName: activeSplit.name,
@@ -908,7 +915,10 @@ export default function TodayPage() {
             logsInvalidated = true;
             queryClient.invalidateQueries({ queryKey: ['logs'] });
           }
-        }).catch(err => console.error("Auto-completion failed:", err));
+        }).catch(err => {
+          console.error("Auto-completion failed:", err);
+          savingDatesRef.current.delete(dateStr);
+        });
       }
     });
   }, [splits, logs, isLoading, activeSplit, days, queryClient, storage]);
