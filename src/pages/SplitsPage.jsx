@@ -679,7 +679,7 @@ Coach:`;
       </div>
 
       {/* Leaderboard Widget */}
-      <div style={{ padding: '0 16px' }}>
+      <div style={{ padding: '16px 16px 0' }}>
         <div 
           onClick={() => isLoggedIn ? setViewingRanking(true) : handleSignIn()}
           style={{
