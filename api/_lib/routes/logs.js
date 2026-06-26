@@ -9,9 +9,24 @@ router.use(requireAuth);
 router.post('/', async (req, res) => {
   try {
     const { date, splitName, dayName, dayTag, exercises } = req.body;
+    
+    // Check if a log for this date and user already exists
+    const existingLog = await WorkoutLog.findOne({ userId: req.userId, date });
+    
     const totalVolume = (exercises || []).reduce((sum, ex) => {
       return sum + (ex.sets || 0) * (ex.reps || 0) * (ex.weight || 0);
     }, 0);
+
+    if (existingLog) {
+      existingLog.splitName = splitName || existingLog.splitName;
+      existingLog.dayName = dayName || existingLog.dayName;
+      existingLog.dayTag = dayTag || existingLog.dayTag;
+      existingLog.exercises = exercises;
+      existingLog.totalVolume = totalVolume;
+      await existingLog.save();
+      return res.status(200).json(existingLog);
+    }
+
     const log = new WorkoutLog({ date, splitName, dayName, dayTag, exercises, totalVolume, userId: req.userId });
     await log.save();
     res.status(201).json(log);
