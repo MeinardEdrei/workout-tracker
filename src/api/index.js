@@ -46,6 +46,7 @@ export const setSplitVisibility = (id, isPublic) => req('PATCH', `/api/splits/${
 export const getPublicSplits = (page = 1) => req('GET', `/api/splits/public?page=${page}&limit=20`);
 export const copyPublicSplit = (id) => req('POST', `/api/splits/public/${id}/copy`);
 export const reapplySplit = (id) => req('POST', `/api/splits/${id}/reapply`);
+export const getRanking = (filter = 'weekly') => req('GET', `/api/splits/ranking?filter=${filter}`);
 
 // ─── Days ─────────────────────────────────────────────────────────────────────
 export const getDays = (splitId) => req('GET', `/api/splits/${splitId}/days`);

@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const Split = require('../models/Split');
+const WorkoutLog = require('../models/WorkoutLog');
+const User = require('../models/User');
 const { requireAuth } = require('../middleware/auth');
 
 router.use(requireAuth);
@@ -105,6 +107,96 @@ router.get('/public', async (req, res) => {
       return obj;
     });
     res.json({ splits: result, total, page, pages: Math.ceil(total / limit) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── ACTIVE USERS RANKING ──────────────────────────────────────────────────────
+
+router.get('/ranking', async (req, res) => {
+  try {
+    const filter = req.query.filter || 'weekly'; // 'weekly', 'monthly', 'yearly'
+    
+    // Calculate start date based on filter
+    const now = new Date();
+    let startDateStr = '';
+
+    if (filter === 'weekly') {
+      const dow = now.getDay(); // 0=Sun, 1=Mon, etc.
+      const diffToMon = dow === 0 ? -6 : 1 - dow;
+      const mon = new Date(now);
+      mon.setDate(now.getDate() + diffToMon);
+      mon.setHours(0, 0, 0, 0);
+      startDateStr = mon.toISOString().slice(0, 10);
+    } else if (filter === 'monthly') {
+      const mon = new Date(now.getFullYear(), now.getMonth(), 1);
+      startDateStr = mon.toISOString().slice(0, 10);
+    } else if (filter === 'yearly') {
+      const yr = new Date(now.getFullYear(), 0, 1);
+      startDateStr = yr.toISOString().slice(0, 10);
+    } else {
+      return res.status(400).json({ error: 'Invalid filter type' });
+    }
+
+    // 1. Aggregate from WorkoutLog
+    const rankingAgg = await WorkoutLog.aggregate([
+      {
+        $match: {
+          date: { $gte: startDateStr }
+        }
+      },
+      {
+        $group: {
+          _id: '$userId',
+          workoutCount: { $sum: 1 },
+          totalVolume: { $sum: '$totalVolume' },
+          latestLog: {
+            $max: {
+              date: '$date',
+              dayName: '$dayName',
+              updatedAt: '$updatedAt'
+            }
+          }
+        }
+      },
+      {
+        $sort: { workoutCount: -1, totalVolume: -1 }
+      },
+      {
+        $limit: 50
+      }
+    ]);
+
+    // 2. Fetch User profiles & Active Splits for these users
+    const results = [];
+    for (const entry of rankingAgg) {
+      if (!entry._id) continue;
+      const user = await User.findById(entry._id).select('name avatar lastLoginAt');
+      if (!user) continue;
+
+      const activeSplit = await Split.findOne({ userId: entry._id, isActive: true }).select('name days');
+      
+      results.push({
+        userId: entry._id,
+        name: user.name || 'Anonymous User',
+        avatar: user.avatar || '',
+        lastLoginAt: user.lastLoginAt,
+        workoutCount: entry.workoutCount,
+        totalVolume: entry.totalVolume,
+        latestWorkout: entry.latestLog,
+        activeSplitName: activeSplit ? activeSplit.name : 'No Active Split',
+        activeSplitDaysCount: activeSplit ? activeSplit.days.length : 0,
+        activeSplitDays: activeSplit ? activeSplit.days.map((d) => ({
+          name: d.name,
+          tag: d.tag,
+          isRest: d.isRest,
+          exerciseCount: d.exercises ? d.exercises.length : 0
+        })) : [],
+      });
+    }
+
+    res.json(results);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

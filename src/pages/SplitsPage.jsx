@@ -6,7 +6,8 @@ import { useAuth } from '../context/AuthContext';
 import SplitShareModal from '../components/SplitShareModal';
 import SplitEditor from './EditPage';
 import BrowseSplitsPage from './BrowseSplitsPage';
-import { setSplitVisibility, reapplySplit as reapplySplitApi } from '../api/index';
+import LeaderboardPage from '../components/LeaderboardPage';
+import { setSplitVisibility, reapplySplit as reapplySplitApi, getRanking } from '../api/index';
 import AiChatBubble from '../components/AiChatBubble';
 
 const API = import.meta.env.VITE_API_URL || '';
@@ -295,6 +296,7 @@ export default function SplitsPage() {
   const [actionLoading, setActionLoading] = useState(null);
   const [editingSplitId, setEditingSplitId] = useState(null);
   const [browsing, setBrowsing] = useState(false);
+  const [viewingRanking, setViewingRanking] = useState(false);
   const [showAiChat, setShowAiChat] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [menuOpenId, setMenuOpenId] = useState(null);
@@ -319,6 +321,13 @@ export default function SplitsPage() {
   const { data: splits = [], isLoading } = useQuery({
     queryKey: ['splits', storageKey],
     queryFn: storage.getSplits,
+  });
+
+  const { data: ranking = [] } = useQuery({
+    queryKey: ['ranking', 'weekly_widget'],
+    queryFn: () => getRanking('weekly'),
+    enabled: isLoggedIn,
+    staleTime: 60 * 1000,
   });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['splits'] });
@@ -483,6 +492,10 @@ Coach:`;
 
   if (browsing) {
     return <BrowseSplitsPage onBack={() => setBrowsing(false)} />;
+  }
+
+  if (viewingRanking) {
+    return <LeaderboardPage onBack={() => setViewingRanking(false)} />;
   }
 
   return (
@@ -662,6 +675,66 @@ Coach:`;
           <button className="btn btn-accent" onClick={() => setModal({ type: 'add' })}>
             <PlusIcon /> New
           </button>
+        </div>
+      </div>
+
+      {/* Leaderboard Widget */}
+      <div style={{ padding: '0 16px' }}>
+        <div 
+          onClick={() => isLoggedIn ? setViewingRanking(true) : handleSignIn()}
+          style={{
+            marginBottom: 16,
+            padding: '14px 16px',
+            background: 'var(--bg2)',
+            border: '1px solid var(--border)',
+            borderRadius: 12,
+            cursor: 'pointer',
+            transition: 'transform 0.15s, background 0.15s',
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg3)'}
+          onMouseLeave={(e) => e.currentTarget.style.background = 'var(--bg2)'}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: isLoggedIn && ranking.length > 0 ? 12 : 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 14 }}>🏆</span>
+              <span style={{ fontSize: 12, fontWeight: 900, fontFamily: 'var(--font-mono)', color: 'var(--text3)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Active Leaderboard</span>
+            </div>
+            <span style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              {isLoggedIn ? 'View Standings →' : 'Sign in to join →'}
+            </span>
+          </div>
+
+          {isLoggedIn && ranking && ranking.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {ranking.slice(0, 3).map((row, idx) => (
+                <div key={row.userId} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ 
+                    width: 18, height: 18, borderRadius: 4, 
+                    background: idx === 0 ? 'rgba(255,215,0,0.15)' : idx === 1 ? 'rgba(192,192,192,0.15)' : 'rgba(205,127,50,0.15)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                    fontSize: 9, fontWeight: 900, color: idx === 0 ? '#ffd700' : idx === 1 ? '#e0e0e0' : '#cd7f32',
+                    border: `1px solid ${idx === 0 ? 'rgba(255,215,0,0.3)' : idx === 1 ? 'rgba(192,192,192,0.3)' : 'rgba(205,127,50,0.3)'}`
+                  }}>
+                    {idx + 1}
+                  </div>
+                  
+                  {row.avatar ? (
+                    <img src={row.avatar} alt={row.name} style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover' }} />
+                  ) : (
+                    <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--bg3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: 'var(--text2)', border: '1px solid var(--border)' }}>
+                      {row.name[0].toUpperCase()}
+                    </div>
+                  )}
+
+                  <span style={{ flex: 1, fontSize: 12, fontWeight: 700, color: 'var(--text2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.name}</span>
+                  
+                  <span style={{ fontSize: 11, fontWeight: 900, color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>
+                    {row.workoutCount} workout{row.workoutCount !== 1 ? 's' : ''}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
