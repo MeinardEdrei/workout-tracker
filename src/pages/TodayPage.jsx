@@ -664,6 +664,23 @@ function ActionPermissionModal({ pendingAction, onAllow, onDeny }) {
   );
 }
 
+/* ─── Generic Confirmation Modal ─── */
+function ConfirmModal({ message, onConfirm, onClose }) {
+  return createPortal(
+    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal">
+        <div className="modal-title">Confirm</div>
+        <div style={{ color: 'var(--text2)', fontSize: 14, marginBottom: 16 }}>{message}</div>
+        <div className="modal-actions">
+          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn btn-accent" onClick={onConfirm}>Finish</button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dateStr, logForDate, logs }) {
   const queryClient = useQueryClient();
   const { storage } = useStorage();
@@ -672,6 +689,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
   const [completedLog, setCompletedLog] = useState(null);
   const [sharing, setSharing] = useState(false);
   const shareCardRef = useRef(null);
+  const [showConfirmFinish, setShowConfirmFinish] = useState(false);
 
 
   useEffect(() => {
@@ -742,6 +760,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
   function handleFinish() {
     const done = exercises.filter((e) => e.lastCheckedDate === TODAY_STR && e.checked);
     saveLogMutation.mutate({ date: TODAY_STR, splitName, dayName: day.name, dayTag: day.tag || '', exercises: done.map((e) => ({ name: e.name, sets: e.sets, reps: e.reps, weight: e.weight, weightUnit: e.weightUnit })) });
+    setShowConfirmFinish(false);
   }
 
   async function handleShare() {
@@ -800,7 +819,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
             )}
             {checkedCount > 0 && isToday && !isCompleted && (
               <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)' }}>
-                <button className="btn btn-accent" style={{ width: '100%', fontSize: 14, padding: '12px' }} onClick={handleFinish} disabled={saveLogMutation.isPending}>
+                <button className="btn btn-accent" style={{ width: '100%', fontSize: 14, padding: '12px' }} onClick={() => setShowConfirmFinish(true)} disabled={saveLogMutation.isPending}>
                   {saveLogMutation.isPending ? 'Saving…' : `✓ Finish Workout (${checkedCount} done)`}
                 </button>
               </div>
@@ -845,6 +864,13 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
 
       {completedLog && <DailyShareCard log={completedLog} cardRef={shareCardRef} />}
       {completedLog && <CompletionScreen log={completedLog} onClose={() => setCompletedLog(null)} onShare={handleShare} sharing={sharing} />}
+      {showConfirmFinish && (
+        <ConfirmModal
+          message={`Finish this workout? You have completed ${checkedCount} of ${total} exercises.`}
+          onConfirm={handleFinish}
+          onClose={() => setShowConfirmFinish(false)}
+        />
+      )}
     </>
   );
 }
