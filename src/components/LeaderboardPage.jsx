@@ -41,7 +41,7 @@ export default function LeaderboardPage({ onBack }) {
   return (
     <div>
       {/* Page Header */}
-      <div className="page-header" style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
+      <div className="page-header" style={{ padding: '24px 20px 16px', borderBottom: '1px solid var(--border)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button className="back-btn" onClick={onBack} style={{ padding: '6px 4px' }}>
             <ChevronLeftIcon /> Back
@@ -53,7 +53,7 @@ export default function LeaderboardPage({ onBack }) {
         </div>
       </div>
 
-      <div style={{ padding: '16px 16px 80px' }}>
+      <div style={{ padding: '20px 16px 80px' }}>
         
         {/* Filter Segmented Control */}
         <div style={{

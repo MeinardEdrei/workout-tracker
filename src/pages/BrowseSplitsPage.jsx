@@ -101,7 +101,7 @@ export default function BrowseSplitsPage({ onBack }) {
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
       {/* Header */}
-      <div className="page-header" style={{ padding: '16px 20px' }}>
+      <div className="page-header" style={{ padding: '24px 20px 16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
           <button
             onClick={onBack}
@@ -124,7 +124,7 @@ export default function BrowseSplitsPage({ onBack }) {
       </div>
 
       {/* Search */}
-      <div style={{ padding: '0 16px 12px' }}>
+      <div style={{ padding: '12px 16px 16px' }}>
         <input
           className="input"
           placeholder="Search by name or creator…"

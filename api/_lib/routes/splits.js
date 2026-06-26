@@ -175,7 +175,11 @@ router.get('/ranking', async (req, res) => {
       const user = await User.findById(entry._id).select('name avatar lastLoginAt');
       if (!user) continue;
 
-      const activeSplit = await Split.findOne({ userId: entry._id, isActive: true }).select('name days');
+      let activeSplit = await Split.findOne({ userId: entry._id, isActive: true }).select('name days');
+      if (!activeSplit) {
+        // Fallback to user's latest updated split, matching frontend behavior
+        activeSplit = await Split.findOne({ userId: entry._id }).sort({ updatedAt: -1 }).select('name days');
+      }
       
       results.push({
         userId: entry._id,
@@ -224,12 +228,15 @@ router.post('/public/:id/copy', async (req, res) => {
         muscleTargets: e.muscleTargets || [],
       })),
     }));
+    // Check if the user already has any active split. If not, make this copied one active.
+    const activeCount = await Split.countDocuments({ userId: req.userId, isActive: true });
     const newSplit = new Split({
       name: source.name,
       days: copiedDays,
       userId: req.userId,
       isPublic: false,
       sourceId: source._id,
+      isActive: activeCount === 0,
     });
     await newSplit.save();
     res.status(201).json(sortExercises(newSplit));
