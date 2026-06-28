@@ -6,6 +6,7 @@ const LogExerciseSchema = new mongoose.Schema({
   reps: { type: Number, default: 0 },
   weight: { type: Number, default: 0 },
   weightUnit: { type: String, enum: ['kg', 'lbs'], default: 'kg' },
+  category: { type: String, enum: ['warmup', 'workout', 'cooldown'], default: 'workout' },
 });
 
 const WorkoutLogSchema = new mongoose.Schema(

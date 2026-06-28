@@ -868,24 +868,35 @@ Coach:`;
                             
                             {!day.isRest && (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                {(day.exercises || []).map((ex, idx) => (
-                                  <div 
-                                    key={ex._id || idx}
-                                    style={{ 
-                                      display: 'flex', 
-                                      justifyContent: 'space-between', 
-                                      alignItems: 'center',
-                                      fontSize: 13,
-                                      color: 'var(--text2)',
-                                      padding: '2px 0'
-                                    }}
-                                  >
-                                    <span style={{ color: 'var(--text)' }}>{idx + 1}. {ex.name}</span>
-                                    <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text3)', fontSize: 12 }}>
-                                      {ex.sets}×{ex.untilFailure ? 'Failure' : ex.reps}{ex.weight > 0 ? ` @ ${ex.weight}${ex.weightUnit}` : ''}
-                                    </span>
-                                  </div>
-                                ))}
+                                {(day.exercises || []).map((ex, idx) => {
+                                  let prefix = "";
+                                  let nameStyle = { color: 'var(--text)' };
+                                  if (ex.category === 'warmup') {
+                                    prefix = "[WU] ";
+                                    nameStyle.color = '#ff9f43';
+                                  } else if (ex.category === 'cooldown') {
+                                    prefix = "[CD] ";
+                                    nameStyle.color = 'var(--blue)';
+                                  }
+                                  return (
+                                    <div 
+                                      key={ex._id || idx}
+                                      style={{ 
+                                        display: 'flex', 
+                                        justifyContent: 'space-between', 
+                                        alignItems: 'center',
+                                        fontSize: 13,
+                                        color: 'var(--text2)',
+                                        padding: '2px 0'
+                                      }}
+                                    >
+                                      <span style={nameStyle}>{prefix}{idx + 1}. {ex.name}</span>
+                                      <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text3)', fontSize: 12 }}>
+                                        {ex.sets}×{ex.untilFailure ? 'Failure' : ex.reps}{ex.weight > 0 ? ` @ ${ex.weight}${ex.weightUnit}` : ''}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
                                 {(day.exercises || []).length === 0 && (
                                   <div style={{ color: 'var(--text3)', fontSize: 12, fontStyle: 'italic' }}>No exercises in this day</div>
                                 )}

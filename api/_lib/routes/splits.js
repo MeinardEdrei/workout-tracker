@@ -10,16 +10,25 @@ router.use(requireAuth);
 const DAY_ORDER_MAP = { monday: 0, tuesday: 1, wednesday: 2, thursday: 3, friday: 4, saturday: 5, sunday: 6, rest: 7 };
 function getDayOrder(name) { return DAY_ORDER_MAP[name.trim().toLowerCase()] ?? 8; }
 
+const CATEGORY_ORDER_MAP = { warmup: 0, workout: 1, cooldown: 2 };
+const getCategoryOrder = (cat) => CATEGORY_ORDER_MAP[cat] ?? 1;
+const sortExercisesFn = (a, b) => {
+  const catA = getCategoryOrder(a.category);
+  const catB = getCategoryOrder(b.category);
+  if (catA !== catB) return catA - catB;
+  return (a.order ?? 0) - (b.order ?? 0);
+};
+
 function sortExercises(split) {
   const obj = split.toObject();
   obj.days.sort((a, b) => (a.dayOrder ?? 8) - (b.dayOrder ?? 8));
-  obj.days.forEach((d) => d.exercises.sort((a, b) => (a.order ?? 0) - (b.order ?? 0)));
+  obj.days.forEach((d) => d.exercises.sort(sortExercisesFn));
   return obj;
 }
 
 function sortExercisesInDay(day) {
   const obj = day.toObject ? day.toObject() : { ...day };
-  obj.exercises = [...(obj.exercises || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  obj.exercises = [...(obj.exercises || [])].sort(sortExercisesFn);
   return obj;
 }
 
@@ -100,8 +109,8 @@ router.get('/public', async (req, res) => {
       const obj = sortExercises(s);
       obj.days = obj.days.map((d) => ({
         ...d,
-        exercises: d.exercises.map(({ name, sets, reps, untilFailure, muscleTargets, order }) => ({
-          name, sets, reps, untilFailure, muscleTargets, order,
+        exercises: d.exercises.map(({ name, sets, reps, untilFailure, muscleTargets, order, category }) => ({
+          name, sets, reps, untilFailure, muscleTargets, order, category,
         })),
       }));
       return obj;
@@ -226,6 +235,7 @@ router.post('/public/:id/copy', async (req, res) => {
         lastCheckedDate: '',
         order: e.order,
         muscleTargets: e.muscleTargets || [],
+        category: e.category || 'workout',
       })),
     }));
     // Check if the user already has any active split. If not, make this copied one active.
@@ -295,6 +305,7 @@ router.post('/:id/reapply', async (req, res) => {
           muscleTargets: e.muscleTargets || [],
           imageUrl: saved.imageUrl ?? '',
           imageSource: saved.imageSource ?? '',
+          category: e.category || 'workout',
         };
       }),
     }));
@@ -403,6 +414,7 @@ router.post('/:id/days/:dayId/exercises', async (req, res) => {
       imageUrl: req.body.imageUrl || '',
       imageSource: req.body.imageUrl ? 'auto' : '',
       placeholderUsed: req.body.placeholderUsed === true,
+      category: req.body.category || 'workout',
     });
     await split.save();
     res.status(201).json(day.exercises[day.exercises.length - 1]);
@@ -439,7 +451,7 @@ router.put('/:id/days/:dayId/exercises/:exId', async (req, res) => {
     if (!day) return res.status(404).json({ error: 'Day not found' });
     const ex = day.exercises.id(req.params.exId);
     if (!ex) return res.status(404).json({ error: 'Exercise not found' });
-    const fields = ['name', 'sets', 'reps', 'weight', 'weightUnit', 'muscleTargets', 'untilFailure', 'imageUrl', 'imageSource', 'placeholderUsed'];
+    const fields = ['name', 'sets', 'reps', 'weight', 'weightUnit', 'muscleTargets', 'untilFailure', 'imageUrl', 'imageSource', 'placeholderUsed', 'category'];
     fields.forEach((f) => { if (req.body[f] !== undefined) ex[f] = req.body[f]; });
     if (req.body.untilFailure === true) ex.reps = null;
     await split.save();

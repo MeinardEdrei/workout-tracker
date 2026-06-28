@@ -14,6 +14,7 @@ const ExerciseSchema = new mongoose.Schema({
   imageUrl: { type: String, default: '' },
   imageSource: { type: String, enum: ['auto', 'custom', ''], default: '' },
   placeholderUsed: { type: Boolean, default: false },
+  category: { type: String, enum: ['warmup', 'workout', 'cooldown'], default: 'workout' },
 });
 
 const DaySchema = new mongoose.Schema({

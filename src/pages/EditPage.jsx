@@ -438,7 +438,7 @@ function AddDayModal({ existingDays = [], onConfirm, onClose }) {
 
 function AddExerciseModal({ onConfirm, onClose }) {
   const { storage, storageKey } = useStorage();
-  const [form, setForm] = useState({ name: '', sets: 3, reps: 10, weight: 0, weightUnit: 'kg', muscleTargets: [], untilFailure: false, imageUrl: '', placeholderUsed: false });
+  const [form, setForm] = useState({ name: '', sets: 3, reps: 10, weight: 0, weightUnit: 'kg', muscleTargets: [], untilFailure: false, imageUrl: '', placeholderUsed: false, category: 'workout' });
   const [suggestions, setSuggestions] = useState([]);
 
   const { data: logs = [] } = useQuery({
@@ -464,6 +464,7 @@ function AddExerciseModal({ onConfirm, onClose }) {
             weight: ex.weight || 0,
             weightUnit: ex.weightUnit || 'kg',
             untilFailure: ex.untilFailure || false,
+            category: ex.category || 'workout',
             isCustom: true
           });
         }
@@ -518,6 +519,7 @@ function AddExerciseModal({ onConfirm, onClose }) {
         untilFailure: s.untilFailure,
         imageUrl: s.imageUrl || '',
         placeholderUsed: s.placeholderUsed || false,
+        category: s.category || 'workout',
       });
     } else {
       setForm(f => ({ ...f, name: s.name, imageUrl: s.imageUrl || '', placeholderUsed: false }));
@@ -626,6 +628,13 @@ function AddExerciseModal({ onConfirm, onClose }) {
             <PickerPill label="Specific reps" selected={!form.untilFailure} onClick={() => set('untilFailure', false)} small />
             <PickerPill label="Until failure" selected={form.untilFailure} onClick={() => set('untilFailure', true)} small />
           </div>
+
+          <div style={{ ...LABEL, marginBottom: 4 }}>Category</div>
+          <select className="select" style={{ width: '100%', marginBottom: 12 }} value={form.category} onChange={(e) => set('category', e.target.value)}>
+            <option value="workout">Main Workout</option>
+            <option value="warmup">Warm-up</option>
+            <option value="cooldown">Cool Down</option>
+          </select>
 
           <select className="select" style={{ width: '100%', marginBottom: 16 }} value={form.weightUnit} onChange={(e) => set('weightUnit', e.target.value)}>
             <option value="kg">kg</option>
@@ -870,6 +879,7 @@ function EditExerciseModal({ ex, splitId, dayId, onConfirm, onClose, onUpdate })
     weightUnit: ex.weightUnit,
     muscleTargets: ex.muscleTargets || [],
     untilFailure: ex.untilFailure || false,
+    category: ex.category || 'workout',
   });
   const [suggestions, setSuggestions] = useState([]);
   const [currentImageUrl, setCurrentImageUrl] = useState(ex.imageUrl || '');
@@ -901,6 +911,7 @@ function EditExerciseModal({ ex, splitId, dayId, onConfirm, onClose, onUpdate })
             weight: ex.weight || 0,
             weightUnit: ex.weightUnit || 'kg',
             untilFailure: ex.untilFailure || false,
+            category: ex.category || 'workout',
             isCustom: true
           });
         }
@@ -934,6 +945,7 @@ function EditExerciseModal({ ex, splitId, dayId, onConfirm, onClose, onUpdate })
         weightUnit: s.weightUnit,
         muscleTargets: s.muscleTargets,
         untilFailure: s.untilFailure,
+        category: s.category || 'workout',
       });
       setCurrentImageUrl(s.imageUrl);
     } else {
@@ -1145,6 +1157,15 @@ function EditExerciseModal({ ex, splitId, dayId, onConfirm, onClose, onUpdate })
           <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
             <button type="button" className={`btn ${!form.untilFailure ? 'btn-accent' : ''}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setForm(f => ({ ...f, untilFailure: false }))}>Specific reps</button>
             <button type="button" className={`btn ${form.untilFailure ? 'btn-accent' : ''}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setForm(f => ({ ...f, untilFailure: true }))}>Until failure</button>
+          </div>
+
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ ...LABEL, marginBottom: 4 }}>Category</div>
+            <select className="select" style={{ width: '100%', margin: 0 }} value={form.category} onChange={(e) => setForm(f => ({ ...f, category: e.target.value }))}>
+              <option value="workout">Main Workout</option>
+              <option value="warmup">Warm-up</option>
+              <option value="cooldown">Cool Down</option>
+            </select>
           </div>
 
           <div style={{ marginBottom: 12 }}>
@@ -1410,6 +1431,86 @@ function SortableExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdat
   );
 }
 
+function CategoryHeader({ type }) {
+  const config = {
+    warmup: {
+      label: 'Warm-up',
+      subtitle: 'Dynamic prep & muscle activation',
+      color: '#ff9f43',
+      bgColor: 'rgba(255,159,67,0.06)',
+      borderColor: 'rgba(255,159,67,0.15)',
+      icon: (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+        </svg>
+      )
+    },
+    workout: {
+      label: 'Main Workout',
+      subtitle: 'Primary strength & hypertrophy sets',
+      color: 'var(--accent)',
+      bgColor: 'rgba(232,255,90,0.04)',
+      borderColor: 'rgba(232,255,90,0.12)',
+      icon: (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="m6.5 6.5 11 11M21 21l-3-3M3 3l3 3M18.5 5.5l3-3M5.5 18.5l-3 3M8.5 4.5l2-2M17.5 13.5l2-2M13.5 17.5l-2 2M4.5 8.5l-2 2" />
+        </svg>
+      )
+    },
+    cooldown: {
+      label: 'Cool Down',
+      subtitle: 'Stretching, mobility & recovery',
+      color: 'var(--blue)',
+      bgColor: 'rgba(90,240,255,0.04)',
+      borderColor: 'rgba(90,240,255,0.12)',
+      icon: (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z" />
+          <path d="M12 2v10M12 12l-4 4M12 12h10M12 12v10" />
+        </svg>
+      )
+    }
+  };
+
+  const current = config[type] || config.workout;
+
+  return (
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 3,
+      padding: '10px 16px',
+      background: current.bgColor,
+      borderTop: `1px solid ${current.borderColor}`,
+      borderBottom: `1px solid ${current.borderColor}`,
+      marginTop: 18,
+      marginBottom: 10,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: current.color }}>
+        {current.icon}
+        <span style={{
+          fontFamily: 'var(--font-display)',
+          fontSize: 12,
+          fontWeight: 800,
+          letterSpacing: '0.08em',
+          textTransform: 'uppercase',
+        }}>
+          {current.label}
+        </span>
+      </div>
+      <div style={{
+        fontSize: 10,
+        color: 'var(--text2)',
+        fontFamily: 'var(--font-mono)',
+        textTransform: 'uppercase',
+        letterSpacing: '0.02em',
+      }}>
+        {current.subtitle}
+      </div>
+    </div>
+  );
+}
+
 /* ─── Day editor panel ─── */
 function DayEditor({ day, split, onBack, onDayUpdated }) {
   const queryClient = useQueryClient();
@@ -1430,6 +1531,15 @@ function DayEditor({ day, split, onBack, onDayUpdated }) {
   async function handleDragEnd(event) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
+
+    const activeEx = exercises.find((e) => e._id === active.id);
+    const overEx = exercises.find((e) => e._id === over.id);
+    if (!activeEx || !overEx) return;
+
+    const activeCat = activeEx.category || 'workout';
+    const overCat = overEx.category || 'workout';
+
+    if (activeCat !== overCat) return;
 
     const oldIndex = exercises.findIndex((e) => e._id === active.id);
     const newIndex = exercises.findIndex((e) => e._id === over.id);
@@ -1540,20 +1650,75 @@ function DayEditor({ day, split, onBack, onDayUpdated }) {
               <div className="empty-state">No exercises yet.</div>
             ) : (
               <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                <SortableContext items={exercises.map((e) => e._id)} strategy={verticalListSortingStrategy}>
-                  {exercises.map((ex, i) => (
-                    <SortableExerciseEditRow
-                      key={ex._id}
-                      ex={ex}
-                      index={i}
-                      splitId={split._id}
-                      dayId={day._id}
-                      splitDays={split.days}
-                      onUpdate={handleUpdateExercise}
-                      onDelete={handleDeleteExercise}
-                    />
-                  ))}
-                </SortableContext>
+                {(() => {
+                  const warmups = exercises.filter((e) => (e.category || 'workout') === 'warmup');
+                  const workouts = exercises.filter((e) => (e.category || 'workout') === 'workout');
+                  const cooldowns = exercises.filter((e) => (e.category || 'workout') === 'cooldown');
+
+                  return (
+                    <>
+                      {warmups.length > 0 && (
+                        <div style={{ marginBottom: 16 }}>
+                          <CategoryHeader type="warmup" />
+                          <SortableContext items={warmups.map((e) => e._id)} strategy={verticalListSortingStrategy}>
+                            {warmups.map((ex) => (
+                              <SortableExerciseEditRow
+                                key={ex._id}
+                                ex={ex}
+                                index={exercises.indexOf(ex)}
+                                splitId={split._id}
+                                dayId={day._id}
+                                splitDays={split.days}
+                                onUpdate={handleUpdateExercise}
+                                onDelete={handleDeleteExercise}
+                              />
+                            ))}
+                          </SortableContext>
+                        </div>
+                      )}
+
+                      {workouts.length > 0 && (
+                        <div style={{ marginBottom: 16 }}>
+                          <CategoryHeader type="workout" />
+                          <SortableContext items={workouts.map((e) => e._id)} strategy={verticalListSortingStrategy}>
+                            {workouts.map((ex) => (
+                              <SortableExerciseEditRow
+                                key={ex._id}
+                                ex={ex}
+                                index={exercises.indexOf(ex)}
+                                splitId={split._id}
+                                dayId={day._id}
+                                splitDays={split.days}
+                                onUpdate={handleUpdateExercise}
+                                onDelete={handleDeleteExercise}
+                              />
+                            ))}
+                          </SortableContext>
+                        </div>
+                      )}
+
+                      {cooldowns.length > 0 && (
+                        <div style={{ marginBottom: 16 }}>
+                          <CategoryHeader type="cooldown" />
+                          <SortableContext items={cooldowns.map((e) => e._id)} strategy={verticalListSortingStrategy}>
+                            {cooldowns.map((ex) => (
+                              <SortableExerciseEditRow
+                                key={ex._id}
+                                ex={ex}
+                                index={exercises.indexOf(ex)}
+                                splitId={split._id}
+                                dayId={day._id}
+                                splitDays={split.days}
+                                onUpdate={handleUpdateExercise}
+                                onDelete={handleDeleteExercise}
+                              />
+                            ))}
+                          </SortableContext>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </DndContext>
             )}
           </div>

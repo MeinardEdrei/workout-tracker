@@ -21,13 +21,22 @@ function readLogs() {
 }
 function writeLogs(l) { localStorage.setItem(LOGS_KEY, JSON.stringify(l)); }
 
+const CATEGORY_ORDER_MAP = { warmup: 0, workout: 1, cooldown: 2 };
+const getCategoryOrder = (cat) => CATEGORY_ORDER_MAP[cat] ?? 1;
+const sortExercisesFn = (a, b) => {
+  const catA = getCategoryOrder(a.category);
+  const catB = getCategoryOrder(b.category);
+  if (catA !== catB) return catA - catB;
+  return (a.order ?? 0) - (b.order ?? 0);
+};
+
 function sortExercisesInSplits(splits) {
   return splits.map((s) => ({
     ...s,
     days: s.days
       .map((d) => ({
         ...d,
-        exercises: [...(d.exercises || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+        exercises: [...(d.exercises || [])].sort(sortExercisesFn),
       }))
       .sort((a, b) => (a.dayOrder ?? 8) - (b.dayOrder ?? 8)),
   }));
@@ -126,7 +135,7 @@ export function getExercises(splitId, dayId) {
   if (!split) return Promise.reject(new Error('Split not found'));
   const day = split.days.find((d) => d._id === dayId);
   if (!day) return Promise.reject(new Error('Day not found'));
-  return Promise.resolve([...(day.exercises || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)));
+  return Promise.resolve([...(day.exercises || [])].sort(sortExercisesFn));
 }
 
 export function createExercise(splitId, dayId, data) {
@@ -150,6 +159,7 @@ export function createExercise(splitId, dayId, data) {
     imageUrl: data.imageUrl || '',
     imageSource: data.imageUrl ? 'auto' : '',
     placeholderUsed: data.placeholderUsed || false,
+    category: data.category || 'workout',
   };
   if (!day.exercises) day.exercises = [];
   day.exercises.push(ex);
@@ -165,7 +175,7 @@ export function updateExercise(splitId, dayId, exId, data) {
   if (!day) return Promise.reject(new Error('Day not found'));
   const ex = (day.exercises || []).find((e) => e._id === exId);
   if (!ex) return Promise.reject(new Error('Exercise not found'));
-  ['name', 'sets', 'reps', 'weight', 'weightUnit', 'muscleTargets', 'untilFailure', 'imageUrl', 'imageSource', 'placeholderUsed'].forEach((f) => {
+  ['name', 'sets', 'reps', 'weight', 'weightUnit', 'muscleTargets', 'untilFailure', 'imageUrl', 'imageSource', 'placeholderUsed', 'category'].forEach((f) => {
     if (data[f] !== undefined) ex[f] = data[f];
   });
   writeSplits(splits);

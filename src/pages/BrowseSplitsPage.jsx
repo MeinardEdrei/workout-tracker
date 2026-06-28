@@ -240,14 +240,25 @@ export default function BrowseSplitsPage({ onBack }) {
                             </div>
                             {!day.isRest && (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                {(day.exercises || []).map((ex, idx) => (
-                                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: 'var(--text2)', padding: '1px 0' }}>
-                                    <span style={{ color: 'var(--text)' }}>{idx + 1}. {ex.name}</span>
-                                    <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text3)', fontSize: 11 }}>
-                                      {ex.sets}×{ex.untilFailure ? 'Failure' : ex.reps}
-                                    </span>
-                                  </div>
-                                ))}
+                                {(day.exercises || []).map((ex, idx) => {
+                                  let prefix = "";
+                                  let nameStyle = { color: 'var(--text)' };
+                                  if (ex.category === 'warmup') {
+                                    prefix = "[WU] ";
+                                    nameStyle.color = '#ff9f43';
+                                  } else if (ex.category === 'cooldown') {
+                                    prefix = "[CD] ";
+                                    nameStyle.color = 'var(--blue)';
+                                  }
+                                  return (
+                                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: 'var(--text2)', padding: '1px 0' }}>
+                                      <span style={nameStyle}>{prefix}{idx + 1}. {ex.name}</span>
+                                      <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text3)', fontSize: 11 }}>
+                                        {ex.sets}×{ex.untilFailure ? 'Failure' : ex.reps}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
                                 {(day.exercises || []).length === 0 && (
                                   <div style={{ color: 'var(--text3)', fontSize: 11, fontStyle: 'italic' }}>No exercises</div>
                                 )}

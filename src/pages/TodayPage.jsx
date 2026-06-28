@@ -292,6 +292,86 @@ function WeightSyncModal({ exName, oldWeight, newWeight, unit, otherDays, onSync
   );
 }
 
+function CategoryHeader({ type }) {
+  const config = {
+    warmup: {
+      label: 'Warm-up',
+      subtitle: 'Dynamic prep & muscle activation',
+      color: '#ff9f43',
+      bgColor: 'rgba(255,159,67,0.06)',
+      borderColor: 'rgba(255,159,67,0.15)',
+      icon: (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+        </svg>
+      )
+    },
+    workout: {
+      label: 'Main Workout',
+      subtitle: 'Primary strength & hypertrophy sets',
+      color: 'var(--accent)',
+      bgColor: 'rgba(232,255,90,0.04)',
+      borderColor: 'rgba(232,255,90,0.12)',
+      icon: (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="m6.5 6.5 11 11M21 21l-3-3M3 3l3 3M18.5 5.5l3-3M5.5 18.5l-3 3M8.5 4.5l2-2M17.5 13.5l2-2M13.5 17.5l-2 2M4.5 8.5l-2 2" />
+        </svg>
+      )
+    },
+    cooldown: {
+      label: 'Cool Down',
+      subtitle: 'Stretching, mobility & recovery',
+      color: 'var(--blue)',
+      bgColor: 'rgba(90,240,255,0.04)',
+      borderColor: 'rgba(90,240,255,0.12)',
+      icon: (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z" />
+          <path d="M12 2v10M12 12l-4 4M12 12h10M12 12v10" />
+        </svg>
+      )
+    }
+  };
+
+  const current = config[type] || config.workout;
+
+  return (
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 3,
+      padding: '10px 16px',
+      background: current.bgColor,
+      borderTop: `1px solid ${current.borderColor}`,
+      borderBottom: `1px solid ${current.borderColor}`,
+      marginTop: 18,
+      marginBottom: 10,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: current.color }}>
+        {current.icon}
+        <span style={{
+          fontFamily: 'var(--font-display)',
+          fontSize: 12,
+          fontWeight: 800,
+          letterSpacing: '0.08em',
+          textTransform: 'uppercase',
+        }}>
+          {current.label}
+        </span>
+      </div>
+      <div style={{
+        fontSize: 10,
+        color: 'var(--text2)',
+        fontFamily: 'var(--font-mono)',
+        textTransform: 'uppercase',
+        letterSpacing: '0.02em',
+      }}>
+        {current.subtitle}
+      </div>
+    </div>
+  );
+}
+
 function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly, isCompleted }) {
   const queryClient = useQueryClient();
   const { storage, storageKey } = useStorage();
@@ -978,7 +1058,8 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
           imageUrl: defaultEx?.imageUrl,
           muscleTargets: defaultEx?.muscleTargets || [],
           checked: true,
-          lastCheckedDate: dateStr
+          lastCheckedDate: dateStr,
+          category: logEx.category || defaultEx?.category || 'workout'
         };
       })
     : exercises;
@@ -1001,7 +1082,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
 
   function handleFinish() {
     const done = exercises.filter((e) => e.lastCheckedDate === TODAY_STR && e.checked);
-    saveLogMutation.mutate({ date: TODAY_STR, splitName, dayName: day.name, dayTag: day.tag || '', exercises: done.map((e) => ({ name: e.name, sets: e.sets, reps: e.reps, weight: e.weight, weightUnit: e.weightUnit })) });
+    saveLogMutation.mutate({ date: TODAY_STR, splitName, dayName: day.name, dayTag: day.tag || '', exercises: done.map((e) => ({ name: e.name, sets: e.sets, reps: e.reps, weight: e.weight, weightUnit: e.weightUnit, category: e.category || 'workout' })) });
     setShowConfirmFinish(false);
   }
 
@@ -1055,9 +1136,42 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
             {displayExercises.length === 0 ? (
               <div className="empty-state" style={{ padding: '20px' }}>No exercises yet</div>
             ) : (
-              displayExercises.map((ex, i) => (
-                <ExerciseRow key={ex._id || i} ex={ex} index={i} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} />
-              ))
+              (() => {
+                const warmups = displayExercises.filter((e) => (e.category || 'workout') === 'warmup');
+                const workouts = displayExercises.filter((e) => (e.category || 'workout') === 'workout');
+                const cooldowns = displayExercises.filter((e) => (e.category || 'workout') === 'cooldown');
+
+                return (
+                  <>
+                    {warmups.length > 0 && (
+                      <div>
+                        <CategoryHeader type="warmup" />
+                        {warmups.map((ex, i) => (
+                          <ExerciseRow key={ex._id || i} ex={ex} index={displayExercises.indexOf(ex)} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} />
+                        ))}
+                      </div>
+                    )}
+
+                    {workouts.length > 0 && (
+                      <div>
+                        <CategoryHeader type="workout" />
+                        {workouts.map((ex, i) => (
+                          <ExerciseRow key={ex._id || i} ex={ex} index={displayExercises.indexOf(ex)} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} />
+                        ))}
+                      </div>
+                    )}
+
+                    {cooldowns.length > 0 && (
+                      <div>
+                        <CategoryHeader type="cooldown" />
+                        {cooldowns.map((ex, i) => (
+                          <ExerciseRow key={ex._id || i} ex={ex} index={displayExercises.indexOf(ex)} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} />
+                        ))}
+                      </div>
+                    )}
+                  </>
+                );
+              })()
             )}
             {checkedCount > 0 && isToday && !isCompleted && (
               <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)' }}>
@@ -1176,7 +1290,8 @@ export default function TodayPage() {
             sets: e.sets,
             reps: e.reps,
             weight: e.weight,
-            weightUnit: e.weightUnit
+            weightUnit: e.weightUnit,
+            category: e.category || 'workout'
           }))
         }).then(() => {
           if (!logsInvalidated) {
