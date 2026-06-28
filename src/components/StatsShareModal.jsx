@@ -16,6 +16,68 @@ function getWeekDates() {
   });
 }
 
+function getGymBroStatus(completedDays) {
+  if (completedDays === 0) {
+    return {
+      status: 'Couch Potato',
+      verdict: 'Gravity won this week. Go touch some iron.',
+      badgeColor: '#ff4444',
+    };
+  } else if (completedDays <= 2) {
+    return {
+      status: 'Pump Chaser',
+      verdict: 'A pump was chased. Respectable, but the iron gods are watching.',
+      badgeColor: '#ff9f43',
+    };
+  } else if (completedDays <= 4) {
+    return {
+      status: 'Iron Disciple',
+      verdict: 'Consistency is cooking. Your sleeves are getting nervous.',
+      badgeColor: '#5af0ff',
+    };
+  } else if (completedDays <= 6) {
+    return {
+      status: 'Absolute Beast',
+      verdict: 'Gorilla mode active. Gravity was personally offended.',
+      badgeColor: '#e8ff5a',
+    };
+  } else {
+    return {
+      status: 'CNS Demolisher',
+      verdict: 'Bro, sleep. Your central nervous system has left the chat.',
+      badgeColor: '#a55eea',
+    };
+  }
+}
+
+function getVolumeComparison(volumeKg) {
+  if (volumeKg === 0) {
+    return {
+      tons: '0.00',
+      comparison: '0 Honda Civics (go lift something)',
+    };
+  }
+  const tons = volumeKg / 1000;
+  let comparison = '';
+  if (volumeKg < 1000) {
+    comparison = `≈ ${Math.round(volumeKg / 12)} watermelons`;
+  } else if (volumeKg < 3000) {
+    comparison = `≈ ${(volumeKg / 1300).toFixed(1)} Honda Civics`;
+  } else if (volumeKg < 8000) {
+    comparison = `≈ ${(volumeKg / 5000).toFixed(1)} T-Rexes`;
+  } else if (volumeKg < 15000) {
+    comparison = `≈ ${(volumeKg / 6000).toFixed(1)} African Elephants`;
+  } else if (volumeKg < 30000) {
+    comparison = `≈ ${(volumeKg / 12000).toFixed(1)} City Buses`;
+  } else {
+    comparison = `≈ ${(volumeKg / 70000).toFixed(1)} Space Shuttles`;
+  }
+  return {
+    tons: tons.toFixed(2),
+    comparison,
+  };
+}
+
 function CloseIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -94,13 +156,16 @@ export default function StatsShareModal({ logs, onClose }) {
       : `${totalVolume} kg`
     : '—';
 
+  const { tons, comparison: volComparison } = useMemo(() => getVolumeComparison(totalVolume), [totalVolume]);
+  const { status: gymBroStatus, verdict: gymBroVerdict, badgeColor: statusBadgeColor } = useMemo(() => getGymBroStatus(completed), [completed]);
+
   const weekStart = new Date(weekDates[0] + 'T12:00:00');
   const weekEnd = new Date(weekDates[6] + 'T12:00:00');
   const weekLabel = `${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
 
   // Styling maps
   const bgStyles = {
-    dark: { background: '#0d0d0d', color: '#ffffff' },
+    dark: { background: 'linear-gradient(180deg, #111111 0%, #050505 100%)', color: '#ffffff' },
     sunset: { background: 'linear-gradient(135deg, #ff3366 0%, #ff9933 100%)', color: '#ffffff' },
     ocean: { background: 'linear-gradient(135deg, #00f2fe 0%, #4facfe 100%)', color: '#ffffff' },
     transparent: { background: 'transparent', color: '#ffffff', border: '1px solid rgba(255, 255, 255, 0.2)' },
@@ -232,39 +297,71 @@ export default function StatsShareModal({ logs, onClose }) {
               justifyContent: 'space-between',
               fontFamily: "'Outfit', 'Inter', sans-serif",
               position: 'relative',
-              boxShadow: background !== 'transparent' ? '0 10px 30px rgba(0,0,0,0.4)' : 'none',
+              boxShadow: background !== 'transparent' ? `0 0 30px rgba(${accent === 'lime' ? '232,255,90' : accent === 'coral' ? '255,107,107' : accent === 'cyan' ? '0,240,255' : '255,255,255'}, 0.12)` : 'none',
+              border: background === 'transparent' ? '1.5px solid rgba(255, 255, 255, 0.2)' : 'none',
               ...bgStyles[background],
               transition: 'background 0.25s, color 0.25s',
             }}
           >
             {/* Header section */}
             <div>
-              <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.16em', textTransform: 'uppercase', color: background === 'dark' ? activeAccent : 'rgba(255,255,255,0.7)', marginBottom: 2 }}>
-                Weekly Recap
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                <div>
+                  <span style={{
+                    background: background === 'dark' ? statusBadgeColor : '#ffffff',
+                    color: '#000000',
+                    padding: '3px 9px',
+                    borderRadius: 20,
+                    fontSize: 8.5,
+                    fontWeight: 900,
+                    fontFamily: 'var(--font-mono)',
+                    letterSpacing: '0.06em',
+                    textTransform: 'uppercase',
+                    display: 'inline-block',
+                    boxShadow: background === 'dark' ? `0 2px 8px ${statusBadgeColor}33` : 'none',
+                  }}>
+                    {gymBroStatus}
+                  </span>
+                </div>
+                <div style={{ fontSize: 9, opacity: 0.6, fontFamily: 'var(--font-mono)', color: '#ffffff', fontWeight: 500 }}>
+                  {weekLabel}
+                </div>
               </div>
-              <div style={{ fontSize: format === '1:1' ? 26 : 30, fontWeight: 900, textTransform: 'uppercase', lineHeight: 1.1, letterSpacing: '-0.02em', color: '#ffffff' }}>
-                {completed} Workout{completed !== 1 ? 's' : ''}
-              </div>
-              <div style={{ fontSize: 11, opacity: 0.6, marginTop: 4, fontWeight: 500, letterSpacing: '0.02em', color: '#ffffff' }}>
-                {weekLabel}
+              <div style={{ fontSize: format === '1:1' ? 24 : 28, fontWeight: 900, textTransform: 'uppercase', lineHeight: 1.1, letterSpacing: '-0.02em', color: '#ffffff', fontFamily: 'var(--font-display)', marginBottom: 2 }}>
+                Weekly Iron Report
               </div>
             </div>
 
             {/* Middle Stats */}
-            <div style={{ margin: format === '1:1' ? '12px 0' : '24px 0', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-              <div style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 9, opacity: 0.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#ffffff' }}>Volume</div>
-                  <div style={{ fontSize: 22, fontWeight: 900, color: background === 'dark' ? activeAccent : '#ffffff', letterSpacing: '-0.02em' }}>{volLabel}</div>
+            <div style={{ margin: format === '1:1' ? '10px 0' : '20px 0', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+              
+              {/* Tonnage and Attendance side-by-side */}
+              <div style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
+                <div style={{ flex: 1, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: '10px 12px' }}>
+                  <div style={{ fontSize: 8, opacity: 0.5, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#ffffff', marginBottom: 2 }}>Weight Moved</div>
+                  <div style={{ fontSize: 18, fontWeight: 900, color: background === 'dark' ? activeAccent : '#ffffff', letterSpacing: '-0.01em', fontFamily: 'var(--font-mono)' }}>{volLabel}</div>
                 </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 9, opacity: 0.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#ffffff' }}>Days Active</div>
-                  <div style={{ fontSize: 22, fontWeight: 900, color: '#ffffff', letterSpacing: '-0.02em' }}>{completed}/7</div>
+                <div style={{ flex: 1, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: '10px 12px' }}>
+                  <div style={{ fontSize: 8, opacity: 0.5, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#ffffff', marginBottom: 2 }}>Gym Attendance</div>
+                  <div style={{ fontSize: 18, fontWeight: 900, color: '#ffffff', letterSpacing: '-0.01em', fontFamily: 'var(--font-mono)' }}>{completed}/7 Days</div>
                 </div>
               </div>
 
-              {/* Active Days check strip */}
-              <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
+              {/* Absurd Comparison Box */}
+              <div style={{
+                background: 'rgba(255,255,255,0.02)',
+                border: `1px dashed ${background === 'dark' ? `${activeAccent}33` : 'rgba(255,255,255,0.2)'}`,
+                borderRadius: 12,
+                padding: '12px 14px',
+                marginBottom: 14,
+                textAlign: 'center',
+              }}>
+                <div style={{ fontSize: 8, opacity: 0.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#ffffff', marginBottom: 3 }}>Absurd Tonnage Equivalent</div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: background === 'dark' ? activeAccent : '#ffffff', textTransform: 'uppercase', letterSpacing: '0.01em' }}>{volComparison}</div>
+              </div>
+
+              {/* Active Days Check Strip */}
+              <div style={{ display: 'flex', gap: 5, marginBottom: 14 }}>
                 {weekDates.map((d, i) => {
                   const done = !!logByDate[d];
                   const isToday = d === today;
@@ -272,40 +369,64 @@ export default function StatsShareModal({ logs, onClose }) {
                     <div key={d} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
                       <div style={{
                         width: '100%',
-                        height: 22,
-                        borderRadius: 6,
-                        background: done ? activeAccent : 'rgba(255,255,255,0.08)',
-                        border: isToday && !done ? '1.5px solid rgba(255,255,255,0.3)' : 'none',
+                        height: 20,
+                        borderRadius: 5,
+                        background: done ? activeAccent : 'rgba(255,255,255,0.06)',
+                        border: isToday && !done ? `1.5px solid ${activeAccent}` : 'none',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        color: done ? '#000000' : 'rgba(255,255,255,0.3)',
+                        color: done ? '#000000' : 'rgba(255,255,255,0.2)',
                         fontSize: 9,
-                        fontWeight: 800,
+                        fontWeight: 900,
                       }}>
-                        {done && (
-                          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                            <polyline points="1.5,5 4.5,8 8.5,2" stroke="#000000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                          </svg>
+                        {done ? (
+                          <span style={{ fontSize: 9 }}>✓</span>
+                        ) : (
+                          <span style={{ opacity: 0.3 }}>·</span>
                         )}
                       </div>
-                      <div style={{ fontSize: 8, fontWeight: 700, opacity: 0.5, color: '#ffffff' }}>{DAYS_SHORT[i].slice(0, 1)}</div>
+                      <div style={{ fontSize: 8, fontWeight: 700, opacity: 0.4, color: '#ffffff', fontFamily: 'var(--font-mono)' }}>{DAYS_SHORT[i].slice(0, 1)}</div>
                     </div>
                   );
                 })}
               </div>
 
-              {/* Workouts Completed / Focus */}
+              {/* Gym Bro Verdict Callout */}
+              <div style={{
+                background: 'rgba(255,255,255,0.03)',
+                borderLeft: `3px solid ${background === 'dark' ? activeAccent : '#ffffff'}`,
+                borderRadius: '0 8px 8px 0',
+                padding: '10px 14px',
+                margin: '4px 0',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+              }}>
+                <div style={{ fontSize: 8, opacity: 0.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#ffffff', marginBottom: 4 }}>GYM BRO VERDICT</div>
+                <div style={{
+                  fontStyle: 'italic',
+                  fontSize: 11,
+                  color: 'rgba(255, 255, 255, 0.95)',
+                  lineHeight: 1.4,
+                  fontFamily: 'var(--font-mono)',
+                }}>
+                  "{gymBroVerdict}"
+                </div>
+              </div>
+
+              {/* Workouts Completed / Focus in Story Format */}
               {format === '9:16' && logs && logs.length > 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 12 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10, borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 12 }}>
+                  <div style={{ fontSize: 8, opacity: 0.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#ffffff', marginBottom: 2 }}>Sessions Completed</div>
                   {logs.slice(0, 3).map((log, i) => (
-                    <div key={log._id || i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div key={log._id || i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.02)', padding: '6px 10px', borderRadius: 6 }}>
                       <div>
-                        <div style={{ fontSize: 12, fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.01em' }}>{log.dayName.split('—')[0].trim()}</div>
-                        {log.dayTag && <div style={{ fontSize: 9, opacity: 0.5, color: '#ffffff' }}>{log.dayTag}</div>}
+                        <div style={{ fontSize: 11, fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.01em' }}>{log.dayName.split('—')[0].trim()}</div>
+                        {log.dayTag && <div style={{ fontSize: 8, opacity: 0.4, color: '#ffffff' }}>{log.dayTag}</div>}
                       </div>
-                      <div style={{ fontSize: 10, opacity: 0.6, fontWeight: 700, fontFamily: 'monospace', color: '#ffffff' }}>
-                        {log.totalVolume > 0 ? `${log.totalVolume >= 1000 ? (log.totalVolume/1000).toFixed(1)+'k' : log.totalVolume} kg` : `${log.exercises.length} exercises`}
+                      <div style={{ fontSize: 9, opacity: 0.7, fontWeight: 700, fontFamily: 'var(--font-mono)', color: activeAccent }}>
+                        {log.totalVolume > 0 ? `${log.totalVolume >= 1000 ? (log.totalVolume/1000).toFixed(1)+'k' : log.totalVolume} kg` : `${log.exercises.length} exs`}
                       </div>
                     </div>
                   ))}
@@ -314,14 +435,14 @@ export default function StatsShareModal({ logs, onClose }) {
             </div>
 
             {/* Bottom Footer Section */}
-            <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, marginTop: 10 }}>
               <div>
-                <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', color: background === 'dark' ? activeAccent : '#ffffff', textTransform: 'uppercase' }}>💪 WORKOUT TRACKER</span>
+                <span style={{ fontSize: 9, fontWeight: 900, letterSpacing: '0.08em', color: background === 'dark' ? activeAccent : '#ffffff', textTransform: 'uppercase', fontFamily: 'var(--font-mono)' }}>💪 ANATOMICALLY CORRECT</span>
               </div>
               {topTag && (
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: 7, opacity: 0.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#ffffff' }}>TOP FOCUS</div>
-                  <div style={{ fontSize: 9, fontWeight: 800, color: '#ffffff', textTransform: 'uppercase' }}>{topTag}</div>
+                  <span style={{ fontSize: 8, opacity: 0.5, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#ffffff', marginRight: 4 }}>MAIN FOCUS:</span>
+                  <span style={{ fontSize: 9, fontWeight: 900, color: '#ffffff', textTransform: 'uppercase' }}>{topTag}</span>
                 </div>
               )}
             </div>
