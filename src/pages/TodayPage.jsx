@@ -1012,6 +1012,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
   const [sharing, setSharing] = useState(false);
   const shareCardRef = useRef(null);
   const [showConfirmFinish, setShowConfirmFinish] = useState(false);
+  const [isRetaking, setIsRetaking] = useState(false);
 
 
   useEffect(() => {
@@ -1047,7 +1048,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
 
   const isCompleted = !!logForDate;
   const isPast = dateStr < TODAY_STR;
-  const readOnly = isPast || isCompleted || !isToday;
+  const readOnly = (isPast && !isRetaking) || isCompleted || !isToday;
 
   const displayExercises = isCompleted
     ? logForDate.exercises.map(logEx => {
@@ -1074,6 +1075,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
   const saveLogMutation = useMutation({
     mutationFn: (logData) => storage.saveLog(logData),
     onSuccess: (saved) => {
+      setIsRetaking(false);
       setCompletedLog(saved);
       queryClient.invalidateQueries({ queryKey: ['logs'] });
     },
@@ -1082,20 +1084,20 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
 
   function handleFinish() {
     const done = exercises.filter((e) => e.lastCheckedDate === TODAY_STR && e.checked);
-    saveLogMutation.mutate({ date: TODAY_STR, splitName, dayName: day.name, dayTag: day.tag || '', exercises: done.map((e) => ({ name: e.name, sets: e.sets, reps: e.reps, weight: e.weight, weightUnit: e.weightUnit, category: e.category || 'workout' })) });
+    saveLogMutation.mutate({ date: dateStr, splitName, dayName: day.name, dayTag: day.tag || '', exercises: done.map((e) => ({ name: e.name, sets: e.sets, reps: e.reps, weight: e.weight, weightUnit: e.weightUnit, category: e.category || 'workout' })) });
     setShowConfirmFinish(false);
   }
 
   async function handleShare() {
     setSharing(true);
-    try { await captureAndShare(shareCardRef, `workout-${TODAY_STR}.png`, `${day.name} — Workout Complete`); }
+    try { await captureAndShare(shareCardRef, `workout-${dateStr}.png`, `${day.name} — Workout Complete`); }
     finally { setSharing(false); }
   }
 
 
   return (
     <>
-      <div style={{ margin: '0 16px 12px', borderRadius: 10, border: `1px solid ${isToday ? 'var(--accent)' : 'var(--border)'}`, overflow: 'hidden', background: 'var(--bg2)' }}>
+      <div style={{ margin: '0 16px 12px', borderRadius: 10, border: `1px solid ${(isToday || isRetaking) ? 'var(--accent)' : 'var(--border)'}`, overflow: 'hidden', background: 'var(--bg2)' }}>
         <button
           onClick={() => !day.isRest && setOpen((o) => !o)}
           style={{ width: '100%', background: isToday ? 'rgba(232,255,90,0.04)' : 'transparent', border: 'none', cursor: day.isRest ? 'default' : 'pointer', padding: '16px 16px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, textAlign: 'left' }}
@@ -1104,7 +1106,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
             {isToday && (
               <div style={{ fontSize: 8, fontWeight: 900, letterSpacing: '0.18em', background: 'var(--accent)', color: '#0a0a0a', padding: '2px 6px', borderRadius: 2, textTransform: 'uppercase', display: 'inline-block', marginBottom: 6 }}>TODAY</div>
             )}
-            <div style={{ fontSize: 28, fontWeight: 900, fontFamily: 'var(--font-display)', letterSpacing: '0.02em', textTransform: 'uppercase', lineHeight: 1, color: isToday ? 'var(--accent)' : day.isRest ? 'var(--text3)' : 'var(--text)' }}>
+            <div style={{ fontSize: 28, fontWeight: 900, fontFamily: 'var(--font-display)', letterSpacing: '0.02em', textTransform: 'uppercase', lineHeight: 1, color: (isToday || isRetaking) ? 'var(--accent)' : day.isRest ? 'var(--text3)' : 'var(--text)' }}>
               {day.name}
             </div>
             {day.tag && <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 5, fontWeight: 500 }}>{day.tag}</div>}
@@ -1117,7 +1119,18 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
                 {isCompleted ? (
                   <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--green)', letterSpacing: '0.08em', textTransform: 'uppercase', background: 'rgba(68,255,136,0.1)', padding: '4px 8px', borderRadius: 4 }}>✓ Done</span>
                 ) : isPast ? (
-                  <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', background: 'rgba(255,255,255,0.03)', padding: '4px 8px', borderRadius: 4 }}>Skipped</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {isRetaking && total > 0 && (
+                      <span style={{ fontSize: 16, fontWeight: 900, fontFamily: 'var(--font-mono)', color: checkedCount === total ? 'var(--green)' : checkedCount > 0 ? 'var(--accent)' : 'var(--text3)' }}>
+                        {checkedCount}<span style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 400 }}>/{total}</span>
+                      </span>
+                    )}
+                    {isRetaking ? (
+                      <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--accent)', letterSpacing: '0.08em', textTransform: 'uppercase', background: 'rgba(232,255,90,0.1)', border: '1.5px solid var(--accent)', padding: '4px 8px', borderRadius: 4 }}>Retaking</span>
+                    ) : (
+                      <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', background: 'rgba(255,255,255,0.03)', padding: '4px 8px', borderRadius: 4 }}>Skipped</span>
+                    )}
+                  </div>
                 ) : total > 0 ? (
                   <span style={{ fontSize: 18, fontWeight: 900, fontFamily: 'var(--font-mono)', color: checkedCount === total ? 'var(--green)' : checkedCount > 0 ? 'var(--accent)' : 'var(--text3)' }}>
                     {checkedCount}<span style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 400 }}>/{total}</span>
@@ -1173,11 +1186,18 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
                 );
               })()
             )}
-            {checkedCount > 0 && isToday && !isCompleted && (
-              <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)' }}>
-                <button className="btn btn-accent" style={{ width: '100%', fontSize: 14, padding: '12px' }} onClick={() => setShowConfirmFinish(true)} disabled={saveLogMutation.isPending}>
-                  {saveLogMutation.isPending ? 'Saving…' : `✓ Finish Workout (${checkedCount} done)`}
-                </button>
+            {(isToday || isRetaking) && !isCompleted && (
+              <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', display: 'flex', gap: 8 }}>
+                {checkedCount > 0 ? (
+                  <button className="btn btn-accent" style={{ flex: 1, fontSize: 14, padding: '12px' }} onClick={() => setShowConfirmFinish(true)} disabled={saveLogMutation.isPending}>
+                    {saveLogMutation.isPending ? 'Saving…' : `✓ Finish Workout (${checkedCount} done)`}
+                  </button>
+                ) : null}
+                {isRetaking && (
+                  <button className="btn btn-ghost" style={{ flex: checkedCount > 0 ? 0.4 : 1, fontSize: 14, padding: '12px' }} onClick={() => setIsRetaking(false)}>
+                    Cancel
+                  </button>
+                )}
               </div>
             )}
             
@@ -1201,17 +1221,31 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
               </div>
             )}
             
-            {isPast && !isCompleted && (
+            {isPast && !isCompleted && !isRetaking && (
               <div style={{ 
-                padding: '12px 16px', 
+                padding: '16px', 
                 borderTop: '1px solid var(--border)', 
                 background: 'rgba(255,255,255,0.01)',
                 textAlign: 'center',
                 fontSize: 12,
                 color: 'var(--text3)',
-                marginTop: 12
+                marginTop: 12,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 12
               }}>
-                This day has passed. Exercises are in view-only mode.
+                <div>This day has passed. Exercises are in view-only mode.</div>
+                <button 
+                  className="btn btn-accent" 
+                  style={{ padding: '8px 16px', fontSize: 12, fontWeight: 700 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsRetaking(true);
+                  }}
+                >
+                  Retake Workout
+                </button>
               </div>
             )}
           </div>
