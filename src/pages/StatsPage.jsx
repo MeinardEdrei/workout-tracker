@@ -388,12 +388,17 @@ function ProgressionCard({ exercise }) {
   const first = weightedSessions[0];
   const last = weightedSessions[weightedSessions.length - 1];
 
+  const firstConverted = first && last ? convertWeight(first.weight, first.weightUnit, last.weightUnit) : 0;
   const trend = !first || !last ? '→'
-    : last.weight > first.weight ? '↑'
-    : last.weight < first.weight ? '↓' : '→';
+    : last.weight > firstConverted ? '↑'
+    : last.weight < firstConverted ? '↓' : '→';
   const trendColor = trend === '↑' ? 'var(--green)' : trend === '↓' ? 'var(--red)' : 'var(--text3)';
 
-  const maxW = Math.max(...last6.map((s) => s.weight || 0), 1);
+  const last6Converted = last ? last6.map(s => ({
+    ...s,
+    weightInLastUnit: convertWeight(s.weight, s.weightUnit, last.weightUnit)
+  })) : [];
+  const maxW = Math.max(...last6Converted.map((s) => s.weightInLastUnit || 0), 1);
 
   return (
     <div style={{ marginBottom: 8, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--bg2)', overflow: 'hidden' }}>
@@ -410,16 +415,16 @@ function ProgressionCard({ exercise }) {
             <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text3)', marginTop: 3 }}>
               <span>{first.weight}{first.weightUnit}</span>
               <span style={{ color: trendColor, margin: '0 5px', fontWeight: 700 }}>{trend}</span>
-              <span style={{ color: last.weight > first.weight ? 'var(--green)' : 'var(--text2)', fontWeight: 700 }}>{last.weight}{last.weightUnit}</span>
+              <span style={{ color: last.weight > firstConverted ? 'var(--green)' : 'var(--text2)', fontWeight: 700 }}>{last.weight}{last.weightUnit}</span>
             </div>
           )}
         </div>
 
         {/* Mini weight dots */}
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 28, flexShrink: 0 }}>
-          {last6.map((s, i) => {
-            const h = maxW > 0 ? Math.max(4, Math.round((s.weight / maxW) * 28)) : 4;
-            const isLast = i === last6.length - 1;
+          {last6Converted.map((s, i) => {
+            const h = maxW > 0 ? Math.max(4, Math.round((s.weightInLastUnit / maxW) * 28)) : 4;
+            const isLast = i === last6Converted.length - 1;
             return (
               <div key={i} style={{ width: 6, height: h, borderRadius: 2, background: isLast ? 'var(--accent)' : 'var(--border2)', transition: 'height 0.2s' }} />
             );
@@ -435,14 +440,26 @@ function ProgressionCard({ exercise }) {
             const d = new Date(s.date + 'T12:00:00');
             const label = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
             const prev = sessions[i - 1];
-            const delta = prev && prev.weight > 0 && s.weight > 0 ? s.weight - prev.weight : null;
+            
+            let deltaFormatted = null;
+            let deltaColor = 'var(--text3)';
+            if (prev && prev.weight > 0 && s.weight > 0) {
+              const prevWConverted = convertWeight(prev.weight, prev.weightUnit, s.weightUnit);
+              const delta = s.weight - prevWConverted;
+              if (Math.abs(delta) >= 0.05) {
+                const roundedDelta = parseFloat(delta.toFixed(1));
+                deltaFormatted = roundedDelta > 0 ? `+${roundedDelta}` : `${roundedDelta}`;
+                deltaColor = roundedDelta > 0 ? 'var(--green)' : 'var(--red)';
+              }
+            }
+            
             return (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 14px', borderBottom: i < sessions.length - 1 ? '1px solid var(--border)' : 'none' }}>
                 <div style={{ fontSize: 12, color: 'var(--text2)', fontFamily: 'var(--font-mono)' }}>{label}</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {delta !== null && (
-                    <span style={{ fontSize: 10, fontWeight: 700, color: delta > 0 ? 'var(--green)' : delta < 0 ? 'var(--red)' : 'var(--text3)', fontFamily: 'var(--font-mono)' }}>
-                      {delta > 0 ? `+${delta}` : delta}
+                  {deltaFormatted !== null && (
+                    <span style={{ fontSize: 10, fontWeight: 700, color: deltaColor, fontFamily: 'var(--font-mono)' }}>
+                      {deltaFormatted}
                     </span>
                   )}
                   <span style={{ fontSize: 14, fontWeight: 900, fontFamily: 'var(--font-mono)', color: s.weight > 0 ? 'var(--accent)' : 'var(--text3)' }}>
