@@ -13,6 +13,13 @@ const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frid
 const TODAY_DOW = new Date().getDay();
 const TODAY_STR = new Date().toISOString().slice(0, 10);
 
+function convertWeight(weight, fromUnit, toUnit) {
+  if (fromUnit === toUnit) return weight;
+  if (fromUnit === 'kg' && toUnit === 'lbs') return weight * 2.20462;
+  if (fromUnit === 'lbs' && toUnit === 'kg') return weight / 2.20462;
+  return weight;
+}
+
 function CheckIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -245,11 +252,12 @@ That's a good question! To give you a specific recommendation, what part of your
 - Feel free to ask more specific questions about volume, alternatives, or training frequency!`;
 }
 
-function WeightSyncModal({ exName, oldWeight, newWeight, unit, otherDays, onSync, onSkip }) {
-  const delta = newWeight - oldWeight;
+function WeightSyncModal({ exName, oldWeight, oldUnit, newWeight, newUnit, otherDays, onSync, onSkip }) {
+  const oldWInNewUnit = convertWeight(oldWeight, oldUnit, newUnit);
+  const delta = newWeight - oldWInNewUnit;
   const isIncrease = delta > 0;
-  const direction = isIncrease ? 'increase' : 'decrease';
   const directionColor = isIncrease ? 'var(--green)' : '#f87171';
+  const deltaFormatted = Math.abs(delta).toFixed(1);
 
   return createPortal(
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onSkip()}>
@@ -258,16 +266,16 @@ function WeightSyncModal({ exName, oldWeight, newWeight, unit, otherDays, onSync
         <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 12, lineHeight: 1.5 }}>
           <strong style={{ color: 'var(--text)' }}>{exName}</strong>
           {' '}changed from{' '}
-          <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text)' }}>{oldWeight}{unit}</span>
+          <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text)' }}>{oldWeight}{oldUnit}</span>
           {' → '}
-          <span style={{ fontFamily: 'var(--font-mono)', color: directionColor, fontWeight: 700 }}>{newWeight}{unit}</span>
+          <span style={{ fontFamily: 'var(--font-mono)', color: directionColor, fontWeight: 700 }}>{newWeight}{newUnit}</span>
           {' '}
           <span style={{
             fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
             background: isIncrease ? 'rgba(68,255,136,0.12)' : 'rgba(248,113,113,0.12)',
             color: directionColor, padding: '2px 6px', borderRadius: 4,
           }}>
-            {isIncrease ? `+${delta}${unit} increase` : `${delta}${unit} decrease`}
+            {isIncrease ? `+${deltaFormatted}${newUnit} increase` : `-${deltaFormatted}${newUnit} decrease`}
           </span>
         </div>
         <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 16 }}>
@@ -409,7 +417,11 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
 
       const newW = +weight;
       const oldW = ex.weight ?? 0;
-      if (newW === oldW) return;
+      const newUnit = unit;
+      const oldUnit = ex.weightUnit || 'kg';
+      
+      const oldWConverted = convertWeight(oldW, oldUnit, newUnit);
+      if (Math.abs(newW - oldWConverted) < 0.01) return;
 
       // Find other days that have the same exercise name
       const otherDays = (splitDays || [])
@@ -421,7 +433,13 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
         );
 
       if (otherDays.length > 0) {
-        setSyncPrompt({ otherDays, oldWeight: oldW, newWeight: newW, unit });
+        setSyncPrompt({ 
+          otherDays, 
+          oldWeight: oldW, 
+          oldUnit: oldUnit,
+          newWeight: newW, 
+          newUnit: newUnit 
+        });
       }
     },
   });
@@ -437,7 +455,7 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
   async function handleSync() {
     if (!syncPrompt) return;
     for (const { dayId: dId, exId } of syncPrompt.otherDays) {
-      await storage.updateExercise(splitId, dId, exId, { weight: syncPrompt.newWeight, weightUnit: syncPrompt.unit });
+      await storage.updateExercise(splitId, dId, exId, { weight: syncPrompt.newWeight, weightUnit: syncPrompt.newUnit });
     }
     queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
     setSyncPrompt(null);
@@ -548,8 +566,9 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
         <WeightSyncModal
           exName={ex.name}
           oldWeight={syncPrompt.oldWeight}
+          oldUnit={syncPrompt.oldUnit}
           newWeight={syncPrompt.newWeight}
-          unit={syncPrompt.unit}
+          newUnit={syncPrompt.newUnit}
           otherDays={syncPrompt.otherDays}
           onSync={handleSync}
           onSkip={() => setSyncPrompt(null)}
@@ -578,7 +597,20 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
             />
             <select
               value={weightUnit}
-              onChange={(e) => setWeightUnit(e.target.value)}
+              onChange={(e) => {
+                const nextUnit = e.target.value;
+                const prevUnit = weightUnit;
+                setWeightUnit(nextUnit);
+                
+                // Convert current input weight value if it's a valid number
+                const num = parseFloat(weightVal);
+                if (!isNaN(num) && num > 0) {
+                  const converted = convertWeight(num, prevUnit, nextUnit);
+                  // Round to 1 decimal place or nearest 0.5 for clean presentation
+                  const rounded = Math.round(converted * 2) / 2;
+                  setWeightVal(String(rounded));
+                }
+              }}
               style={{
                 padding: '5px 4px', borderRadius: 6, border: '1px solid var(--border2)',
                 background: 'var(--bg3)', color: 'var(--text2)', fontSize: 11, outline: 'none',

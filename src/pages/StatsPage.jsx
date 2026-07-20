@@ -458,12 +458,33 @@ function ProgressionCard({ exercise }) {
   );
 }
 
-/* ─── Derive volume unit from a log's exercises (returns 'kg', 'lbs', or 'mixed') ─── */
-function volUnit(exercises) {
-  const units = [...new Set((exercises || []).filter((e) => e.weight > 0).map((e) => e.weightUnit || 'kg'))];
-  if (units.length === 0) return 'kg';
-  if (units.length === 1) return units[0];
-  return 'mixed';
+/* ─── Derive volume unit and convert/recalculate volume accurately ─── */
+function convertWeight(weight, fromUnit, toUnit) {
+  if (fromUnit === toUnit) return weight;
+  if (fromUnit === 'kg' && toUnit === 'lbs') return weight * 2.20462;
+  if (fromUnit === 'lbs' && toUnit === 'kg') return weight / 2.20462;
+  return weight;
+}
+
+function getExercisesVolumeAndUnit(exercises) {
+  if (!exercises || exercises.length === 0) return { volume: 0, unit: 'kg' };
+  const activeExs = exercises.filter((e) => e.weight > 0);
+  const units = [...new Set(activeExs.map((e) => e.weightUnit || 'kg'))];
+  
+  if (units.length === 0) return { volume: 0, unit: 'kg' };
+  if (units.length === 1) {
+    const unit = units[0];
+    const volume = exercises.reduce((sum, ex) => sum + (ex.sets || 0) * (ex.reps || 0) * (ex.weight || 0), 0);
+    return { volume: Math.round(volume), unit };
+  }
+  
+  // Mixed units: standardise to kg
+  const volumeInKg = exercises.reduce((sum, ex) => {
+    const w = ex.weight || 0;
+    const weightInKg = (ex.weightUnit === 'lbs') ? (w / 2.20462) : w;
+    return sum + (ex.sets || 0) * (ex.reps || 0) * weightInKg;
+  }, 0);
+  return { volume: Math.round(volumeInKg), unit: 'kg' };
 }
 
 /* ─── Log history card ─── */
@@ -472,9 +493,7 @@ function LogCard({ log, onDelete }) {
   const date = new Date(log.date + 'T12:00:00');
   const dayAbbr = date.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
   const dateFull = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  const unit = volUnit(log.exercises);
-  // Recompute volume from exercises to avoid stale stored values
-  const computedVol = (log.exercises || []).reduce((s, ex) => s + (ex.sets || 0) * (ex.reps || 0) * (ex.weight || 0), 0);
+  const { volume: computedVol, unit } = getExercisesVolumeAndUnit(log.exercises);
   const vol = computedVol > 0
     ? computedVol >= 1000 ? `${(computedVol / 1000).toFixed(1)}k` : `${computedVol}`
     : null;
@@ -567,9 +586,8 @@ export default function StatsPage() {
 
   // Recompute from exercises so the unit is always correct
   const allWeekExercises = weekLogs.flatMap((l) => l.exercises || []);
-  const totalVolume = allWeekExercises.reduce((s, ex) => s + (ex.sets || 0) * (ex.reps || 0) * (ex.weight || 0), 0);
+  const { volume: totalVolume, unit: weekVolUnit } = getExercisesVolumeAndUnit(allWeekExercises);
   const volLabel = totalVolume >= 1000 ? `${(totalVolume / 1000).toFixed(1)}k` : `${totalVolume || 0}`;
-  const weekVolUnit = volUnit(allWeekExercises);
 
   const progressionData = buildProgressionMap(logs);
   const filteredProgression = progressionSearch.trim()

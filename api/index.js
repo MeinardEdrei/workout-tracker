@@ -21,11 +21,45 @@ app.use(cors({
 
 app.use(express.json());
 
+const WorkoutLog = require('./_lib/models/WorkoutLog');
+
 let isConnected = false;
+let isMigrated = false;
+
+async function runLogVolumeMigration() {
+  try {
+    console.log('Starting WorkoutLog volume migration...');
+    const logs = await WorkoutLog.find({ 'exercises.weightUnit': 'lbs' });
+    console.log(`Found ${logs.length} logs with potential lbs exercises.`);
+    
+    let updatedCount = 0;
+    for (const log of logs) {
+      const correctVol = Math.round((log.exercises || []).reduce((sum, ex) => {
+        const w = ex.weight || 0;
+        const weightInKg = (ex.weightUnit === 'lbs') ? (w / 2.20462) : w;
+        return sum + (ex.sets || 0) * (ex.reps || 0) * weightInKg;
+      }, 0));
+      
+      if (log.totalVolume !== correctVol) {
+        log.totalVolume = correctVol;
+        await log.save();
+        updatedCount++;
+      }
+    }
+    console.log(`WorkoutLog volume migration completed: updated ${updatedCount} logs.`);
+  } catch (err) {
+    console.error('WorkoutLog volume migration failed:', err);
+  }
+}
+
 async function connectDB() {
   if (isConnected) return;
   await mongoose.connect(process.env.MONGODB_URI);
   isConnected = true;
+  if (!isMigrated) {
+    isMigrated = true;
+    runLogVolumeMigration().catch(err => console.error('Migration async error:', err));
+  }
 }
 
 app.use(async (_req, _res, next) => {

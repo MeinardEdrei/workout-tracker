@@ -13,9 +13,11 @@ router.post('/', async (req, res) => {
     // Check if a log for this date and user already exists
     const existingLog = await WorkoutLog.findOne({ userId: req.userId, date });
     
-    const totalVolume = (exercises || []).reduce((sum, ex) => {
-      return sum + (ex.sets || 0) * (ex.reps || 0) * (ex.weight || 0);
-    }, 0);
+    const totalVolume = Math.round((exercises || []).reduce((sum, ex) => {
+      const w = ex.weight || 0;
+      const weightInKg = (ex.weightUnit === 'lbs') ? (w / 2.20462) : w;
+      return sum + (ex.sets || 0) * (ex.reps || 0) * weightInKg;
+    }, 0));
 
     if (existingLog) {
       existingLog.splitName = splitName || existingLog.splitName;

@@ -17,7 +17,34 @@ function readSplits() {
 function writeSplits(s) { localStorage.setItem(SPLITS_KEY, JSON.stringify(s)); }
 
 function readLogs() {
-  try { return JSON.parse(localStorage.getItem(LOGS_KEY) || '[]'); } catch { return []; }
+  try {
+    const logs = JSON.parse(localStorage.getItem(LOGS_KEY) || '[]');
+    // Run migration if not already migrated
+    if (typeof window !== 'undefined' && typeof localStorage !== 'undefined' && !localStorage.getItem('wt_logs_migrated_vol_v1') && logs.length > 0) {
+      let migrated = false;
+      const migratedLogs = logs.map(log => {
+        const correctVol = Math.round((log.exercises || []).reduce((sum, ex) => {
+          const w = ex.weight || 0;
+          const weightInKg = (ex.weightUnit === 'lbs') ? (w / 2.20462) : w;
+          return sum + (ex.sets || 0) * (ex.reps || 0) * weightInKg;
+        }, 0));
+        if (log.totalVolume !== correctVol) {
+          migrated = true;
+          return { ...log, totalVolume: correctVol };
+        }
+        return log;
+      });
+      if (migrated) {
+        localStorage.setItem(LOGS_KEY, JSON.stringify(migratedLogs));
+        localStorage.setItem('wt_logs_migrated_vol_v1', 'true');
+        return migratedLogs;
+      }
+      localStorage.setItem('wt_logs_migrated_vol_v1', 'true');
+    }
+    return logs;
+  } catch {
+    return [];
+  }
 }
 function writeLogs(l) { localStorage.setItem(LOGS_KEY, JSON.stringify(l)); }
 
@@ -231,9 +258,13 @@ export function reorderExercises(splitId, dayId, exercises) {
 
 export function saveLog(data) {
   const logs = readLogs();
-  const totalVolume = (data.exercises || []).reduce(
-    (sum, ex) => sum + (ex.sets || 0) * (ex.reps || 0) * (ex.weight || 0), 0
-  );
+  const totalVolume = Math.round((data.exercises || []).reduce(
+    (sum, ex) => {
+      const w = ex.weight || 0;
+      const weightInKg = (ex.weightUnit === 'lbs') ? (w / 2.20462) : w;
+      return sum + (ex.sets || 0) * (ex.reps || 0) * weightInKg;
+    }, 0
+  ));
   const log = {
     _id: uid(),
     date: data.date,
