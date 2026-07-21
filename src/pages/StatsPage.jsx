@@ -1,8 +1,16 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useStorage } from '../hooks/useStorage';
 import StatsShareModal from '../components/StatsShareModal';
 import { createPortal } from 'react-dom';
+import { capitalizeWords } from '../utils/textFormat';
+
+function convertWeight(weight, fromUnit, toUnit) {
+  if (fromUnit === toUnit) return weight;
+  if (fromUnit === 'kg' && toUnit === 'lbs') return weight * 2.20462;
+  if (fromUnit === 'lbs' && toUnit === 'kg') return weight / 2.20462;
+  return weight;
+}
 
 const LOGS_STALE = 2 * 60 * 1000;
 const DOW_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
@@ -593,12 +601,6 @@ function ProgressionCard({ exercise }) {
 }
 
 /* ─── Derive volume unit and convert/recalculate volume accurately ─── */
-function convertWeight(weight, fromUnit, toUnit) {
-  if (fromUnit === toUnit) return weight;
-  if (fromUnit === 'kg' && toUnit === 'lbs') return weight * 2.20462;
-  if (fromUnit === 'lbs' && toUnit === 'kg') return weight / 2.20462;
-  return weight;
-}
 
 function getExercisesVolumeAndUnit(exercises) {
   if (!exercises || exercises.length === 0) return { volume: 0, unit: 'kg' };
