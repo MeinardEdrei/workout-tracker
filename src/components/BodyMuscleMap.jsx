@@ -66,100 +66,167 @@ export default function BodyMuscleMap({ muscleSetsMap, selectedMuscle, onSelectM
     return { sets, color: 'var(--text2)', fill: 'rgba(255,255,255,0.12)', opacity: 0.7, label: `${sets}s` };
   }
 
-  const frontMuscles = ['Chest', 'Front Delts', 'Biceps', 'Abs', 'Quads'];
-  const backMuscles = ['Upper Back', 'Lats', 'Triceps', 'Glutes', 'Hamstrings', 'Calves'];
+  // Deduplicated single hotspot pins per muscle region for mobile viewports
+  const frontHotspots = [
+    { key: 'Chest', top: '28%', left: '50%' },
+    { key: 'Front Delts', top: '22%', left: '26%' },
+    { key: 'Biceps', top: '35%', left: '78%' },
+    { key: 'Abs', top: '39%', left: '50%' },
+    { key: 'Quads', top: '59%', left: '50%' },
+  ];
+
+  const backHotspots = [
+    { key: 'Upper Back', top: '24%', left: '50%' },
+    { key: 'Lats', top: '34%', left: '64%' },
+    { key: 'Triceps', top: '34%', left: '20%' },
+    { key: 'Glutes', top: '48%', left: '50%' },
+    { key: 'Hamstrings', top: '63%', left: '50%' },
+    { key: 'Calves', top: '83%', left: '50%' },
+  ];
+
+  const allMuscles = [
+    'Chest', 'Upper Back', 'Lats', 'Front Delts', 'Side Delts', 
+    'Biceps', 'Triceps', 'Abs', 'Quads', 'Hamstrings', 'Glutes', 'Calves'
+  ];
 
   return (
-    <div style={{ background: 'var(--bg3)', borderRadius: 12, border: '1px solid var(--border)', padding: '16px', marginBottom: 20 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-          Anatomical Target Display
+    <div style={{ background: 'var(--bg3)', borderRadius: 12, border: '1px solid var(--border)', padding: '12px', marginBottom: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          3D Muscle Target Map
         </div>
         <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>
-          Tap tag to filter
+          Tap glowing pins
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
+      {/* 3D RENDERS WITH PIN HOTSPOTS */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
         {/* FRONT VIEW */}
-        <div style={{ position: 'relative', borderRadius: 10, overflow: 'hidden', background: '#080808', border: '1px solid var(--border2)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <div style={{ fontSize: 9, fontWeight: 900, fontFamily: 'var(--font-mono)', color: 'var(--text3)', letterSpacing: '0.15em', padding: '6px 0 2px', textTransform: 'uppercase' }}>
-            FRONT VIEW
+        <div style={{ borderRadius: 10, overflow: 'hidden', background: '#080808', border: '1px solid var(--border2)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <div style={{ fontSize: 8, fontWeight: 900, fontFamily: 'var(--font-mono)', color: 'var(--text3)', letterSpacing: '0.15em', padding: '4px 0 2px', textTransform: 'uppercase' }}>
+            FRONT
           </div>
-          <div style={{ position: 'relative', width: '100%', aspectRatio: '3/4', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+          <div style={{ position: 'relative', width: '100%', aspectRatio: '3/4' }}>
             <img 
               src="/assets/anatomy_front_body.jpg" 
               alt="Anatomy Front View" 
-              style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.9 }} 
+              style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.85 }} 
             />
-            {/* Overlay Tags */}
-            <div style={{ position: 'absolute', inset: 0, padding: 8, display: 'flex', flexDirection: 'column', justifyContent: 'space-around', alignItems: 'center' }}>
-              {frontMuscles.map(m => {
-                const info = getVolumeInfo(m);
-                const isSelected = selectedMuscle && m.toLowerCase().includes(selectedMuscle.toLowerCase());
-                return (
-                  <button
-                    key={m}
-                    onClick={() => onSelectMuscle(m)}
-                    style={{
-                      padding: '3px 7px', borderRadius: 12,
-                      background: isSelected ? 'var(--accent)' : 'rgba(10, 10, 10, 0.75)',
-                      border: `1.5px solid ${info.color}`,
-                      color: isSelected ? '#0a0a0a' : info.color,
-                      fontSize: 10, fontWeight: 800, fontFamily: 'var(--font-mono)',
-                      backdropFilter: 'blur(4px)', cursor: 'pointer', transition: 'all 0.15s',
-                      boxShadow: isSelected ? '0 0 12px var(--accent)' : '0 2px 6px rgba(0,0,0,0.5)',
-                      display: 'flex', alignItems: 'center', gap: 4
-                    }}
-                  >
-                    <span>{m}</span>
-                    <span style={{ opacity: 0.8, fontSize: 9 }}>({info.sets}s)</span>
-                  </button>
-                );
-              })}
-            </div>
+            {/* Hotspots */}
+            {frontHotspots.map((hs, i) => {
+              const info = getVolumeInfo(hs.key);
+              if (info.sets === 0) return null;
+              const isSelected = selectedMuscle && hs.key.toLowerCase().includes(selectedMuscle.toLowerCase());
+
+              return (
+                <div
+                  key={i}
+                  onClick={() => onSelectMuscle(hs.key)}
+                  style={{
+                    position: 'absolute', top: hs.top, left: hs.left, transform: 'translate(-50%, -50%)',
+                    cursor: 'pointer', zIndex: isSelected ? 10 : 2,
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1
+                  }}
+                  title={`${hs.key}: ${info.sets} sets`}
+                >
+                  <div style={{
+                    width: isSelected ? 14 : 10, height: isSelected ? 14 : 10, borderRadius: '50%',
+                    background: info.color, border: '1.5px solid rgba(10,10,10,0.9)',
+                    boxShadow: `0 0 8px ${info.color}`,
+                    transition: 'all 0.15s'
+                  }} />
+                  <span style={{
+                    fontSize: 8, fontWeight: 900, fontFamily: 'var(--font-mono)',
+                    color: isSelected ? '#0a0a0a' : 'var(--text)',
+                    background: isSelected ? 'var(--accent)' : 'rgba(10,10,10,0.85)',
+                    border: `1px solid ${info.color}`, padding: '0px 3px', borderRadius: 4,
+                    lineHeight: 1.2, whiteSpace: 'nowrap'
+                  }}>
+                    {info.sets}s
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
 
         {/* BACK VIEW */}
-        <div style={{ position: 'relative', borderRadius: 10, overflow: 'hidden', background: '#080808', border: '1px solid var(--border2)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <div style={{ fontSize: 9, fontWeight: 900, fontFamily: 'var(--font-mono)', color: 'var(--text3)', letterSpacing: '0.15em', padding: '6px 0 2px', textTransform: 'uppercase' }}>
-            BACK VIEW
+        <div style={{ borderRadius: 10, overflow: 'hidden', background: '#080808', border: '1px solid var(--border2)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <div style={{ fontSize: 8, fontWeight: 900, fontFamily: 'var(--font-mono)', color: 'var(--text3)', letterSpacing: '0.15em', padding: '4px 0 2px', textTransform: 'uppercase' }}>
+            BACK
           </div>
-          <div style={{ position: 'relative', width: '100%', aspectRatio: '3/4', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+          <div style={{ position: 'relative', width: '100%', aspectRatio: '3/4' }}>
             <img 
               src="/assets/anatomy_back_body.jpg" 
               alt="Anatomy Back View" 
-              style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.9 }} 
+              style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.85 }} 
             />
-            {/* Overlay Tags */}
-            <div style={{ position: 'absolute', inset: 0, padding: 8, display: 'flex', flexDirection: 'column', justifyContent: 'space-around', alignItems: 'center' }}>
-              {backMuscles.map(m => {
-                const info = getVolumeInfo(m);
-                const isSelected = selectedMuscle && m.toLowerCase().includes(selectedMuscle.toLowerCase());
-                return (
-                  <button
-                    key={m}
-                    onClick={() => onSelectMuscle(m)}
-                    style={{
-                      padding: '3px 7px', borderRadius: 12,
-                      background: isSelected ? 'var(--accent)' : 'rgba(10, 10, 10, 0.75)',
-                      border: `1.5px solid ${info.color}`,
-                      color: isSelected ? '#0a0a0a' : info.color,
-                      fontSize: 10, fontWeight: 800, fontFamily: 'var(--font-mono)',
-                      backdropFilter: 'blur(4px)', cursor: 'pointer', transition: 'all 0.15s',
-                      boxShadow: isSelected ? '0 0 12px var(--accent)' : '0 2px 6px rgba(0,0,0,0.5)',
-                      display: 'flex', alignItems: 'center', gap: 4
-                    }}
-                  >
-                    <span>{m}</span>
-                    <span style={{ opacity: 0.8, fontSize: 9 }}>({info.sets}s)</span>
-                  </button>
-                );
-              })}
-            </div>
+            {/* Hotspots */}
+            {backHotspots.map((hs, i) => {
+              const info = getVolumeInfo(hs.key);
+              if (info.sets === 0) return null;
+              const isSelected = selectedMuscle && hs.key.toLowerCase().includes(selectedMuscle.toLowerCase());
+
+              return (
+                <div
+                  key={i}
+                  onClick={() => onSelectMuscle(hs.key)}
+                  style={{
+                    position: 'absolute', top: hs.top, left: hs.left, transform: 'translate(-50%, -50%)',
+                    cursor: 'pointer', zIndex: isSelected ? 10 : 2,
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1
+                  }}
+                  title={`${hs.key}: ${info.sets} sets`}
+                >
+                  <div style={{
+                    width: isSelected ? 14 : 10, height: isSelected ? 14 : 10, borderRadius: '50%',
+                    background: info.color, border: '1.5px solid rgba(10,10,10,0.9)',
+                    boxShadow: `0 0 8px ${info.color}`,
+                    transition: 'all 0.15s'
+                  }} />
+                  <span style={{
+                    fontSize: 8, fontWeight: 900, fontFamily: 'var(--font-mono)',
+                    color: isSelected ? '#0a0a0a' : 'var(--text)',
+                    background: isSelected ? 'var(--accent)' : 'rgba(10,10,10,0.85)',
+                    border: `1px solid ${info.color}`, padding: '0px 3px', borderRadius: 4,
+                    lineHeight: 1.2, whiteSpace: 'nowrap'
+                  }}>
+                    {info.sets}s
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
+      </div>
+
+      {/* QUICK SELECT MUSCLE PILLS BELOW IMAGES */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+        {allMuscles.map(m => {
+          const info = getVolumeInfo(m);
+          if (info.sets === 0) return null;
+          const isSelected = selectedMuscle && m.toLowerCase().includes(selectedMuscle.toLowerCase());
+
+          return (
+            <button
+              key={m}
+              onClick={() => onSelectMuscle(m)}
+              style={{
+                padding: '2px 7px', borderRadius: 8,
+                background: isSelected ? 'var(--accent)' : 'var(--bg2)',
+                border: `1px solid ${isSelected ? 'var(--accent)' : info.color}`,
+                color: isSelected ? '#0a0a0a' : info.color,
+                fontSize: 9, fontWeight: 700, fontFamily: 'var(--font-mono)',
+                cursor: 'pointer', transition: 'all 0.15s',
+                display: 'inline-flex', alignItems: 'center', gap: 3
+              }}
+            >
+              <span>{m}</span>
+              <span style={{ fontSize: 8, opacity: 0.8 }}>{info.sets}s</span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
