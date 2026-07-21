@@ -4,6 +4,7 @@ import { useStorage } from '../hooks/useStorage';
 import StatsShareModal from '../components/StatsShareModal';
 import { createPortal } from 'react-dom';
 import { capitalizeWords } from '../utils/textFormat';
+import BodyMuscleMap, { resolveExerciseMuscles } from '../components/BodyMuscleMap';
 
 function convertWeight(weight, fromUnit, toUnit) {
   if (fromUnit === toUnit) return weight;
@@ -388,11 +389,13 @@ function buildProgressionMap(logs) {
 }
 
 function MuscleVolumeBreakdown({ weekLogs }) {
-  const muscleSets = useMemo(() => {
+  const [selectedMuscle, setSelectedMuscle] = useState(null);
+
+  const { muscleSetsMap, muscleSetsList } = useMemo(() => {
     const map = {};
     (weekLogs || []).forEach((log) => {
       (log.exercises || []).forEach((ex) => {
-        const targets = (ex.muscleTargets && ex.muscleTargets.length > 0) ? ex.muscleTargets : ['Full Body'];
+        const targets = resolveExerciseMuscles(ex);
         const sets = ex.sets || 0;
         targets.forEach((t) => {
           const key = capitalizeWords(t);
@@ -400,20 +403,42 @@ function MuscleVolumeBreakdown({ weekLogs }) {
         });
       });
     });
-    return Object.entries(map).sort((a, b) => b[1] - a[1]);
+    const list = Object.entries(map).sort((a, b) => b[1] - a[1]);
+    return { muscleSetsMap: map, muscleSetsList: list };
   }, [weekLogs]);
 
-  if (muscleSets.length === 0) return null;
+  if (muscleSetsList.length === 0) return null;
 
-  const maxSets = Math.max(...muscleSets.map(([, s]) => s), 1);
+  const displayList = selectedMuscle 
+    ? muscleSetsList.filter(([m]) => m.toLowerCase().includes(selectedMuscle.toLowerCase()))
+    : muscleSetsList;
+
+  const maxSets = Math.max(...muscleSetsList.map(([, s]) => s), 1);
 
   return (
     <div style={{ borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg2)', padding: '16px', marginBottom: 24 }}>
-      <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 12 }}>
-        Muscle Volume (This Week)
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          Muscle Volume (This Week)
+        </div>
+        {selectedMuscle && (
+          <button 
+            onClick={() => setSelectedMuscle(null)} 
+            style={{ fontSize: 10, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}
+          >
+            Show All ({selectedMuscle} ✕)
+          </button>
+        )}
       </div>
+
+      <BodyMuscleMap 
+        muscleSetsMap={muscleSetsMap} 
+        selectedMuscle={selectedMuscle} 
+        onSelectMuscle={(m) => setSelectedMuscle(prev => prev === m ? null : m)} 
+      />
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {muscleSets.map(([muscle, sets]) => {
+        {displayList.map(([muscle, sets]) => {
           let statusText = 'Low Volume';
           let statusColor = 'var(--text2)';
           let statusBg = 'rgba(255,255,255,0.05)';
@@ -435,7 +460,10 @@ function MuscleVolumeBreakdown({ weekLogs }) {
           const percent = Math.min(100, Math.round((sets / Math.max(maxSets, 20)) * 100));
 
           return (
-            <div key={muscle}>
+            <div key={muscle} style={{
+              background: selectedMuscle && muscle.toLowerCase().includes(selectedMuscle.toLowerCase()) ? 'rgba(232,255,90,0.04)' : 'transparent',
+              padding: '4px 6px', borderRadius: 6, transition: 'all 0.15s'
+            }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
                   {muscle}

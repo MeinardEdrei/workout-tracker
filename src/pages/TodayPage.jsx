@@ -1442,7 +1442,14 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
 
   function handleFinish() {
     const done = exercises.filter((e) => e.lastCheckedDate === TODAY_STR && e.checked);
-    saveLogMutation.mutate({ date: dateStr, splitName, dayName: day.name, dayTag: day.tag || '', exercises: done.map((e) => ({ name: e.name, sets: e.sets, reps: e.reps, weight: e.weight, weightUnit: e.weightUnit, category: e.category || 'workout' })) });
+    saveLogMutation.mutate({
+      date: dateStr, splitName, dayName: day.name, dayTag: day.tag || '',
+      exercises: done.map((e) => ({
+        name: e.name, sets: e.sets, reps: e.reps, weight: e.weight, weightUnit: e.weightUnit,
+        untilFailure: e.untilFailure, notes: e.notes || '', muscleTargets: e.muscleTargets || [],
+        category: e.category || 'workout'
+      }))
+    });
     setShowConfirmFinish(false);
   }
 
