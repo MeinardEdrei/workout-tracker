@@ -684,11 +684,11 @@ function BackupModal({ logs, splits, storage, queryClient, onClose }) {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
-          <div style={{ padding: 14, borderRadius: 10, background: 'var(--bg3)', border: '1px solid var(--border)' }}>
+          <div style={{ padding: 14, borderRadius: 10, background: 'var(--bg3)', border: '1px solid var(--border2)' }}>
             <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4, color: 'var(--text)' }}>
               📊 Export Workout History (CSV)
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 10 }}>
+            <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 10 }}>
               Download your complete workout logs as a spreadsheet compatible with Excel and Google Sheets.
             </div>
             <button className="btn btn-ghost" style={{ fontSize: 12, width: '100%' }} onClick={exportCSV}>
@@ -696,11 +696,11 @@ function BackupModal({ logs, splits, storage, queryClient, onClose }) {
             </button>
           </div>
 
-          <div style={{ padding: 14, borderRadius: 10, background: 'var(--bg3)', border: '1px solid var(--border)' }}>
+          <div style={{ padding: 14, borderRadius: 10, background: 'var(--bg3)', border: '1px solid var(--border2)' }}>
             <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4, color: 'var(--text)' }}>
               📁 Export Full Backup (JSON)
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 10 }}>
+            <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 10 }}>
               Export all your custom splits, exercise routines, and workout history as a JSON backup file.
             </div>
             <button className="btn btn-ghost" style={{ fontSize: 12, width: '100%' }} onClick={exportJSON}>
@@ -708,11 +708,11 @@ function BackupModal({ logs, splits, storage, queryClient, onClose }) {
             </button>
           </div>
 
-          <div style={{ padding: 14, borderRadius: 10, background: 'var(--bg3)', border: '1px solid var(--border)' }}>
+          <div style={{ padding: 14, borderRadius: 10, background: 'var(--bg3)', border: '1px solid var(--border2)' }}>
             <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4, color: 'var(--text)' }}>
               📥 Restore / Import Backup (JSON)
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 10 }}>
+            <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 10 }}>
               Upload a `.json` backup file to restore past workouts and split programs.
             </div>
             <input
@@ -736,9 +736,9 @@ function BackupModal({ logs, splits, storage, queryClient, onClose }) {
         {msg && (
           <div style={{
             fontSize: 12, fontWeight: 600, padding: '8px 12px', borderRadius: 6,
-            background: msg.type === 'error' ? 'rgba(248,113,113,0.12)' : 'rgba(68,255,136,0.12)',
-            color: msg.type === 'error' ? 'var(--red)' : 'var(--green)',
-            border: `1px solid ${msg.type === 'error' ? 'rgba(248,113,113,0.3)' : 'rgba(68,255,136,0.3)'}`,
+            background: msg.type === 'error' ? 'rgba(255,68,68,0.12)' : 'rgba(232,255,90,0.12)',
+            color: msg.type === 'error' ? 'var(--red)' : 'var(--accent)',
+            border: `1px solid ${msg.type === 'error' ? 'rgba(255,68,68,0.3)' : 'rgba(232,255,90,0.3)'}`,
             marginBottom: 12,
           }}>
             {msg.text}
@@ -782,15 +782,15 @@ export default function StatsPage() {
   return (
     <div>
       {/* Page header */}
-      <div className="page-header">
+      <div className="page-header" style={{ paddingRight: 20 }}>
         <div>
           <h1 className="page-title">Stats</h1>
           <div className="page-subtitle">{logs.length} total workouts</div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <button
-            className="btn"
-            style={{ fontSize: 11, padding: '6px 12px', gap: 5, background: 'var(--bg2)', border: '1px solid var(--border)' }}
+            className="btn btn-ghost"
+            style={{ fontSize: 11, padding: '5px 10px', gap: 5 }}
             onClick={() => setShowBackupModal(true)}
           >
             📁 Backups

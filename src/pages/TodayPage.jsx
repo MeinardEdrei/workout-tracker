@@ -98,14 +98,14 @@ function ExerciseHistoryModal({ exName, logs, onClose }) {
                 <div key={idx} style={{
                   padding: '10px 12px',
                   borderRadius: 8,
-                  background: isPr ? 'rgba(255, 215, 0, 0.05)' : 'var(--bg3)',
-                  border: `1px solid ${isPr ? 'rgba(255, 215, 0, 0.25)' : 'var(--border)'}`,
+                  background: isPr ? 'rgba(232, 255, 90, 0.04)' : 'var(--bg3)',
+                  border: `1px solid ${isPr ? 'rgba(232, 255, 90, 0.2)' : 'var(--border2)'}`,
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
                 }}>
                   <div>
-                    <div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)', marginBottom: 2 }}>
+                    <div style={{ fontSize: 11, color: 'var(--text2)', fontFamily: 'var(--font-mono)', marginBottom: 2 }}>
                       {rec.date}
                     </div>
                     <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
@@ -119,8 +119,8 @@ function ExerciseHistoryModal({ exName, logs, onClose }) {
                   </div>
                   {isPr && rec.weight > 0 && (
                     <span style={{
-                      fontSize: 10, fontWeight: 800, color: '#ffd700',
-                      background: 'rgba(255, 215, 0, 0.12)', border: '1px solid rgba(255, 215, 0, 0.3)',
+                      fontSize: 10, fontWeight: 800, color: 'var(--accent)',
+                      background: 'rgba(232, 255, 90, 0.12)', border: '1px solid rgba(232, 255, 90, 0.25)',
                       padding: '2px 7px', borderRadius: 10, textTransform: 'uppercase', letterSpacing: '0.04em'
                     }}>
                       🏆 Max
@@ -738,12 +738,11 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
             <span
               style={{
                 fontSize: 10, fontWeight: 800, letterSpacing: '0.04em',
-                color: '#ffd700',
-                background: 'linear-gradient(135deg, rgba(255, 215, 0, 0.15) 0%, rgba(255, 165, 0, 0.15) 100%)',
-                border: '1px solid rgba(255, 215, 0, 0.3)',
+                color: 'var(--accent)',
+                background: 'rgba(232, 255, 90, 0.1)',
+                border: '1px solid rgba(232, 255, 90, 0.25)',
                 padding: '2px 7px', borderRadius: 10,
                 display: 'inline-flex', alignItems: 'center', gap: 3,
-                boxShadow: '0 0 10px rgba(255, 215, 0, 0.15)',
                 textTransform: 'uppercase',
               }}
               title={`Previous PR: ${prInfo.prevWeight}${prInfo.prevUnit}`}
