@@ -45,6 +45,40 @@ function ShareIcon() {
     </svg>
   );
 }
+function CopyIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
+}
+
+function formatSplitAsText(split) {
+  const sortedDays = [...(split.days || [])].sort((a, b) => (a.dayOrder ?? 8) - (b.dayOrder ?? 8));
+  let text = `🏋️ ${split.name}\n\n`;
+  
+  sortedDays.forEach((day, idx) => {
+    text += `DAY ${idx + 1}: ${day.name.toUpperCase()}${day.tag ? ` (${day.tag})` : ''}\n`;
+    if (day.isRest) {
+      text += `• Rest Day\n\n`;
+      return;
+    }
+    const exercises = day.exercises || [];
+    if (exercises.length === 0) {
+      text += `• No exercises\n\n`;
+      return;
+    }
+    exercises.forEach((ex) => {
+      const rStr = (ex.untilFailure || !ex.reps || ex.reps === 0) ? 'Failure' : `${ex.reps} reps`;
+      const wStr = ex.weight > 0 ? ` @ ${ex.weight} ${ex.weightUnit || 'kg'}` : '';
+      const catPrefix = ex.category === 'warmup' ? '[Warm-up] ' : ex.category === 'cooldown' ? '[Cool-down] ' : '';
+      text += `• ${catPrefix}${ex.name} — ${ex.sets} sets × ${rStr}${wStr}\n`;
+    });
+    text += `\n`;
+  });
+  return text.trim();
+}
 function GlobeIcon() {
   return (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -316,6 +350,38 @@ export default function SplitsPage() {
   function showToast(message, type = 'success') {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
+  }
+
+  function handleCopySplit(split) {
+    const text = formatSplitAsText(split);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => {
+        showToast('Split copied to clipboard as text!');
+      }).catch(() => {
+        fallbackCopyTextToClipboard(text);
+      });
+    } else {
+      fallbackCopyTextToClipboard(text);
+    }
+  }
+
+  function fallbackCopyTextToClipboard(text) {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.top = '0';
+    textArea.style.left = '0';
+    textArea.style.opacity = '0';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
+      document.execCommand('copy');
+      showToast('Split copied to clipboard as text!');
+    } catch {
+      showToast('Failed to copy split', 'error');
+    }
+    document.body.removeChild(textArea);
   }
 
   const { data: splits = [], isLoading } = useQuery({
@@ -837,6 +903,15 @@ Coach:`;
                 {/* Expanded Details Row */}
                 {isExpanded && (
                   <div style={{ borderTop: '1px solid var(--border)', padding: '14px 16px', background: 'rgba(0,0,0,0.2)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleCopySplit(split); }}
+                        className="btn btn-ghost"
+                        style={{ fontSize: 11, padding: '4px 10px', gap: 5, display: 'inline-flex', alignItems: 'center' }}
+                      >
+                        <CopyIcon /> Copy as Text
+                      </button>
+                    </div>
                     {sortedDays.length === 0 ? (
                       <div style={{ color: 'var(--text3)', fontSize: 13, fontStyle: 'italic', textAlign: 'center', padding: '10px 0' }}>No days added yet. Tap Edit in Today page to configure.</div>
                     ) : (
@@ -1058,6 +1133,19 @@ Coach:`;
                   <path d="M11.5 2.5a1.5 1.5 0 0 1 2.12 2.12L5 13.24l-3 .76.76-3L11.5 2.5Z" />
                 </svg>
                 Rename
+              </button>
+
+              {/* Copy as Text */}
+              <button
+                onClick={() => { handleCopySplit(s); setMenuOpenId(null); }}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '11px 16px', background: 'none', border: 'none',
+                  cursor: 'pointer', color: 'var(--text)', fontSize: 13, fontWeight: 600,
+                }}
+              >
+                <CopyIcon />
+                Copy as Text
               </button>
 
               {/* Share */}
