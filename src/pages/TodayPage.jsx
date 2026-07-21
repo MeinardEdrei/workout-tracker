@@ -111,6 +111,11 @@ function ExerciseHistoryModal({ exName, logs, onClose }) {
                     <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
                       {rec.sets} sets × {rLabel} {rec.weight > 0 ? `@ ${rec.weight}${rec.weightUnit}` : ''}
                     </div>
+                    {rec.weight > 0 && (
+                      <div style={{ fontSize: 11, color: 'var(--accent)', fontFamily: 'var(--font-mono)', marginTop: 1 }}>
+                        Est. 1RM: {Math.round(rec.weight * (1 + ((rec.untilFailure || rec.reps === 0 ? 10 : rec.reps) || 1) / 30) * 10) / 10}{rec.weightUnit}
+                      </div>
+                    )}
                     {rec.notes && (
                       <div style={{ fontSize: 11, color: 'var(--text2)', fontStyle: 'italic', marginTop: 2 }}>
                         "{rec.notes}"
@@ -1618,6 +1623,127 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
   );
 }
 
+function ConsistencyCard({ logs, activeSplit }) {
+  const stats = useMemo(() => {
+    if (!activeSplit) return { streakWeeks: 0, streakDays: 0, thisWeekDone: 0, thisWeekTarget: 0, weekDays: [] };
+    const targetDays = (activeSplit.days || []).filter(d => !d.isRest).length || 1;
+    const now = new Date();
+    const dayOfWeek = now.getDay();
+    const diffToMon = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const monday = new Date(now);
+    monday.setDate(monday.getDate() + diffToMon);
+    
+    const logsByDate = new Map();
+    (logs || []).forEach(l => logsByDate.set(l.date, true));
+    
+    let thisWeekDone = 0;
+    const weekDays = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(monday);
+      d.setDate(d.getDate() + i);
+      const dateStr = d.toISOString().slice(0, 10);
+      const isDone = logsByDate.has(dateStr);
+      if (isDone) thisWeekDone++;
+      weekDays.push({ label: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i], isDone, isToday: dateStr === TODAY_STR });
+    }
+
+    function getISOWeekString(dateObj) {
+      const d = new Date(dateObj);
+      d.setHours(0, 0, 0, 0);
+      d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
+      const week1 = new Date(d.getFullYear(), 0, 4);
+      return `${d.getFullYear()}-W${1 + Math.round(((d.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7)}`;
+    }
+
+    const logsByWeek = new Map();
+    (logs || []).forEach(l => {
+      const ws = getISOWeekString(new Date(l.date));
+      logsByWeek.set(ws, (logsByWeek.get(ws) || 0) + 1);
+    });
+
+    let streakWeeks = 0;
+    let checkDate = new Date(now);
+    let checkWeekStr = getISOWeekString(checkDate);
+    
+    if ((logsByWeek.get(checkWeekStr) || 0) > 0) {
+      streakWeeks++;
+    }
+    
+    checkDate.setDate(checkDate.getDate() - 7);
+    checkWeekStr = getISOWeekString(checkDate);
+    while ((logsByWeek.get(checkWeekStr) || 0) > 0) {
+      streakWeeks++;
+      checkDate.setDate(checkDate.getDate() - 7);
+      checkWeekStr = getISOWeekString(checkDate);
+    }
+    
+    let streakDays = 0;
+    let dDay = new Date(now);
+    let checkDayStr = TODAY_STR;
+    if (logsByDate.has(checkDayStr)) {
+      streakDays++;
+    }
+    dDay.setDate(dDay.getDate() - 1);
+    checkDayStr = dDay.toISOString().slice(0, 10);
+    while (logsByDate.has(checkDayStr)) {
+      streakDays++;
+      dDay.setDate(dDay.getDate() - 1);
+      checkDayStr = dDay.toISOString().slice(0, 10);
+    }
+
+    return { streakWeeks, streakDays, thisWeekDone, thisWeekTarget: targetDays, weekDays };
+  }, [logs, activeSplit]);
+
+  const streakDisplay = stats.streakWeeks > 0 
+    ? `🔥 ${stats.streakWeeks} WEEK STREAK` 
+    : `🔥 ${stats.streakDays} DAY STREAK`;
+
+  return (
+    <div style={{ margin: '0 16px 16px', padding: '16px', background: 'var(--bg2)', borderRadius: 12, border: '1px solid var(--border)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--accent)', letterSpacing: '0.05em' }}>
+          {streakDisplay}
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--text2)', fontFamily: 'var(--font-mono)' }}>
+          {stats.thisWeekDone} / {stats.thisWeekTarget} workouts
+        </div>
+      </div>
+      
+      <div style={{ width: '100%', height: 6, background: 'var(--bg3)', borderRadius: 3, marginBottom: 16, overflow: 'hidden' }}>
+        <div style={{ 
+          width: `${Math.min(100, (stats.thisWeekDone / stats.thisWeekTarget) * 100)}%`, 
+          height: '100%', 
+          background: 'var(--accent)', 
+          borderRadius: 3,
+          transition: 'width 0.3s ease'
+        }} />
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6 }}>
+        {stats.weekDays.map((d, i) => (
+          <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+            <div style={{ fontSize: 10, color: d.isToday ? 'var(--text)' : 'var(--text3)', fontWeight: d.isToday ? 800 : 500 }}>
+              {d.label}
+            </div>
+            <div style={{ 
+              width: 24, height: 24, borderRadius: '50%', 
+              background: d.isDone ? 'rgba(68,255,136,0.1)' : 'var(--bg3)',
+              border: `1px solid ${d.isDone ? 'var(--green)' : d.isToday ? 'var(--border2)' : 'transparent'}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}>
+              {d.isDone && (
+                <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+                  <polyline points="2,7 6,11 12,3" stroke="var(--green)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function TodayPage() {
   const { storage, storageKey } = useStorage();
   const queryClient = useQueryClient();
@@ -1924,7 +2050,10 @@ Coach:`;
           </div>
         </div>
       </div>
-      <div style={{ paddingTop: 12 }}>
+      
+      <ConsistencyCard logs={logs} activeSplit={activeSplit} />
+
+      <div style={{ paddingTop: 0 }}>
         {days.length === 0 ? (
           <div className="empty-state">This split has no days yet</div>
         ) : (

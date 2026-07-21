@@ -375,12 +375,85 @@ function buildProgressionMap(logs) {
     .sort((a, b) => {
       const la = a.sessions[a.sessions.length - 1]?.date || '';
       const lb = b.sessions[b.sessions.length - 1]?.date || '';
-      return lb.localeCompare(la);
     });
+}
+
+function MuscleVolumeBreakdown({ weekLogs }) {
+  const muscleSets = useMemo(() => {
+    const map = {};
+    (weekLogs || []).forEach((log) => {
+      (log.exercises || []).forEach((ex) => {
+        const targets = ex.muscleTargets || [];
+        const sets = ex.sets || 0;
+        targets.forEach((t) => {
+          const key = capitalizeWords(t);
+          map[key] = (map[key] || 0) + sets;
+        });
+      });
+    });
+    return Object.entries(map).sort((a, b) => b[1] - a[1]);
+  }, [weekLogs]);
+
+  if (muscleSets.length === 0) return null;
+
+  const maxSets = Math.max(...muscleSets.map(([, s]) => s), 1);
+
+  return (
+    <div style={{ borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg2)', padding: '16px', marginBottom: 24 }}>
+      <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 12 }}>
+        Muscle Volume (This Week)
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {muscleSets.map(([muscle, sets]) => {
+          let statusText = 'Low Volume';
+          let statusColor = 'var(--text2)';
+          let statusBg = 'rgba(255,255,255,0.05)';
+          
+          if (sets >= 10 && sets <= 20) {
+            statusText = 'Optimal Volume';
+            statusColor = 'var(--green)';
+            statusBg = 'rgba(68,255,136,0.1)';
+          } else if (sets >= 6 && sets <= 9) {
+            statusText = 'Moderate Volume';
+            statusColor = 'var(--blue)';
+            statusBg = 'rgba(90,240,255,0.1)';
+          } else if (sets > 20) {
+            statusText = 'High Volume';
+            statusColor = 'var(--accent)';
+            statusBg = 'rgba(232,255,90,0.1)';
+          }
+
+          const percent = Math.min(100, Math.round((sets / Math.max(maxSets, 20)) * 100));
+
+          return (
+            <div key={muscle}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
+                  {muscle}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: statusColor, background: statusBg, padding: '2px 6px', borderRadius: 4, textTransform: 'uppercase' }}>
+                    {statusText}
+                  </span>
+                  <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text2)' }}>
+                    {sets} sets
+                  </span>
+                </div>
+              </div>
+              <div style={{ width: '100%', height: 6, background: 'var(--bg3)', borderRadius: 3, overflow: 'hidden' }}>
+                <div style={{ width: `${percent}%`, height: '100%', background: statusColor, borderRadius: 3, transition: 'width 0.3s ease' }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function ProgressionCard({ exercise }) {
   const [expanded, setExpanded] = useState(false);
+  const [use1RM, setUse1RM] = useState(false);
   const sessions = exercise.sessions;
   // Only use sessions with actual weight for the chart — 0-weight sessions are rest/unlogged
   const weightedSessions = sessions.filter((s) => s.weight > 0);
@@ -388,17 +461,29 @@ function ProgressionCard({ exercise }) {
   const first = weightedSessions[0];
   const last = weightedSessions[weightedSessions.length - 1];
 
-  const firstConverted = first && last ? convertWeight(first.weight, first.weightUnit, last.weightUnit) : 0;
+  function calc1RM(s) {
+    if (!s || s.weight <= 0) return 0;
+    const reps = (s.untilFailure || s.reps === 0) ? 10 : (s.reps || 1);
+    return Math.round(s.weight * (1 + reps / 30) * 10) / 10;
+  }
+
+  const firstVal = first ? (use1RM ? calc1RM(first) : first.weight) : 0;
+  const lastVal = last ? (use1RM ? calc1RM(last) : last.weight) : 0;
+  const firstConverted = first && last ? convertWeight(firstVal, first.weightUnit, last.weightUnit) : 0;
+
   const trend = !first || !last ? '→'
-    : last.weight > firstConverted ? '↑'
-    : last.weight < firstConverted ? '↓' : '→';
+    : lastVal > firstConverted ? '↑'
+    : lastVal < firstConverted ? '↓' : '→';
   const trendColor = trend === '↑' ? 'var(--green)' : trend === '↓' ? 'var(--red)' : 'var(--text3)';
 
-  const last6Converted = last ? last6.map(s => ({
-    ...s,
-    weightInLastUnit: convertWeight(s.weight, s.weightUnit, last.weightUnit)
-  })) : [];
-  const maxW = Math.max(...last6Converted.map((s) => s.weightInLastUnit || 0), 1);
+  const last6Converted = last ? last6.map(s => {
+    const rawVal = use1RM ? calc1RM(s) : s.weight;
+    return {
+      ...s,
+      displayVal: convertWeight(rawVal, s.weightUnit, last.weightUnit)
+    };
+  }) : [];
+  const maxW = Math.max(...last6Converted.map((s) => s.displayVal || 0), 1);
 
   return (
     <div style={{ marginBottom: 8, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--bg2)', overflow: 'hidden' }}>
@@ -408,14 +493,21 @@ function ProgressionCard({ exercise }) {
       >
         {/* Name + trend */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 800, fontFamily: 'var(--font-display)', textTransform: 'uppercase', letterSpacing: '0.02em', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {exercise.name}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ fontSize: 14, fontWeight: 800, fontFamily: 'var(--font-display)', textTransform: 'uppercase', letterSpacing: '0.02em', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {exercise.name}
+            </div>
+            {use1RM && (
+              <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--accent)', background: 'rgba(232,255,90,0.1)', padding: '1px 5px', borderRadius: 4 }}>
+                1RM
+              </span>
+            )}
           </div>
           {first && last && (
             <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text3)', marginTop: 3 }}>
-              <span>{first.weight}{first.weightUnit}</span>
+              <span>{Math.round(firstVal * 10) / 10}{first.weightUnit}</span>
               <span style={{ color: trendColor, margin: '0 5px', fontWeight: 700 }}>{trend}</span>
-              <span style={{ color: last.weight > firstConverted ? 'var(--green)' : 'var(--text2)', fontWeight: 700 }}>{last.weight}{last.weightUnit}</span>
+              <span style={{ color: lastVal > firstConverted ? 'var(--green)' : 'var(--text2)', fontWeight: 700 }}>{Math.round(lastVal * 10) / 10}{last.weightUnit}</span>
             </div>
           )}
         </div>
@@ -423,7 +515,7 @@ function ProgressionCard({ exercise }) {
         {/* Mini weight dots */}
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 28, flexShrink: 0 }}>
           {last6Converted.map((s, i) => {
-            const h = maxW > 0 ? Math.max(4, Math.round((s.weightInLastUnit / maxW) * 28)) : 4;
+            const h = maxW > 0 ? Math.max(4, Math.round((s.displayVal / maxW) * 28)) : 4;
             const isLast = i === last6Converted.length - 1;
             return (
               <div key={i} style={{ width: 6, height: h, borderRadius: 2, background: isLast ? 'var(--accent)' : 'var(--border2)', transition: 'height 0.2s' }} />
@@ -436,6 +528,30 @@ function ProgressionCard({ exercise }) {
 
       {expanded && (
         <div style={{ borderTop: '1px solid var(--border)' }}>
+          <div style={{ padding: '8px 14px', background: 'var(--bg3)', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+            <button
+              onClick={() => setUse1RM(false)}
+              style={{
+                fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)', padding: '2px 8px', borderRadius: 4,
+                border: !use1RM ? '1px solid var(--accent)' : '1px solid var(--border2)',
+                background: !use1RM ? 'rgba(232,255,90,0.1)' : 'transparent',
+                color: !use1RM ? 'var(--accent)' : 'var(--text3)', cursor: 'pointer'
+              }}
+            >
+              Weight
+            </button>
+            <button
+              onClick={() => setUse1RM(true)}
+              style={{
+                fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)', padding: '2px 8px', borderRadius: 4,
+                border: use1RM ? '1px solid var(--accent)' : '1px solid var(--border2)',
+                background: use1RM ? 'rgba(232,255,90,0.1)' : 'transparent',
+                color: use1RM ? 'var(--accent)' : 'var(--text3)', cursor: 'pointer'
+              }}
+            >
+              Est. 1RM
+            </button>
+          </div>
           {sessions.map((s, i) => {
             const d = new Date(s.date + 'T12:00:00');
             const label = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
@@ -829,6 +945,9 @@ export default function StatsPage() {
             </div>
             <WeekStrip weekLogs={weekLogs} />
           </div>
+
+          {/* ── Muscle Volume Breakdown ── */}
+          <MuscleVolumeBreakdown weekLogs={weekLogs} />
 
           {/* ── Activity Tracker ── */}
           {logs.length > 0 && (
