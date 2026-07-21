@@ -392,7 +392,7 @@ function MuscleVolumeBreakdown({ weekLogs }) {
     const map = {};
     (weekLogs || []).forEach((log) => {
       (log.exercises || []).forEach((ex) => {
-        const targets = ex.muscleTargets || [];
+        const targets = (ex.muscleTargets && ex.muscleTargets.length > 0) ? ex.muscleTargets : ['Full Body'];
         const sets = ex.sets || 0;
         targets.forEach((t) => {
           const key = capitalizeWords(t);
@@ -506,11 +506,18 @@ function ProgressionCard({ exercise }) {
             <div style={{ fontSize: 14, fontWeight: 800, fontFamily: 'var(--font-display)', textTransform: 'uppercase', letterSpacing: '0.02em', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {exercise.name}
             </div>
-            {use1RM && (
-              <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--accent)', background: 'rgba(232,255,90,0.1)', padding: '1px 5px', borderRadius: 4 }}>
-                1RM
-              </span>
-            )}
+            <button
+              onClick={(e) => { e.stopPropagation(); setUse1RM(v => !v); }}
+              style={{
+                fontSize: 9, fontWeight: 800, fontFamily: 'var(--font-mono)', padding: '1px 6px', borderRadius: 4,
+                border: use1RM ? '1px solid var(--accent)' : '1px solid var(--border2)',
+                background: use1RM ? 'rgba(232,255,90,0.12)' : 'var(--bg3)',
+                color: use1RM ? 'var(--accent)' : 'var(--text3)', cursor: 'pointer'
+              }}
+              title="Toggle Weight / Est 1RM"
+            >
+              {use1RM ? 'Est 1RM' : 'Weight'}
+            </button>
           </div>
           {first && last && (
             <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text3)', marginTop: 3 }}>
