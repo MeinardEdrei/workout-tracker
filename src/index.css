@@ -39,7 +39,9 @@ html, body, #root {
 #root {
   display: flex;
   flex-direction: column;
+  width: 100%;
   max-width: 480px;
+  min-height: 100%;
   margin: 0 auto;
   position: relative;
 }
@@ -342,6 +344,11 @@ html, body, #root {
   .page-title { font-size: 22px; }
   .page-subtitle { font-size: 11px; }
   .btn { padding: 7px 10px; font-size: 11px; }
+}
+
+@media (max-width: 480px) {
+  .modal-overlay { padding: 12px; }
+  .modal { padding: 18px 14px; max-height: 85vh; }
 }
 
 .transparency-checkerboard {

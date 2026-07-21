@@ -375,6 +375,7 @@ function buildProgressionMap(logs) {
     .sort((a, b) => {
       const la = a.sessions[a.sessions.length - 1]?.date || '';
       const lb = b.sessions[b.sessions.length - 1]?.date || '';
+      return lb.localeCompare(la);
     });
 }
 
