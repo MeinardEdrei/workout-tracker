@@ -587,10 +587,178 @@ function SectionLabel({ children }) {
   );
 }
 
+function BackupModal({ logs, splits, storage, queryClient, onClose }) {
+  const [importing, setImporting] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const fileRef = useRef(null);
+
+  function exportCSV() {
+    let csv = 'Date,Split Name,Day Name,Day Tag,Exercise Name,Category,Sets,Reps,Weight,Unit,Total Volume (kg),Notes\n';
+    
+    (logs || []).forEach(log => {
+      (log.exercises || []).forEach(ex => {
+        const wKg = convertWeight(ex.weight, ex.weightUnit || 'kg', 'kg');
+        const volKg = Math.round((ex.sets || 0) * (ex.reps || 0) * wKg);
+        const date = log.date || '';
+        const split = (log.splitName || '').replace(/,/g, ' ');
+        const day = (log.dayName || '').replace(/,/g, ' ');
+        const tag = (log.dayTag || '').replace(/,/g, ' ');
+        const exName = (ex.name || '').replace(/,/g, ' ');
+        const cat = ex.category || 'workout';
+        const sets = ex.sets || 0;
+        const reps = (ex.untilFailure || ex.reps === 0) ? 'Failure' : (ex.reps || 0);
+        const weight = ex.weight || 0;
+        const unit = ex.weightUnit || 'kg';
+        const notes = (ex.notes || '').replace(/,/g, ' ');
+
+        csv += `${date},${split},${day},${tag},${exName},${cat},${sets},${reps},${weight},${unit},${volKg},"${notes}"\n`;
+      });
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const dateStr = new Date().toISOString().slice(0, 10);
+    link.href = url;
+    link.download = `workout_logs_${dateStr}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    setMsg({ text: 'CSV workout log exported successfully!', type: 'success' });
+  }
+
+  async function exportJSON() {
+    const data = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      splits: splits || [],
+      logs: logs || [],
+    };
+    const jsonStr = JSON.stringify(data, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const dateStr = new Date().toISOString().slice(0, 10);
+    link.href = url;
+    link.download = `workout_tracker_backup_${dateStr}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    setMsg({ text: 'JSON backup file exported successfully!', type: 'success' });
+  }
+
+  function handleImportFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    setMsg(null);
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const json = JSON.parse(event.target.result);
+        if (!json.logs && !json.splits) {
+          throw new Error('Invalid backup file structure.');
+        }
+        
+        if (json.logs && Array.isArray(json.logs)) {
+          for (const l of json.logs) {
+            await storage.saveLog(l);
+          }
+        }
+        queryClient.invalidateQueries({ queryKey: ['logs'] });
+        queryClient.invalidateQueries({ queryKey: ['splits'] });
+        setMsg({ text: `Imported successfully! Restored backup data.`, type: 'success' });
+      } catch (err) {
+        setMsg({ text: `Import failed: ${err.message}`, type: 'error' });
+      } finally {
+        setImporting(false);
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  return createPortal(
+    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 440 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div className="modal-title" style={{ fontSize: 18, margin: 0 }}>Data & Backups</div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text3)', fontSize: 16, cursor: 'pointer' }}>✕</button>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+          <div style={{ padding: 14, borderRadius: 10, background: 'var(--bg3)', border: '1px solid var(--border)' }}>
+            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4, color: 'var(--text)' }}>
+              📊 Export Workout History (CSV)
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 10 }}>
+              Download your complete workout logs as a spreadsheet compatible with Excel and Google Sheets.
+            </div>
+            <button className="btn btn-ghost" style={{ fontSize: 12, width: '100%' }} onClick={exportCSV}>
+              Download CSV
+            </button>
+          </div>
+
+          <div style={{ padding: 14, borderRadius: 10, background: 'var(--bg3)', border: '1px solid var(--border)' }}>
+            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4, color: 'var(--text)' }}>
+              📁 Export Full Backup (JSON)
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 10 }}>
+              Export all your custom splits, exercise routines, and workout history as a JSON backup file.
+            </div>
+            <button className="btn btn-ghost" style={{ fontSize: 12, width: '100%' }} onClick={exportJSON}>
+              Download JSON Backup
+            </button>
+          </div>
+
+          <div style={{ padding: 14, borderRadius: 10, background: 'var(--bg3)', border: '1px solid var(--border)' }}>
+            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4, color: 'var(--text)' }}>
+              📥 Restore / Import Backup (JSON)
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 10 }}>
+              Upload a `.json` backup file to restore past workouts and split programs.
+            </div>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".json"
+              style={{ display: 'none' }}
+              onChange={handleImportFile}
+            />
+            <button
+              className="btn btn-accent"
+              style={{ fontSize: 12, width: '100%' }}
+              onClick={() => fileRef.current?.click()}
+              disabled={importing}
+            >
+              {importing ? 'Importing...' : 'Select Backup File'}
+            </button>
+          </div>
+        </div>
+
+        {msg && (
+          <div style={{
+            fontSize: 12, fontWeight: 600, padding: '8px 12px', borderRadius: 6,
+            background: msg.type === 'error' ? 'rgba(248,113,113,0.12)' : 'rgba(68,255,136,0.12)',
+            color: msg.type === 'error' ? 'var(--red)' : 'var(--green)',
+            border: `1px solid ${msg.type === 'error' ? 'rgba(248,113,113,0.3)' : 'rgba(68,255,136,0.3)'}`,
+            marginBottom: 12,
+          }}>
+            {msg.text}
+          </div>
+        )}
+
+        <div className="modal-actions">
+          <button className="btn btn-ghost" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 export default function StatsPage() {
   const queryClient = useQueryClient();
   const { storage, storageKey } = useStorage();
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showBackupModal, setShowBackupModal] = useState(false);
   const [confirm, setConfirm] = useState(null);
   const [progressionSearch, setProgressionSearch] = useState('');
 
@@ -619,9 +787,18 @@ export default function StatsPage() {
           <h1 className="page-title">Stats</h1>
           <div className="page-subtitle">{logs.length} total workouts</div>
         </div>
-        {logs.length > 0 && (
-          <button className="btn-icon" style={{ color: 'var(--red)' }} onClick={() => setConfirm('clear')}><TrashIcon /></button>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            className="btn"
+            style={{ fontSize: 11, padding: '6px 12px', gap: 5, background: 'var(--bg2)', border: '1px solid var(--border)' }}
+            onClick={() => setShowBackupModal(true)}
+          >
+            📁 Backups
+          </button>
+          {logs.length > 0 && (
+            <button className="btn-icon" style={{ color: 'var(--red)' }} onClick={() => setConfirm('clear')}><TrashIcon /></button>
+          )}
+        </div>
       </div>
 
       {isLoading ? <div className="spinner" /> : (
@@ -703,6 +880,16 @@ export default function StatsPage() {
         <StatsShareModal
           logs={weekLogs}
           onClose={() => setShowShareModal(false)}
+        />
+      )}
+
+      {showBackupModal && (
+        <BackupModal
+          logs={logs}
+          splits={storage.getSplits ? storage.getSplits() : []}
+          storage={storage}
+          queryClient={queryClient}
+          onClose={() => setShowBackupModal(false)}
         />
       )}
 

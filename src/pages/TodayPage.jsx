@@ -20,6 +20,127 @@ function convertWeight(weight, fromUnit, toUnit) {
   return weight;
 }
 
+function getExercisePRs(logs, currentDateStr = '') {
+  const prs = {};
+  (logs || []).forEach((log) => {
+    if (currentDateStr && log.date === currentDateStr) return;
+    (log.exercises || []).forEach((ex) => {
+      if (!ex.name || !ex.weight) return;
+      const key = ex.name.trim().toLowerCase();
+      const unit = ex.weightUnit || 'kg';
+      const wKg = convertWeight(ex.weight, unit, 'kg');
+      
+      if (!prs[key] || wKg > prs[key].maxWeightKg) {
+        prs[key] = {
+          maxWeight: ex.weight,
+          unit: unit,
+          maxWeightKg: wKg,
+          date: log.date,
+        };
+      }
+    });
+  });
+  return prs;
+}
+
+function ExerciseHistoryModal({ exName, logs, onClose }) {
+  const history = useMemo(() => {
+    const key = (exName || '').trim().toLowerCase();
+    const records = [];
+    (logs || []).forEach((log) => {
+      (log.exercises || []).forEach((e) => {
+        if ((e.name || '').trim().toLowerCase() === key) {
+          records.push({
+            date: log.date,
+            sets: e.sets || 0,
+            reps: e.reps || 0,
+            weight: e.weight || 0,
+            weightUnit: e.weightUnit || 'kg',
+            untilFailure: e.untilFailure,
+            notes: e.notes || '',
+            category: e.category,
+          });
+        }
+      });
+    });
+    return records.sort((a, b) => new Date(b.date) - new Date(a.date));
+  }, [exName, logs]);
+
+  const maxWKg = useMemo(() => {
+    return history.reduce((max, r) => {
+      const wKg = convertWeight(r.weight, r.weightUnit, 'kg');
+      return wKg > max ? wKg : max;
+    }, 0);
+  }, [history]);
+
+  return createPortal(
+    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 440 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <div className="modal-title" style={{ fontSize: 17, margin: 0, textTransform: 'uppercase' }}>
+            {exName} History
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text3)', fontSize: 16, cursor: 'pointer' }}>✕</button>
+        </div>
+
+        {history.length === 0 ? (
+          <div style={{ color: 'var(--text3)', fontSize: 13, fontStyle: 'italic', textAlign: 'center', padding: '24px 0' }}>
+            No past workout logs recorded for this exercise yet.
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 360, overflowY: 'auto', paddingRight: 4 }}>
+            {history.map((rec, idx) => {
+              const wKg = convertWeight(rec.weight, rec.weightUnit, 'kg');
+              const isPr = maxWKg > 0 && Math.abs(wKg - maxWKg) < 0.01;
+              const rLabel = (rec.untilFailure || rec.reps === 0) ? 'Failure' : `${rec.reps}`;
+              
+              return (
+                <div key={idx} style={{
+                  padding: '10px 12px',
+                  borderRadius: 8,
+                  background: isPr ? 'rgba(255, 215, 0, 0.05)' : 'var(--bg3)',
+                  border: `1px solid ${isPr ? 'rgba(255, 215, 0, 0.25)' : 'var(--border)'}`,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}>
+                  <div>
+                    <div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)', marginBottom: 2 }}>
+                      {rec.date}
+                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
+                      {rec.sets} sets × {rLabel} {rec.weight > 0 ? `@ ${rec.weight}${rec.weightUnit}` : ''}
+                    </div>
+                    {rec.notes && (
+                      <div style={{ fontSize: 11, color: 'var(--text2)', fontStyle: 'italic', marginTop: 2 }}>
+                        "{rec.notes}"
+                      </div>
+                    )}
+                  </div>
+                  {isPr && rec.weight > 0 && (
+                    <span style={{
+                      fontSize: 10, fontWeight: 800, color: '#ffd700',
+                      background: 'rgba(255, 215, 0, 0.12)', border: '1px solid rgba(255, 215, 0, 0.3)',
+                      padding: '2px 7px', borderRadius: 10, textTransform: 'uppercase', letterSpacing: '0.04em'
+                    }}>
+                      🏆 Max
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="modal-actions" style={{ marginTop: 16 }}>
+          <button className="btn btn-ghost" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 function CheckIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -402,7 +523,7 @@ function CategoryHeader({ type }) {
   );
 }
 
-function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly, isCompleted }) {
+function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly, isCompleted, dateStr, logs, onShowToast }) {
   const queryClient = useQueryClient();
   const { storage, storageKey } = useStorage();
   const [editingWeight, setEditingWeight] = useState(false);
@@ -413,6 +534,38 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
   const [setsVal, setSetsVal] = useState(String(ex.sets ?? 3));
   const [repsVal, setRepsVal] = useState(String(ex.reps ?? 0));
   const [showSwapModal, setShowSwapModal] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [notesVal, setNotesVal] = useState(ex.notes || '');
+
+  const notesMutation = useMutation({
+    mutationFn: (notes) => storage.updateExercise(splitId, dayId, ex._id, { notes }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
+      setEditingNotes(false);
+    },
+  });
+
+  const prInfo = useMemo(() => {
+    const historicalPrs = getExercisePRs(logs, dateStr);
+    const key = (ex.name || '').trim().toLowerCase();
+    const prevPr = historicalPrs[key];
+    if (!prevPr || !(ex.weight > 0)) return null;
+
+    const currentWKg = convertWeight(ex.weight, ex.weightUnit || 'kg', 'kg');
+    if (currentWKg > prevPr.maxWeightKg + 0.01) {
+      const prevWInCurrentUnit = convertWeight(prevPr.maxWeightKg, 'kg', ex.weightUnit || 'kg');
+      const diff = ex.weight - prevWInCurrentUnit;
+      const diffFormatted = Math.abs(diff).toFixed(1).replace(/\.0$/, '');
+      return {
+        isPr: true,
+        diff: diff > 0.01 ? `+${diffFormatted}${ex.weightUnit}` : null,
+        prevWeight: prevPr.maxWeight,
+        prevUnit: prevPr.unit,
+      };
+    }
+    return null;
+  }, [logs, dateStr, ex.name, ex.weight, ex.weightUnit]);
 
   const swapMutation = useMutation({
     mutationFn: (updatedData) => storage.updateExercise(splitId, dayId, ex._id, updatedData),
@@ -428,6 +581,9 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
     onSuccess: (updated) => {
       onToggle(updated);
       queryClient.invalidateQueries({ queryKey: ['splits'] });
+      if (updated.checked && prInfo?.isPr && onShowToast) {
+        onShowToast(`🏆 NEW PR! ${ex.name} @ ${ex.weight}${ex.weightUnit}`);
+      }
     },
   });
 
@@ -567,15 +723,34 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
 
       {/* Name + meta */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{
-          fontSize: 15, fontWeight: 800,
-          fontFamily: 'var(--font-display)',
-          letterSpacing: '0.02em', textTransform: 'uppercase',
-          textDecoration: effectiveChecked ? 'line-through' : 'none',
-          color: effectiveChecked ? 'var(--text3)' : 'var(--text)',
-          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-        }}>
-          {ex.name}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <div style={{
+            fontSize: 15, fontWeight: 800,
+            fontFamily: 'var(--font-display)',
+            letterSpacing: '0.02em', textTransform: 'uppercase',
+            textDecoration: effectiveChecked ? 'line-through' : 'none',
+            color: effectiveChecked ? 'var(--text3)' : 'var(--text)',
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>
+            {ex.name}
+          </div>
+          {prInfo && (
+            <span
+              style={{
+                fontSize: 10, fontWeight: 800, letterSpacing: '0.04em',
+                color: '#ffd700',
+                background: 'linear-gradient(135deg, rgba(255, 215, 0, 0.15) 0%, rgba(255, 165, 0, 0.15) 100%)',
+                border: '1px solid rgba(255, 215, 0, 0.3)',
+                padding: '2px 7px', borderRadius: 10,
+                display: 'inline-flex', alignItems: 'center', gap: 3,
+                boxShadow: '0 0 10px rgba(255, 215, 0, 0.15)',
+                textTransform: 'uppercase',
+              }}
+              title={`Previous PR: ${prInfo.prevWeight}${prInfo.prevUnit}`}
+            >
+              🏆 PR {prInfo.diff ? `(${prInfo.diff})` : ''}
+            </span>
+          )}
         </div>
         {editingSetsReps ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 3 }}>
@@ -607,7 +782,7 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
               style={{ padding: '2px 6px', borderRadius: 4, border: '1px solid var(--border2)', background: 'transparent', color: 'var(--text3)', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>✕</button>
           </div>
         ) : (
-          <div style={{ display: 'flex', alignItems: 'center', marginTop: 2 }}>
+          <div style={{ display: 'flex', alignItems: 'center', marginTop: 2, flexWrap: 'wrap', gap: 4 }}>
             <div
               onClick={() => !readOnly && setEditingSetsReps(true)}
               title={readOnly ? '' : 'Tap to edit sets & reps'}
@@ -616,21 +791,75 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
               {ex.sets} × {repsLabel}
             </div>
             {!readOnly && (
-              <button
-                onClick={() => setShowSwapModal(true)}
-                style={{
-                  color: 'var(--text3)',
-                  fontSize: 10, fontFamily: 'var(--font-mono)', cursor: 'pointer',
-                  marginLeft: 8, padding: '2px 6px', borderRadius: 4,
-                  border: '1.5px solid var(--border2)', background: 'var(--bg3)',
-                  display: 'inline-flex', alignItems: 'center', gap: 3
-                }}
-              >
-                <SwapIcon /> Swap
-              </button>
+              <>
+                <button
+                  onClick={() => setShowSwapModal(true)}
+                  style={{
+                    color: 'var(--text3)',
+                    fontSize: 10, fontFamily: 'var(--font-mono)', cursor: 'pointer',
+                    padding: '2px 5px', borderRadius: 4,
+                    border: '1.5px solid var(--border2)', background: 'var(--bg3)',
+                    display: 'inline-flex', alignItems: 'center', gap: 3
+                  }}
+                >
+                  <SwapIcon /> Swap
+                </button>
+                <button
+                  onClick={() => setShowHistoryModal(true)}
+                  style={{
+                    color: 'var(--text3)',
+                    fontSize: 10, fontFamily: 'var(--font-mono)', cursor: 'pointer',
+                    padding: '2px 5px', borderRadius: 4,
+                    border: '1.5px solid var(--border2)', background: 'var(--bg3)',
+                    display: 'inline-flex', alignItems: 'center', gap: 3
+                  }}
+                  title="View exercise history"
+                >
+                  📊 History
+                </button>
+                <button
+                  onClick={() => setEditingNotes(v => !v)}
+                  style={{
+                    color: ex.notes ? 'var(--accent)' : 'var(--text3)',
+                    fontSize: 10, fontFamily: 'var(--font-mono)', cursor: 'pointer',
+                    padding: '2px 5px', borderRadius: 4,
+                    border: ex.notes ? '1.5px solid rgba(232,255,90,0.3)' : '1.5px solid var(--border2)',
+                    background: ex.notes ? 'rgba(232,255,90,0.06)' : 'var(--bg3)',
+                    display: 'inline-flex', alignItems: 'center', gap: 3
+                  }}
+                  title="Add or edit notes"
+                >
+                  📝 Note
+                </button>
+              </>
             )}
           </div>
         )}
+        {editingNotes ? (
+          <div style={{ display: 'flex', gap: 4, marginTop: 5 }}>
+            <input
+              type="text"
+              placeholder="Add note (e.g. seat 4, slow eccentric)..."
+              value={notesVal}
+              onChange={(e) => setNotesVal(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  notesMutation.mutate(notesVal);
+                }
+              }}
+              style={{ flex: 1, padding: '3px 7px', fontSize: 11, borderRadius: 5, border: '1px solid var(--accent)', background: 'var(--bg3)', color: 'var(--text)', outline: 'none' }}
+            />
+            <button onClick={() => notesMutation.mutate(notesVal)} style={{ padding: '2px 8px', borderRadius: 4, background: 'var(--accent)', color: '#0a0a0a', fontWeight: 800, fontSize: 11, border: 'none', cursor: 'pointer' }}>✓</button>
+          </div>
+        ) : ex.notes ? (
+          <div
+            onClick={() => !readOnly && setEditingNotes(true)}
+            style={{ fontSize: 11, color: 'var(--text2)', fontStyle: 'italic', marginTop: 4, cursor: readOnly ? 'default' : 'pointer', background: 'rgba(255,255,255,0.02)', padding: '3px 6px', borderRadius: 4, border: '1px solid var(--border)' }}
+            title={readOnly ? '' : 'Tap to edit note'}
+          >
+            📝 "{ex.notes}"
+          </div>
+        ) : null}
         {ex.muscleTargets?.length > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 4 }}>
             {ex.muscleTargets.slice(0, 3).map((t) => <MusclePill key={t} target={t} />)}
@@ -734,6 +963,14 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
             {ex.weight > 0 ? ex.weightUnit : (readOnly ? '' : 'tap')}
           </div>
         </div>
+      )}
+
+      {showHistoryModal && (
+        <ExerciseHistoryModal
+          exName={ex.name}
+          logs={logs}
+          onClose={() => setShowHistoryModal(false)}
+        />
       )}
       {showSwapModal && (
         <SwapExerciseModal
@@ -1120,7 +1357,7 @@ function SwapExerciseModal({ currentExName, onConfirm, onClose }) {
   );
 }
 
-function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dateStr, logForDate, logs }) {
+function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dateStr, logForDate, logs, onShowToast }) {
   const queryClient = useQueryClient();
   const { storage } = useStorage();
   const [open, setOpen] = useState(defaultOpen);
@@ -1277,7 +1514,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
                       <div>
                         <CategoryHeader type="warmup" />
                         {warmups.map((ex, i) => (
-                          <ExerciseRow key={ex._id || i} ex={ex} index={displayExercises.indexOf(ex)} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} />
+                          <ExerciseRow key={ex._id || i} ex={ex} index={displayExercises.indexOf(ex)} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} dateStr={dateStr} logs={logs} onShowToast={onShowToast} />
                         ))}
                       </div>
                     )}
@@ -1286,7 +1523,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
                       <div>
                         <CategoryHeader type="workout" />
                         {workouts.map((ex, i) => (
-                          <ExerciseRow key={ex._id || i} ex={ex} index={displayExercises.indexOf(ex)} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} />
+                          <ExerciseRow key={ex._id || i} ex={ex} index={displayExercises.indexOf(ex)} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} dateStr={dateStr} logs={logs} onShowToast={onShowToast} />
                         ))}
                       </div>
                     )}
@@ -1295,7 +1532,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
                       <div>
                         <CategoryHeader type="cooldown" />
                         {cooldowns.map((ex, i) => (
-                          <ExerciseRow key={ex._id || i} ex={ex} index={displayExercises.indexOf(ex)} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} />
+                          <ExerciseRow key={ex._id || i} ex={ex} index={displayExercises.indexOf(ex)} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} dateStr={dateStr} logs={logs} onShowToast={onShowToast} />
                         ))}
                       </div>
                     )}
@@ -1386,6 +1623,12 @@ export default function TodayPage() {
   const { storage, storageKey } = useStorage();
   const queryClient = useQueryClient();
   const savingDatesRef = useRef(new Set());
+  const [toast, setToast] = useState(null);
+
+  function showToast(message, type = 'success') {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3500);
+  }
   const { data: splits = [], isLoading, error } = useQuery({
     queryKey: ['splits', storageKey],
     queryFn: storage.getSplits,
@@ -1701,6 +1944,7 @@ Coach:`;
                 dateStr={dateStr}
                 logForDate={logForDate}
                 logs={logs}
+                onShowToast={showToast}
               />
             );
           })
@@ -1735,6 +1979,18 @@ Coach:`;
           onAllow={handleAiActionApproved}
           onDeny={handleAiActionDenied}
         />
+      )}
+      {toast && (
+        <div style={{
+          position: 'fixed', bottom: 76, left: '50%', transform: 'translateX(-50%)',
+          zIndex: 1000, background: 'var(--bg2)', border: '1.5px solid var(--accent)',
+          borderRadius: 30, padding: '10px 20px', color: 'var(--text)',
+          fontSize: 13, fontWeight: 700, boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+          display: 'flex', alignItems: 'center', gap: 10, animation: 'fadeIn 0.2s ease'
+        }}>
+          {toast.message}
+          <button onClick={() => setToast(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', fontSize: 14 }}>✕</button>
+        </div>
       )}
     </div>
   );

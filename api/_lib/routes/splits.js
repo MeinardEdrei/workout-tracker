@@ -451,7 +451,7 @@ router.put('/:id/days/:dayId/exercises/:exId', async (req, res) => {
     if (!day) return res.status(404).json({ error: 'Day not found' });
     const ex = day.exercises.id(req.params.exId);
     if (!ex) return res.status(404).json({ error: 'Exercise not found' });
-    const fields = ['name', 'sets', 'reps', 'weight', 'weightUnit', 'muscleTargets', 'untilFailure', 'imageUrl', 'imageSource', 'placeholderUsed', 'category'];
+    const fields = ['name', 'sets', 'reps', 'weight', 'weightUnit', 'muscleTargets', 'untilFailure', 'imageUrl', 'imageSource', 'placeholderUsed', 'category', 'notes'];
     fields.forEach((f) => { if (req.body[f] !== undefined) ex[f] = req.body[f]; });
     if (req.body.untilFailure === true) ex.reps = null;
     await split.save();
