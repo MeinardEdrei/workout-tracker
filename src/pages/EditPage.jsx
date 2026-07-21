@@ -538,11 +538,14 @@ function AddExerciseModal({ onConfirm, onClose }) {
   function submit(e) {
     e.preventDefault();
     if (!form.name.trim()) return;
+    const numReps = +form.reps;
+    const isFailure = form.untilFailure || numReps === 0;
     onConfirm({
       ...form,
       name: form.name.trim(),
       sets: +form.sets,
-      reps: form.untilFailure ? null : +form.reps,
+      reps: isFailure ? 0 : numReps,
+      untilFailure: isFailure,
       weight: +form.weight,
     });
   }
@@ -759,11 +762,14 @@ function SwapExerciseModal({ currentExName, onConfirm, onClose }) {
   function submit(e) {
     e.preventDefault();
     if (!form.name.trim()) return;
+    const numReps = +form.reps;
+    const isFailure = form.untilFailure || numReps === 0;
     onConfirm({
       ...form,
       name: form.name.trim(),
       sets: +form.sets,
-      reps: form.untilFailure ? null : +form.reps,
+      reps: isFailure ? 0 : numReps,
+      untilFailure: isFailure,
       weight: +form.weight,
     });
   }
@@ -1068,11 +1074,14 @@ function EditExerciseModal({ ex, splitId, dayId, onConfirm, onClose, onUpdate })
   function submit(e) {
     e.preventDefault();
     if (!form.name.trim()) return;
+    const numReps = +form.reps;
+    const isFailure = form.untilFailure || numReps === 0;
     onConfirm({
       ...form,
       name: form.name.trim(),
       sets: +form.sets,
-      reps: form.untilFailure ? null : +form.reps,
+      reps: isFailure ? 0 : numReps,
+      untilFailure: isFailure,
       weight: +form.weight,
     });
   }
@@ -1296,11 +1305,14 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
   async function handleSave(updatedForm) {
     const oldWeight = ex.weight ?? 0;
     const newWeight = +updatedForm.weight;
+    const numReps = +updatedForm.reps;
+    const isFailure = updatedForm.untilFailure || numReps === 0;
     try {
       const updated = await storage.updateExercise(splitId, dayId, ex._id, {
         ...updatedForm,
         sets: +updatedForm.sets,
-        reps: updatedForm.untilFailure ? null : +updatedForm.reps,
+        reps: isFailure ? 0 : numReps,
+        untilFailure: isFailure,
         weight: newWeight,
       });
       onUpdate(updated);
@@ -1333,7 +1345,7 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
   }
 
   const weightLabel = ex.weight > 0 ? ` · ${ex.weight}${ex.weightUnit}` : '';
-  const repsLabel = ex.untilFailure ? 'Until Failure' : ex.reps > 0 ? `${ex.reps} reps` : 'max reps';
+  const repsLabel = (ex.untilFailure || !ex.reps || ex.reps === 0) ? 'Until Failure' : `${ex.reps} reps`;
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 14px', borderBottom: '1px solid var(--border)' }}>

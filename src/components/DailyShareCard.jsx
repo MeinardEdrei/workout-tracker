@@ -111,7 +111,7 @@ export default function DailyShareCard({ log, cardRef }) {
       <div style={{ padding: '8px 0 4px' }}>
         {log.exercises.map((ex, i) => {
           const wLabel = ex.weight > 0 ? ` · ${ex.weight}${ex.weightUnit}` : '';
-          const rLabel = ex.reps > 0 ? `${ex.reps} reps` : 'max';
+          const rLabel = (ex.untilFailure || !ex.reps || ex.reps === 0) ? 'Failure' : `${ex.reps} reps`;
           return (
             <div key={i} style={{
               display: 'flex',

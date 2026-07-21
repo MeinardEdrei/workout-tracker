@@ -549,7 +549,7 @@ function LogCard({ log, onDelete }) {
         <div style={{ borderTop: '1px solid var(--border)' }}>
           {log.exercises.map((ex, i) => {
             const wLabel = ex.weight > 0 ? `${ex.weight}${ex.weightUnit}` : '—';
-            const rLabel = ex.reps > 0 ? ex.reps : 'max';
+            const rLabel = (ex.untilFailure || !ex.reps || ex.reps === 0) ? 'Failure' : ex.reps;
             let prefix = "";
             let nameStyle = { fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-display)', textTransform: 'uppercase', color: 'var(--text)', letterSpacing: '0.01em' };
             if (ex.category === 'warmup') {

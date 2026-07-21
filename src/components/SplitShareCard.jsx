@@ -19,8 +19,9 @@ function fs(base, scale) {
 }
 
 function ExerciseRow({ ex, scale }) {
+  const rLabel = (ex.untilFailure || !ex.reps || ex.reps === 0) ? 'Failure' : ex.reps;
   const stats = [
-    ex.sets > 0 && ex.reps > 0 ? `${ex.sets}×${ex.reps}` : ex.sets > 0 ? `${ex.sets} sets` : null,
+    ex.sets > 0 ? `${ex.sets}×${rLabel}` : null,
     ex.weight > 0 ? `${ex.weight}${ex.weightUnit}` : null,
   ].filter(Boolean).join(' · ');
 

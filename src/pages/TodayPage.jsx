@@ -445,7 +445,15 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
   });
 
   const setsRepsMutation = useMutation({
-    mutationFn: ({ sets, reps }) => storage.updateExercise(splitId, dayId, ex._id, { sets: +sets, reps: +reps }),
+    mutationFn: ({ sets, reps }) => {
+      const numReps = +reps;
+      const isFailure = numReps === 0;
+      return storage.updateExercise(splitId, dayId, ex._id, { 
+        sets: +sets, 
+        reps: numReps, 
+        untilFailure: isFailure 
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
       setEditingSetsReps(false);
@@ -461,7 +469,7 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
     setSyncPrompt(null);
   }
 
-  const repsLabel = ex.untilFailure ? '∞' : (ex.reps > 0 ? ex.reps : 'max');
+  const repsLabel = (ex.untilFailure || !ex.reps || ex.reps === 0) ? '∞' : ex.reps;
 
   return (
     <div style={{
@@ -533,9 +541,9 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
         ) : (
           <div style={{ display: 'flex', alignItems: 'center', marginTop: 2 }}>
             <div
-              onClick={() => !readOnly && !ex.untilFailure && setEditingSetsReps(true)}
-              title={readOnly || ex.untilFailure ? '' : 'Tap to edit sets & reps'}
-              style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)', cursor: (readOnly || ex.untilFailure) ? 'default' : 'pointer', display: 'inline-block' }}
+              onClick={() => !readOnly && setEditingSetsReps(true)}
+              title={readOnly ? '' : 'Tap to edit sets & reps'}
+              style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)', cursor: readOnly ? 'default' : 'pointer', display: 'inline-block' }}
             >
               {ex.sets} × {repsLabel}
             </div>
@@ -926,11 +934,14 @@ function SwapExerciseModal({ currentExName, onConfirm, onClose }) {
   function submit(e) {
     e.preventDefault();
     if (!form.name.trim()) return;
+    const numReps = +form.reps;
+    const isFailure = form.untilFailure || numReps === 0;
     onConfirm({
       ...form,
       name: form.name.trim(),
       sets: +form.sets,
-      reps: form.untilFailure ? null : +form.reps,
+      reps: isFailure ? 0 : numReps,
+      untilFailure: isFailure,
       weight: +form.weight,
     });
   }
@@ -1412,11 +1423,11 @@ export default function TodayPage() {
 
 Today's session — Day: ${todayDay.name}${todayDay.tag ? ` (${todayDay.tag})` : ''}
 Exercises ${todayLog ? 'done' : 'planned'}:
-${targetExs.map(e => `- ${e.name}: ${e.sets}×${e.reps || 'max'} reps${e.weight ? ` @ ${e.weight}${e.weightUnit}` : ''}`).join('\n')}`
+${targetExs.map(e => `- ${e.name}: ${e.sets}×${(e.untilFailure || !e.reps || e.reps === 0) ? 'failure' : e.reps} reps${e.weight ? ` @ ${e.weight}${e.weightUnit}` : ''}`).join('\n')}`
       : `Analyze this ${todayLog ? 'completed' : 'planned'} workout. Keep it under 100 words with bullet points.
 
 Split: ${activeSplit.name} | Day: ${todayDay.name}
-Exercises: ${targetExs.map(e => `${e.name} ${e.sets}×${e.reps || 'max'}`).join(', ')}`;
+Exercises: ${targetExs.map(e => `${e.name} ${e.sets}×${(e.untilFailure || !e.reps || e.reps === 0) ? 'failure' : e.reps}`).join(', ')}`;
 
     try {
       let result = '';

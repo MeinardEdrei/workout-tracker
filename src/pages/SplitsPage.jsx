@@ -372,7 +372,10 @@ export default function SplitsPage() {
       const sortedDays = [...(s.days || [])].sort((a, b) => (a.dayOrder ?? 8) - (b.dayOrder ?? 8));
       const daysStr = sortedDays.map(d => {
         if (d.isRest) return `- ${d.name}: Rest Day`;
-        const exList = (d.exercises || []).map(e => `${e.name} (${e.sets}x${e.reps}${e.weight > 0 ? ` @ ${e.weight}${e.weightUnit}` : ''})`).join(', ');
+        const exList = (d.exercises || []).map(e => {
+          const rStr = (e.untilFailure || !e.reps || e.reps === 0) ? 'Failure' : `${e.reps}`;
+          return `${e.name} (${e.sets}x${rStr}${e.weight > 0 ? ` @ ${e.weight}${e.weightUnit}` : ''})`;
+        }).join(', ');
         return `- ${d.name} (${d.tag || 'No tag'}): ${exList || 'No exercises yet'}`;
       }).join('\n');
       return `Split Name: ${s.name}${s.isActive ? ' (ACTIVE SPLIT)' : ''}\nDays:\n${daysStr}`;
@@ -892,7 +895,7 @@ Coach:`;
                                     >
                                       <span style={nameStyle}>{prefix}{idx + 1}. {ex.name}</span>
                                       <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text3)', fontSize: 12 }}>
-                                        {ex.sets}×{ex.untilFailure ? 'Failure' : ex.reps}{ex.weight > 0 ? ` @ ${ex.weight}${ex.weightUnit}` : ''}
+                                        {ex.sets}×{(ex.untilFailure || !ex.reps || ex.reps === 0) ? 'Failure' : ex.reps}{ex.weight > 0 ? ` @ ${ex.weight}${ex.weightUnit}` : ''}
                                       </span>
                                     </div>
                                   );
