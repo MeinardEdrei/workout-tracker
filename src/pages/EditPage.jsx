@@ -1305,20 +1305,37 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
   async function handleSave(updatedForm) {
     const oldWeight = ex.weight ?? 0;
     const newWeight = +updatedForm.weight;
+    const oldUnit = ex.weightUnit || 'kg';
+    const newUnit = updatedForm.weightUnit || 'kg';
+
+    const oldSets = ex.sets ?? 3;
+    const newSets = +updatedForm.sets;
+
     const numReps = +updatedForm.reps;
     const isFailure = updatedForm.untilFailure || numReps === 0;
+    const oldReps = ex.reps ?? 10;
+    const newReps = isFailure ? 0 : numReps;
+
+    const oldUntilFailure = !!ex.untilFailure;
+    const newUntilFailure = isFailure;
+
     try {
       const updated = await storage.updateExercise(splitId, dayId, ex._id, {
         ...updatedForm,
-        sets: +updatedForm.sets,
-        reps: isFailure ? 0 : numReps,
-        untilFailure: isFailure,
+        sets: newSets,
+        reps: newReps,
+        untilFailure: newUntilFailure,
         weight: newWeight,
       });
       onUpdate(updated);
       setEditing(false);
 
-      if (newWeight !== oldWeight) {
+      const oldWConverted = convertWeight(oldWeight, oldUnit, newUnit);
+      const weightChanged = Math.abs(newWeight - oldWConverted) >= 0.01;
+      const setsChanged = newSets !== oldSets;
+      const repsChanged = newReps !== oldReps || newUntilFailure !== oldUntilFailure;
+
+      if (weightChanged || setsChanged || repsChanged) {
         const otherDays = (splitDays || [])
           .filter((d) => d._id !== dayId && !d.isRest)
           .flatMap((d) =>
@@ -1327,7 +1344,19 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
               .map((e) => ({ dayName: d.name, dayId: d._id, exId: e._id }))
           );
         if (otherDays.length > 0) {
-          setSyncPrompt({ otherDays, oldWeight, newWeight, unit: updatedForm.weightUnit });
+          setSyncPrompt({
+            otherDays,
+            oldWeight,
+            oldUnit,
+            newWeight,
+            newUnit,
+            oldSets,
+            newSets,
+            oldReps: oldUntilFailure ? 0 : oldReps,
+            newReps: newUntilFailure ? 0 : newReps,
+            oldUntilFailure,
+            newUntilFailure,
+          });
         }
       }
     } catch (err) {
@@ -1337,8 +1366,15 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
 
   async function handleSync() {
     if (!syncPrompt) return;
+    const payload = {};
+    if (syncPrompt.newWeight !== undefined) payload.weight = syncPrompt.newWeight;
+    if (syncPrompt.newUnit !== undefined) payload.weightUnit = syncPrompt.newUnit;
+    if (syncPrompt.newSets !== undefined) payload.sets = syncPrompt.newSets;
+    if (syncPrompt.newReps !== undefined) payload.reps = syncPrompt.newReps;
+    if (syncPrompt.newUntilFailure !== undefined) payload.untilFailure = syncPrompt.newUntilFailure;
+
     for (const { dayId: dId, exId } of syncPrompt.otherDays) {
-      await storage.updateExercise(splitId, dId, exId, { weight: syncPrompt.newWeight, weightUnit: syncPrompt.unit });
+      await storage.updateExercise(splitId, dId, exId, payload);
     }
     queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
     setSyncPrompt(null);
@@ -1392,8 +1428,15 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
         <WeightSyncModal
           exName={ex.name}
           oldWeight={syncPrompt.oldWeight}
+          oldUnit={syncPrompt.oldUnit}
           newWeight={syncPrompt.newWeight}
-          unit={syncPrompt.unit}
+          newUnit={syncPrompt.newUnit}
+          oldSets={syncPrompt.oldSets}
+          newSets={syncPrompt.newSets}
+          oldReps={syncPrompt.oldReps}
+          newReps={syncPrompt.newReps}
+          oldUntilFailure={syncPrompt.oldUntilFailure}
+          newUntilFailure={syncPrompt.newUntilFailure}
           otherDays={syncPrompt.otherDays}
           onSync={handleSync}
           onSkip={() => setSyncPrompt(null)}

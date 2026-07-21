@@ -252,38 +252,60 @@ That's a good question! To give you a specific recommendation, what part of your
 - Feel free to ask more specific questions about volume, alternatives, or training frequency!`;
 }
 
-function WeightSyncModal({ exName, oldWeight, oldUnit, newWeight, newUnit, otherDays, onSync, onSkip }) {
-  const oldWInNewUnit = convertWeight(oldWeight, oldUnit, newUnit);
-  const delta = newWeight - oldWInNewUnit;
+function WeightSyncModal({ exName, oldWeight, oldUnit, newWeight, newUnit, oldSets, newSets, oldReps, newReps, oldUntilFailure, newUntilFailure, otherDays, onSync, onSkip }) {
+  const oldWInNewUnit = convertWeight(oldWeight ?? 0, oldUnit || 'kg', newUnit || 'kg');
+  const delta = (newWeight ?? 0) - oldWInNewUnit;
+  const weightChanged = Math.abs(delta) >= 0.01;
+  const setsRepsChanged = (oldSets !== undefined && newSets !== undefined && oldSets !== newSets) ||
+                          (oldReps !== undefined && newReps !== undefined && oldReps !== newReps) ||
+                          (oldUntilFailure !== undefined && newUntilFailure !== undefined && oldUntilFailure !== newUntilFailure);
+
   const isIncrease = delta > 0;
   const directionColor = isIncrease ? 'var(--green)' : '#f87171';
   const deltaFormatted = Math.abs(delta).toFixed(1);
 
+  const oldRepsStr = (oldUntilFailure || oldReps === 0) ? 'Failure' : `${oldReps}`;
+  const newRepsStr = (newUntilFailure || newReps === 0) ? 'Failure' : `${newReps}`;
+
   return createPortal(
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onSkip()}>
       <div className="modal">
-        <div className="modal-title" style={{ fontSize: 16 }}>Sync Weight Change?</div>
+        <div className="modal-title" style={{ fontSize: 16 }}>Sync Exercise Changes?</div>
         <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 12, lineHeight: 1.5 }}>
           <strong style={{ color: 'var(--text)' }}>{exName}</strong>
-          {' '}changed from{' '}
-          <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text)' }}>{oldWeight}{oldUnit}</span>
-          {' → '}
-          <span style={{ fontFamily: 'var(--font-mono)', color: directionColor, fontWeight: 700 }}>{newWeight}{newUnit}</span>
-          {' '}
-          <span style={{
-            fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
-            background: isIncrease ? 'rgba(68,255,136,0.12)' : 'rgba(248,113,113,0.12)',
-            color: directionColor, padding: '2px 6px', borderRadius: 4,
-          }}>
-            {isIncrease ? `+${deltaFormatted}${newUnit} increase` : `-${deltaFormatted}${newUnit} decrease`}
-          </span>
+          
+          {weightChanged && (
+            <div style={{ marginTop: 4 }}>
+              Weight:{' '}
+              <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text)' }}>{oldWeight}{oldUnit}</span>
+              {' → '}
+              <span style={{ fontFamily: 'var(--font-mono)', color: directionColor, fontWeight: 700 }}>{newWeight}{newUnit}</span>
+              {' '}
+              <span style={{
+                fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+                background: isIncrease ? 'rgba(68,255,136,0.12)' : 'rgba(248,113,113,0.12)',
+                color: directionColor, padding: '2px 6px', borderRadius: 4,
+              }}>
+                {isIncrease ? `+${deltaFormatted}${newUnit} increase` : `-${deltaFormatted}${newUnit} decrease`}
+              </span>
+            </div>
+          )}
+
+          {setsRepsChanged && (
+            <div style={{ marginTop: 4 }}>
+              Sets & Reps:{' '}
+              <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text)' }}>{oldSets}×{oldRepsStr}</span>
+              {' → '}
+              <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent)', fontWeight: 700 }}>{newSets}×{newRepsStr}</span>
+            </div>
+          )}
         </div>
         <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 16 }}>
           This exercise also appears in{' '}
           <strong style={{ color: 'var(--text2)' }}>
             {otherDays.map((d) => d.dayName).join(', ')}
           </strong>
-          . Sync the new weight there too?
+          . Sync these changes there too?
         </div>
         <div className="modal-actions">
           <button className="btn btn-ghost" onClick={onSkip}>Keep separate</button>
@@ -438,7 +460,13 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
           oldWeight: oldW, 
           oldUnit: oldUnit,
           newWeight: newW, 
-          newUnit: newUnit 
+          newUnit: newUnit,
+          oldSets: ex.sets ?? 3,
+          newSets: ex.sets ?? 3,
+          oldReps: ex.reps ?? 10,
+          newReps: ex.reps ?? 10,
+          oldUntilFailure: !!ex.untilFailure,
+          newUntilFailure: !!ex.untilFailure,
         });
       }
     },
@@ -454,16 +482,56 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
         untilFailure: isFailure 
       });
     },
-    onSuccess: () => {
+    onSuccess: (_, { sets, reps }) => {
       queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
       setEditingSetsReps(false);
+
+      const newSets = +sets;
+      const newReps = +reps;
+      const newUntilFailure = newReps === 0;
+      const oldSets = ex.sets ?? 3;
+      const oldReps = ex.reps ?? 10;
+      const oldUntilFailure = !!ex.untilFailure;
+
+      if (newSets === oldSets && newReps === oldReps && newUntilFailure === oldUntilFailure) return;
+
+      const otherDays = (splitDays || [])
+        .filter((d) => d._id !== dayId && !d.isRest)
+        .flatMap((d) =>
+          (d.exercises || [])
+            .filter((e) => e.name.toLowerCase() === ex.name.toLowerCase())
+            .map((e) => ({ dayName: d.name, dayId: d._id, exId: e._id }))
+        );
+
+      if (otherDays.length > 0) {
+        setSyncPrompt({
+          otherDays,
+          oldWeight: ex.weight ?? 0,
+          oldUnit: ex.weightUnit || 'kg',
+          newWeight: ex.weight ?? 0,
+          newUnit: ex.weightUnit || 'kg',
+          oldSets,
+          newSets,
+          oldReps: oldUntilFailure ? 0 : oldReps,
+          newReps: newUntilFailure ? 0 : newReps,
+          oldUntilFailure,
+          newUntilFailure,
+        });
+      }
     },
   });
 
   async function handleSync() {
     if (!syncPrompt) return;
+    const payload = {};
+    if (syncPrompt.newWeight !== undefined) payload.weight = syncPrompt.newWeight;
+    if (syncPrompt.newUnit !== undefined) payload.weightUnit = syncPrompt.newUnit;
+    if (syncPrompt.newSets !== undefined) payload.sets = syncPrompt.newSets;
+    if (syncPrompt.newReps !== undefined) payload.reps = syncPrompt.newReps;
+    if (syncPrompt.newUntilFailure !== undefined) payload.untilFailure = syncPrompt.newUntilFailure;
+
     for (const { dayId: dId, exId } of syncPrompt.otherDays) {
-      await storage.updateExercise(splitId, dId, exId, { weight: syncPrompt.newWeight, weightUnit: syncPrompt.newUnit });
+      await storage.updateExercise(splitId, dId, exId, payload);
     }
     queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
     setSyncPrompt(null);
@@ -577,6 +645,12 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
           oldUnit={syncPrompt.oldUnit}
           newWeight={syncPrompt.newWeight}
           newUnit={syncPrompt.newUnit}
+          oldSets={syncPrompt.oldSets}
+          newSets={syncPrompt.newSets}
+          oldReps={syncPrompt.oldReps}
+          newReps={syncPrompt.newReps}
+          oldUntilFailure={syncPrompt.oldUntilFailure}
+          newUntilFailure={syncPrompt.newUntilFailure}
           otherDays={syncPrompt.otherDays}
           onSync={handleSync}
           onSkip={() => setSyncPrompt(null)}
