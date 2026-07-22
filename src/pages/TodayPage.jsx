@@ -4,6 +4,7 @@ import { useStorage } from '../hooks/useStorage';
 import * as api from '../api/index.js';
 import { capitalizeWords } from '../utils/textFormat';
 import DailyShareCard from '../components/DailyShareCard';
+import BodyMap from '../components/BodyMap';
 import { MusclePill } from '../components/MusclePill';
 import ExerciseThumbnail from '../components/ExerciseThumbnail';
 import { createPortal } from 'react-dom';
@@ -198,27 +199,42 @@ function CompletionScreen({ log, onClose, onShare, sharing }) {
   const vol = log.totalVolume > 0
     ? log.totalVolume >= 1000 ? `${(log.totalVolume / 1000).toFixed(1)}k kg` : `${log.totalVolume} kg`
     : null;
+  const totalSets = (log.exercises || []).reduce((acc, ex) => acc + Number(ex.sets || 0), 0);
+
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 300, animation: 'fadeIn 0.2s ease' }}>
-      <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 480, padding: '28px 24px 40px', animation: 'slideUp 0.25s ease' }}>
-        <div style={{ textAlign: 'center', marginBottom: 20 }}>
-          <div style={{ fontSize: 48, marginBottom: 8 }}>💪</div>
-          <div style={{ fontSize: 26, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.02em', color: 'var(--accent)' }}>Workout Done!</div>
-          <div style={{ fontSize: 14, color: 'var(--text2)', marginTop: 4 }}>{log.dayName}{log.dayTag ? ` · ${log.dayTag}` : ''}</div>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300, animation: 'fadeIn 0.2s ease', padding: 16 }}>
+      <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 20, width: '100%', maxWidth: 440, padding: '24px 20px 28px', animation: 'scaleIn 0.25s ease', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 32, marginBottom: 4 }}>🏆</div>
+          <div style={{ fontSize: 22, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--accent)' }}>Workout Complete!</div>
+          <div style={{ fontSize: 13, color: 'var(--text2)', marginTop: 2 }}>{log.dayName}{log.dayTag ? ` · ${log.dayTag}` : ''}</div>
         </div>
-        <div style={{ display: 'flex', gap: 10, marginBottom: 24 }}>
-          <div style={{ flex: 1, background: 'var(--bg3)', borderRadius: 10, padding: '14px 16px', border: '1px solid var(--border)', textAlign: 'center' }}>
-            <div style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>Exercises</div>
-            <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--text)' }}>{log.exercises.length}</div>
+
+        {/* Stats Dashboard */}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ flex: 1, background: 'var(--bg3)', borderRadius: 10, padding: '10px 12px', border: '1px solid var(--border)', textAlign: 'center' }}>
+            <div style={{ fontSize: 9, color: 'var(--text3)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 2 }}>Exercises</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text)' }}>{log.exercises.length}</div>
+          </div>
+          <div style={{ flex: 1, background: 'var(--bg3)', borderRadius: 10, padding: '10px 12px', border: '1px solid var(--border)', textAlign: 'center' }}>
+            <div style={{ fontSize: 9, color: 'var(--text3)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 2 }}>Sets</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text)' }}>{totalSets}</div>
           </div>
           {vol && (
-            <div style={{ flex: 1, background: 'var(--bg3)', borderRadius: 10, padding: '14px 16px', border: '1px solid var(--border)', textAlign: 'center' }}>
-              <div style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>Volume</div>
-              <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--accent)' }}>{vol}</div>
+            <div style={{ flex: 1, background: 'var(--bg3)', borderRadius: 10, padding: '10px 12px', border: '1px solid var(--border)', textAlign: 'center' }}>
+              <div style={{ fontSize: 9, color: 'var(--text3)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 2 }}>Volume</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--accent)' }}>{vol}</div>
             </div>
           )}
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
+
+        {/* Dynamic Muscle Scanner Map */}
+        <div style={{ background: '#08080a', borderRadius: 12, padding: '14px 10px', display: 'flex', justifyContent: 'center', border: '1px solid var(--border)' }}>
+          <BodyMap exercises={log.exercises} size={90} />
+        </div>
+
+        {/* Action Buttons */}
+        <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
           <button className="btn btn-ghost" style={{ flex: 1 }} onClick={onClose}>Close</button>
           <button className="btn btn-accent" style={{ flex: 1, gap: 8 }} onClick={onShare} disabled={sharing}>
             <ShareIcon />{sharing ? 'Sharing…' : 'Share Card'}
