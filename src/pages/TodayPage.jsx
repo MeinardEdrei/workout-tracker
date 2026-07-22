@@ -20,6 +20,22 @@ function convertWeight(weight, fromUnit, toUnit) {
   return weight;
 }
 
+function findMatchingExercise(name, splitDays, pastExercises) {
+  if (!name) return null;
+  const targetName = name.trim().toLowerCase();
+  if (splitDays) {
+    for (const d of splitDays) {
+      const found = (d.exercises || []).find(e => e.name && e.name.trim().toLowerCase() === targetName);
+      if (found) return found;
+    }
+  }
+  if (pastExercises) {
+    const found = pastExercises.find(e => e.name && e.name.trim().toLowerCase() === targetName);
+    if (found) return found;
+  }
+  return null;
+}
+
 function getExercisePRs(logs, currentDateStr = '') {
   const prs = {};
   (logs || []).forEach((log) => {
@@ -378,7 +394,14 @@ That's a good question! To give you a specific recommendation, what part of your
 - Feel free to ask more specific questions about volume, alternatives, or training frequency!`;
 }
 
-function WeightSyncModal({ exName, oldWeight, oldUnit, newWeight, newUnit, oldSets, newSets, oldReps, newReps, oldUntilFailure, newUntilFailure, otherDays, onSync, onSkip }) {
+function WeightSyncModal({ 
+  exName, 
+  oldWeight, oldUnit, newWeight, newUnit, 
+  oldSets, newSets, oldReps, newReps, oldUntilFailure, newUntilFailure, 
+  oldMuscleTargets = [], newMuscleTargets = [],
+  oldCategory, newCategory,
+  otherDays, onSync, onSkip 
+}) {
   const oldWInNewUnit = convertWeight(oldWeight ?? 0, oldUnit || 'kg', newUnit || 'kg');
   const delta = (newWeight ?? 0) - oldWInNewUnit;
   const weightChanged = Math.abs(delta) >= 0.01;
@@ -386,9 +409,15 @@ function WeightSyncModal({ exName, oldWeight, oldUnit, newWeight, newUnit, oldSe
                           (oldReps !== undefined && newReps !== undefined && oldReps !== newReps) ||
                           (oldUntilFailure !== undefined && newUntilFailure !== undefined && oldUntilFailure !== newUntilFailure);
 
+  const tagsChanged = oldMuscleTargets.length !== newMuscleTargets.length ||
+                      !oldMuscleTargets.every(t => newMuscleTargets.includes(t)) ||
+                      !newMuscleTargets.every(t => oldMuscleTargets.includes(t));
+
+  const categoryChanged = oldCategory !== undefined && newCategory !== undefined && oldCategory !== newCategory;
+
   const isIncrease = delta > 0;
   const directionColor = isIncrease ? 'var(--green)' : '#f87171';
-  const deltaFormatted = Math.abs(delta).toFixed(1);
+  const deltaFormatted = Math.abs(delta).toFixed(1).replace(/\.0$/, '');
 
   const oldRepsStr = (oldUntilFailure || oldReps === 0) ? 'Failure' : `${oldReps}`;
   const newRepsStr = (newUntilFailure || newReps === 0) ? 'Failure' : `${newReps}`;
@@ -423,6 +452,24 @@ function WeightSyncModal({ exName, oldWeight, oldUnit, newWeight, newUnit, oldSe
               <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text)' }}>{oldSets}×{oldRepsStr}</span>
               {' → '}
               <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent)', fontWeight: 700 }}>{newSets}×{newRepsStr}</span>
+            </div>
+          )}
+
+          {tagsChanged && (
+            <div style={{ marginTop: 4 }}>
+              Targets:{' '}
+              <span style={{ color: 'var(--text)' }}>{oldMuscleTargets.length > 0 ? oldMuscleTargets.join(', ') : 'None'}</span>
+              {' → '}
+              <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{newMuscleTargets.length > 0 ? newMuscleTargets.join(', ') : 'None'}</span>
+            </div>
+          )}
+
+          {categoryChanged && (
+            <div style={{ marginTop: 4 }}>
+              Category:{' '}
+              <span style={{ color: 'var(--text)', textTransform: 'capitalize' }}>{oldCategory}</span>
+              {' → '}
+              <span style={{ color: 'var(--accent)', fontWeight: 700, textTransform: 'capitalize' }}>{newCategory}</span>
             </div>
           )}
         </div>
@@ -978,6 +1025,7 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
       )}
       {showSwapModal && (
         <SwapExerciseModal
+          splitDays={splitDays}
           currentExName={ex.name}
           onConfirm={(updatedData) => swapMutation.mutate(updatedData)}
           onClose={() => setShowSwapModal(false)}
@@ -1159,7 +1207,7 @@ function SwapIcon() {
   );
 }
 
-function SwapExerciseModal({ currentExName, onConfirm, onClose }) {
+function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
   const { storage, storageKey } = useStorage();
   const [form, setForm] = useState({ name: '', sets: 3, reps: 10, weight: 0, weightUnit: 'kg', muscleTargets: [], untilFailure: false });
   const [suggestions, setSuggestions] = useState([]);
@@ -1228,7 +1276,20 @@ function SwapExerciseModal({ currentExName, onConfirm, onClose }) {
   }, [form.name, pastExercises]);
 
   function handleSelectSuggestion(s) {
-    if (s.isCustom) {
+    const match = findMatchingExercise(s.name, splitDays, pastExercises);
+    if (match) {
+      setForm({
+        name: s.name,
+        sets: match.sets ?? 3,
+        reps: match.reps ?? 10,
+        weight: match.weight ?? 0,
+        weightUnit: match.weightUnit || 'kg',
+        muscleTargets: match.muscleTargets || [],
+        untilFailure: !!match.untilFailure,
+        imageUrl: match.imageUrl || s.imageUrl || '',
+        placeholderUsed: match.placeholderUsed || false,
+      });
+    } else if (s.isCustom) {
       setForm({
         name: s.name,
         sets: s.sets,
@@ -1249,15 +1310,32 @@ function SwapExerciseModal({ currentExName, onConfirm, onClose }) {
   function submit(e) {
     e.preventDefault();
     if (!form.name.trim()) return;
+    const name = form.name.trim();
+    const match = findMatchingExercise(name, splitDays, pastExercises);
+
+    const finalMuscleTargets = (form.muscleTargets && form.muscleTargets.length > 0)
+      ? form.muscleTargets
+      : (match ? match.muscleTargets || [] : []);
+
+    const finalWeight = (form.weight !== undefined && form.weight !== 0)
+      ? +form.weight
+      : (match ? match.weight ?? 0 : 0);
+
+    const finalWeightUnit = form.weightUnit || (match ? match.weightUnit || 'kg' : 'kg');
+
     const numReps = +form.reps;
     const isFailure = form.untilFailure || numReps === 0;
+
     onConfirm({
       ...form,
-      name: form.name.trim(),
+      name,
       sets: +form.sets,
       reps: isFailure ? 0 : numReps,
       untilFailure: isFailure,
-      weight: +form.weight,
+      weight: finalWeight,
+      weightUnit: finalWeightUnit,
+      muscleTargets: finalMuscleTargets,
+      imageUrl: form.imageUrl || (match ? match.imageUrl || '' : ''),
     });
   }
 

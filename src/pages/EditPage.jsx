@@ -217,33 +217,127 @@ function ConfirmModal({ message, onConfirm, onClose }) {
   );
 }
 
-function WeightSyncModal({ exName, oldWeight, newWeight, unit, otherDays, onSync, onSkip }) {
-  const delta = newWeight - oldWeight;
+function convertWeight(weight, fromUnit, toUnit) {
+  if (fromUnit === toUnit) return weight;
+  if (fromUnit === 'lbs' && toUnit === 'kg') {
+    return Math.round((weight / 2.20462) * 10) / 10;
+  }
+  if (fromUnit === 'kg' && toUnit === 'lbs') {
+    return Math.round((weight * 2.20462) * 10) / 10;
+  }
+  return weight;
+}
+
+function findMatchingExercise(name, splitDays, pastExercises) {
+  if (!name) return null;
+  const targetName = name.trim().toLowerCase();
+  if (splitDays) {
+    for (const d of splitDays) {
+      const found = (d.exercises || []).find(e => e.name && e.name.trim().toLowerCase() === targetName);
+      if (found) return found;
+    }
+  }
+  if (pastExercises) {
+    const found = pastExercises.find(e => e.name && e.name.trim().toLowerCase() === targetName);
+    if (found) return found;
+  }
+  return null;
+}
+
+function WeightSyncModal({ 
+  exName, 
+  oldWeight, oldUnit, newWeight, newUnit, 
+  oldSets, newSets, oldReps, newReps, oldUntilFailure, newUntilFailure, 
+  oldMuscleTargets = [], newMuscleTargets = [],
+  oldCategory, newCategory,
+  otherDays, onSync, onSkip 
+}) {
+  const oldWInNewUnit = convertWeight(oldWeight ?? 0, oldUnit || 'kg', newUnit || 'kg');
+  const delta = (newWeight ?? 0) - oldWInNewUnit;
+  const weightChanged = Math.abs(delta) >= 0.01;
+  const setsRepsChanged = (oldSets !== undefined && newSets !== undefined && oldSets !== newSets) ||
+                          (oldReps !== undefined && newReps !== undefined && oldReps !== newReps) ||
+                          (oldUntilFailure !== undefined && newUntilFailure !== undefined && oldUntilFailure !== newUntilFailure);
+
+  const tagsChanged = oldMuscleTargets.length !== newMuscleTargets.length ||
+                      !oldMuscleTargets.every(t => newMuscleTargets.includes(t)) ||
+                      !newMuscleTargets.every(t => oldMuscleTargets.includes(t));
+
+  const categoryChanged = oldCategory !== undefined && newCategory !== undefined && oldCategory !== newCategory;
+
   const isIncrease = delta > 0;
   const directionColor = isIncrease ? 'var(--green)' : '#f87171';
+  const deltaFormatted = Math.abs(delta).toFixed(1).replace(/\.0$/, '');
+
+  const oldRepsStr = (oldUntilFailure || oldReps === 0) ? 'Failure' : `${oldReps}`;
+  const newRepsStr = (newUntilFailure || newReps === 0) ? 'Failure' : `${newReps}`;
+
   return createPortal(
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onSkip()}>
       <div className="modal">
-        <div className="modal-title" style={{ fontSize: 16 }}>Sync Weight Change?</div>
+        <div className="modal-title" style={{ fontSize: 16 }}>Sync Exercise Changes?</div>
         <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 12, lineHeight: 1.5 }}>
           <strong style={{ color: 'var(--text)' }}>{exName}</strong>
-          {' '}changed from{' '}
-          <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text)' }}>{oldWeight}{unit}</span>
-          {' → '}
-          <span style={{ fontFamily: 'var(--font-mono)', color: directionColor, fontWeight: 700 }}>{newWeight}{unit}</span>
-          {' '}
-          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', background: isIncrease ? 'rgba(68,255,136,0.12)' : 'rgba(248,113,113,0.12)', color: directionColor, padding: '2px 6px', borderRadius: 4 }}>
-            {isIncrease ? `+${delta}${unit} increase` : `${delta}${unit} decrease`}
-          </span>
+          
+          {weightChanged && (
+            <div style={{ marginTop: 4 }}>
+              Weight:{' '}
+              <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text)' }}>{oldWeight}{oldUnit}</span>
+              {' → '}
+              <span style={{ fontFamily: 'var(--font-mono)', color: directionColor, fontWeight: 700 }}>{newWeight}{newUnit}</span>
+              {' '}
+              <span style={{
+                fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+                background: isIncrease ? 'rgba(68,255,136,0.12)' : 'rgba(248,113,113,0.12)',
+                color: directionColor, padding: '2px 6px', borderRadius: 4,
+              }}>
+                {isIncrease ? `+${deltaFormatted}${newUnit} increase` : `-${deltaFormatted}${newUnit} decrease`}
+              </span>
+            </div>
+          )}
+
+          {setsRepsChanged && (
+            <div style={{ marginTop: 4 }}>
+              Sets & Reps:{' '}
+              <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text)' }}>{oldSets}×{oldRepsStr}</span>
+              {' → '}
+              <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent)', fontWeight: 700 }}>{newSets}×{newRepsStr}</span>
+            </div>
+          )}
+
+          {tagsChanged && (
+            <div style={{ marginTop: 4 }}>
+              Targets:{' '}
+              <span style={{ color: 'var(--text)' }}>{oldMuscleTargets.length > 0 ? oldMuscleTargets.join(', ') : 'None'}</span>
+              {' → '}
+              <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{newMuscleTargets.length > 0 ? newMuscleTargets.join(', ') : 'None'}</span>
+            </div>
+          )}
+
+          {categoryChanged && (
+            <div style={{ marginTop: 4 }}>
+              Category:{' '}
+              <span style={{ color: 'var(--text)', textTransform: 'capitalize' }}>{oldCategory}</span>
+              {' → '}
+              <span style={{ color: 'var(--accent)', fontWeight: 700, textTransform: 'capitalize' }}>{newCategory}</span>
+            </div>
+          )}
         </div>
         <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 16 }}>
-          Also appears in{' '}
-          <strong style={{ color: 'var(--text2)' }}>{otherDays.map((d) => d.dayName).join(', ')}</strong>
-          . Sync the new weight there too?
+          This exercise also appears in{' '}
+          <strong style={{ color: 'var(--text2)' }}>
+            {otherDays.map((d) => d.dayName).join(', ')}
+          </strong>
+          . Sync these changes there too?
         </div>
         <div className="modal-actions">
           <button className="btn btn-ghost" onClick={onSkip}>Keep separate</button>
-          <button className="btn btn-accent" onClick={onSync}>Sync to all days</button>
+          <button
+            className="btn btn-accent"
+            onClick={onSync}
+          >
+            Sync to all days
+          </button>
         </div>
       </div>
     </div>,
@@ -436,7 +530,7 @@ function AddDayModal({ existingDays = [], onConfirm, onClose }) {
   );
 }
 
-function AddExerciseModal({ onConfirm, onClose }) {
+function AddExerciseModal({ splitDays, onConfirm, onClose }) {
   const { storage, storageKey } = useStorage();
   const [form, setForm] = useState({ name: '', sets: 3, reps: 10, weight: 0, weightUnit: 'kg', muscleTargets: [], untilFailure: false, imageUrl: '', placeholderUsed: false, category: 'workout' });
   const [suggestions, setSuggestions] = useState([]);
@@ -508,7 +602,21 @@ function AddExerciseModal({ onConfirm, onClose }) {
   function set(k, v) { setForm((f) => ({ ...f, [k]: v })); }
 
   function handleSelectSuggestion(s) {
-    if (s.isCustom) {
+    const match = findMatchingExercise(s.name, splitDays, pastExercises);
+    if (match) {
+      setForm({
+        name: s.name,
+        sets: match.sets ?? 3,
+        reps: match.reps ?? 10,
+        weight: match.weight ?? 0,
+        weightUnit: match.weightUnit || 'kg',
+        muscleTargets: match.muscleTargets || [],
+        untilFailure: !!match.untilFailure,
+        imageUrl: match.imageUrl || s.imageUrl || '',
+        placeholderUsed: match.placeholderUsed || false,
+        category: match.category || 'workout',
+      });
+    } else if (s.isCustom) {
       setForm({
         name: s.name,
         sets: s.sets,
@@ -538,15 +646,32 @@ function AddExerciseModal({ onConfirm, onClose }) {
   function submit(e) {
     e.preventDefault();
     if (!form.name.trim()) return;
+    const name = form.name.trim();
+    const match = findMatchingExercise(name, splitDays, pastExercises);
+
+    const finalMuscleTargets = (form.muscleTargets && form.muscleTargets.length > 0)
+      ? form.muscleTargets
+      : (match ? match.muscleTargets || [] : []);
+
+    const finalWeight = (form.weight !== undefined && form.weight !== 0)
+      ? +form.weight
+      : (match ? match.weight ?? 0 : 0);
+
+    const finalWeightUnit = form.weightUnit || (match ? match.weightUnit || 'kg' : 'kg');
+
     const numReps = +form.reps;
     const isFailure = form.untilFailure || numReps === 0;
+
     onConfirm({
       ...form,
-      name: form.name.trim(),
+      name,
       sets: +form.sets,
       reps: isFailure ? 0 : numReps,
       untilFailure: isFailure,
-      weight: +form.weight,
+      weight: finalWeight,
+      weightUnit: finalWeightUnit,
+      muscleTargets: finalMuscleTargets,
+      imageUrl: form.imageUrl || (match ? match.imageUrl || '' : ''),
     });
   }
 
@@ -672,7 +797,7 @@ function SwapIcon() {
   );
 }
 
-function SwapExerciseModal({ currentExName, onConfirm, onClose }) {
+function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
   const { storage, storageKey } = useStorage();
   const [form, setForm] = useState({ name: '', sets: 3, reps: 10, weight: 0, weightUnit: 'kg', muscleTargets: [], untilFailure: false });
   const [suggestions, setSuggestions] = useState([]);
@@ -741,7 +866,20 @@ function SwapExerciseModal({ currentExName, onConfirm, onClose }) {
   }, [form.name, pastExercises]);
 
   function handleSelectSuggestion(s) {
-    if (s.isCustom) {
+    const match = findMatchingExercise(s.name, splitDays, pastExercises);
+    if (match) {
+      setForm({
+        name: s.name,
+        sets: match.sets ?? 3,
+        reps: match.reps ?? 10,
+        weight: match.weight ?? 0,
+        weightUnit: match.weightUnit || 'kg',
+        muscleTargets: match.muscleTargets || [],
+        untilFailure: !!match.untilFailure,
+        imageUrl: match.imageUrl || s.imageUrl || '',
+        placeholderUsed: match.placeholderUsed || false,
+      });
+    } else if (s.isCustom) {
       setForm({
         name: s.name,
         sets: s.sets,
@@ -762,15 +900,32 @@ function SwapExerciseModal({ currentExName, onConfirm, onClose }) {
   function submit(e) {
     e.preventDefault();
     if (!form.name.trim()) return;
+    const name = form.name.trim();
+    const match = findMatchingExercise(name, splitDays, pastExercises);
+
+    const finalMuscleTargets = (form.muscleTargets && form.muscleTargets.length > 0)
+      ? form.muscleTargets
+      : (match ? match.muscleTargets || [] : []);
+
+    const finalWeight = (form.weight !== undefined && form.weight !== 0)
+      ? +form.weight
+      : (match ? match.weight ?? 0 : 0);
+
+    const finalWeightUnit = form.weightUnit || (match ? match.weightUnit || 'kg' : 'kg');
+
     const numReps = +form.reps;
     const isFailure = form.untilFailure || numReps === 0;
+
     onConfirm({
       ...form,
-      name: form.name.trim(),
+      name,
       sets: +form.sets,
       reps: isFailure ? 0 : numReps,
       untilFailure: isFailure,
-      weight: +form.weight,
+      weight: finalWeight,
+      weightUnit: finalWeightUnit,
+      muscleTargets: finalMuscleTargets,
+      imageUrl: form.imageUrl || (match ? match.imageUrl || '' : ''),
     });
   }
 
@@ -875,7 +1030,7 @@ function SwapExerciseModal({ currentExName, onConfirm, onClose }) {
 }
 
 /* ─── Edit Exercise Modal ─── */
-function EditExerciseModal({ ex, splitId, dayId, onConfirm, onClose, onUpdate }) {
+function EditExerciseModal({ ex, splitId, dayId, splitDays, onConfirm, onClose, onUpdate }) {
   const { storage, storageKey } = useStorage();
   const [form, setForm] = useState({
     name: ex.name,
@@ -942,7 +1097,20 @@ function EditExerciseModal({ ex, splitId, dayId, onConfirm, onClose, onUpdate })
   }
 
   function handleSelectSuggestion(s) {
-    if (s.isCustom) {
+    const match = findMatchingExercise(s.name, splitDays, pastExercises);
+    if (match) {
+      setForm({
+        name: s.name,
+        sets: match.sets ?? 3,
+        reps: match.reps ?? 10,
+        weight: match.weight ?? 0,
+        weightUnit: match.weightUnit || 'kg',
+        muscleTargets: match.muscleTargets || [],
+        untilFailure: !!match.untilFailure,
+        category: match.category || 'workout',
+      });
+      setCurrentImageUrl(match.imageUrl || s.imageUrl || '');
+    } else if (s.isCustom) {
       setForm({
         name: s.name,
         sets: s.sets,
@@ -1074,15 +1242,31 @@ function EditExerciseModal({ ex, splitId, dayId, onConfirm, onClose, onUpdate })
   function submit(e) {
     e.preventDefault();
     if (!form.name.trim()) return;
+    const name = form.name.trim();
+    const match = findMatchingExercise(name, splitDays, pastExercises);
+
+    const finalMuscleTargets = (form.muscleTargets && form.muscleTargets.length > 0)
+      ? form.muscleTargets
+      : (match ? match.muscleTargets || [] : []);
+
+    const finalWeight = (form.weight !== undefined && form.weight !== 0)
+      ? +form.weight
+      : (match ? match.weight ?? 0 : 0);
+
+    const finalWeightUnit = form.weightUnit || (match ? match.weightUnit || 'kg' : 'kg');
+
     const numReps = +form.reps;
     const isFailure = form.untilFailure || numReps === 0;
+
     onConfirm({
       ...form,
-      name: form.name.trim(),
+      name,
       sets: +form.sets,
       reps: isFailure ? 0 : numReps,
       untilFailure: isFailure,
-      weight: +form.weight,
+      weight: finalWeight,
+      weightUnit: finalWeightUnit,
+      muscleTargets: finalMuscleTargets,
     });
   }
 
@@ -1335,7 +1519,17 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
       const setsChanged = newSets !== oldSets;
       const repsChanged = newReps !== oldReps || newUntilFailure !== oldUntilFailure;
 
-      if (weightChanged || setsChanged || repsChanged) {
+      const oldMuscleTargets = ex.muscleTargets || [];
+      const newMuscleTargets = updatedForm.muscleTargets || [];
+      const tagsChanged = oldMuscleTargets.length !== newMuscleTargets.length ||
+        !oldMuscleTargets.every((t) => newMuscleTargets.includes(t)) ||
+        !newMuscleTargets.every((t) => oldMuscleTargets.includes(t));
+
+      const oldCategory = ex.category || 'workout';
+      const newCategory = updatedForm.category || 'workout';
+      const categoryChanged = oldCategory !== newCategory;
+
+      if (weightChanged || setsChanged || repsChanged || tagsChanged || categoryChanged) {
         const otherDays = (splitDays || [])
           .filter((d) => d._id !== dayId && !d.isRest)
           .flatMap((d) =>
@@ -1356,6 +1550,10 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
             newReps: newUntilFailure ? 0 : newReps,
             oldUntilFailure,
             newUntilFailure,
+            oldMuscleTargets,
+            newMuscleTargets,
+            oldCategory,
+            newCategory,
           });
         }
       }
@@ -1372,6 +1570,8 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
     if (syncPrompt.newSets !== undefined) payload.sets = syncPrompt.newSets;
     if (syncPrompt.newReps !== undefined) payload.reps = syncPrompt.newReps;
     if (syncPrompt.newUntilFailure !== undefined) payload.untilFailure = syncPrompt.newUntilFailure;
+    if (syncPrompt.newMuscleTargets !== undefined) payload.muscleTargets = syncPrompt.newMuscleTargets;
+    if (syncPrompt.newCategory !== undefined) payload.category = syncPrompt.newCategory;
 
     for (const { dayId: dId, exId } of syncPrompt.otherDays) {
       await storage.updateExercise(splitId, dId, exId, payload);
@@ -1415,6 +1615,7 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
           ex={ex}
           splitId={splitId}
           dayId={dayId}
+          splitDays={splitDays}
           onConfirm={handleSave}
           onClose={() => setEditing(false)}
           onUpdate={(updated) => {
@@ -1437,6 +1638,10 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
           newReps={syncPrompt.newReps}
           oldUntilFailure={syncPrompt.oldUntilFailure}
           newUntilFailure={syncPrompt.newUntilFailure}
+          oldMuscleTargets={syncPrompt.oldMuscleTargets}
+          newMuscleTargets={syncPrompt.newMuscleTargets}
+          oldCategory={syncPrompt.oldCategory}
+          newCategory={syncPrompt.newCategory}
           otherDays={syncPrompt.otherDays}
           onSync={handleSync}
           onSkip={() => setSyncPrompt(null)}
@@ -1444,6 +1649,7 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
       )}
       {showSwapModal && (
         <SwapExerciseModal
+          splitDays={splitDays}
           currentExName={ex.name}
           onConfirm={(updatedData) => swapMutation.mutate(updatedData)}
           onClose={() => setShowSwapModal(false)}
