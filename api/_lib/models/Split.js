@@ -16,6 +16,8 @@ const ExerciseSchema = new mongoose.Schema({
   placeholderUsed: { type: Boolean, default: false },
   category: { type: String, enum: ['warmup', 'workout', 'cooldown'], default: 'workout' },
   notes: { type: String, default: '' },
+  duration: { type: Number, default: 0 },
+  durationUnit: { type: String, enum: ['sec', 'min'], default: 'sec' },
 });
 
 const DaySchema = new mongoose.Schema({

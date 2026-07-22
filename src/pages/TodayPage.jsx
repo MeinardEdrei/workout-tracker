@@ -585,10 +585,22 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
   const [editingSetsReps, setEditingSetsReps] = useState(false);
   const [setsVal, setSetsVal] = useState(String(ex.sets ?? 3));
   const [repsVal, setRepsVal] = useState(String(ex.reps ?? 0));
+  const [durationVal, setDurationVal] = useState(String(ex.duration ?? 0));
+  const [durationUnitVal, setDurationUnitVal] = useState(ex.durationUnit || 'sec');
   const [showSwapModal, setShowSwapModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesVal, setNotesVal] = useState(ex.notes || '');
+
+  useEffect(() => {
+    setWeightVal(String(ex.weight ?? 0));
+    setWeightUnit(ex.weightUnit || 'kg');
+    setSetsVal(String(ex.sets ?? 3));
+    setRepsVal(String(ex.reps ?? 0));
+    setDurationVal(String(ex.duration ?? 0));
+    setDurationUnitVal(ex.durationUnit || 'sec');
+    setNotesVal(ex.notes || '');
+  }, [ex]);
 
   const notesMutation = useMutation({
     mutationFn: (notes) => storage.updateExercise(splitId, dayId, ex._id, { notes }),
@@ -681,27 +693,41 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
   });
 
   const setsRepsMutation = useMutation({
-    mutationFn: ({ sets, reps }) => {
-      const numReps = +reps;
-      const isFailure = numReps === 0;
-      return storage.updateExercise(splitId, dayId, ex._id, { 
-        sets: +sets, 
-        reps: numReps, 
-        untilFailure: isFailure 
-      });
+    mutationFn: ({ sets, reps, duration, durationUnit }) => {
+      const payload = { sets: +sets };
+      if (duration !== undefined) {
+        payload.duration = +duration;
+        payload.durationUnit = durationUnit || 'sec';
+        payload.reps = 0;
+        payload.untilFailure = false;
+      } else {
+        const numReps = +reps;
+        payload.reps = numReps;
+        payload.untilFailure = numReps === 0;
+        payload.duration = 0;
+      }
+      return storage.updateExercise(splitId, dayId, ex._id, payload);
     },
-    onSuccess: (_, { sets, reps }) => {
+    onSuccess: (_, { sets, reps, duration, durationUnit }) => {
       queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
       setEditingSetsReps(false);
 
       const newSets = +sets;
-      const newReps = +reps;
-      const newUntilFailure = newReps === 0;
+      const newReps = reps !== undefined ? +reps : 0;
+      const newUntilFailure = reps !== undefined && newReps === 0;
+      const newDuration = duration !== undefined ? +duration : 0;
+      const newDurationUnit = durationUnit || 'sec';
+
       const oldSets = ex.sets ?? 3;
       const oldReps = ex.reps ?? 10;
       const oldUntilFailure = !!ex.untilFailure;
+      const oldDuration = ex.duration ?? 0;
+      const oldDurationUnit = ex.durationUnit || 'sec';
 
-      if (newSets === oldSets && newReps === oldReps && newUntilFailure === oldUntilFailure) return;
+      const durationChanged = oldDuration !== newDuration || oldDurationUnit !== newDurationUnit;
+      const repsChanged = newReps !== oldReps || newUntilFailure !== oldUntilFailure;
+
+      if (newSets === oldSets && !repsChanged && !durationChanged) return;
 
       const otherDays = (splitDays || [])
         .filter((d) => d._id !== dayId && !d.isRest)
@@ -724,6 +750,10 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
           newReps: newUntilFailure ? 0 : newReps,
           oldUntilFailure,
           newUntilFailure,
+          oldDuration,
+          newDuration,
+          oldDurationUnit,
+          newDurationUnit,
         });
       }
     },
@@ -737,6 +767,8 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
     if (syncPrompt.newSets !== undefined) payload.sets = syncPrompt.newSets;
     if (syncPrompt.newReps !== undefined) payload.reps = syncPrompt.newReps;
     if (syncPrompt.newUntilFailure !== undefined) payload.untilFailure = syncPrompt.newUntilFailure;
+    if (syncPrompt.newDuration !== undefined) payload.duration = syncPrompt.newDuration;
+    if (syncPrompt.newDurationUnit !== undefined) payload.durationUnit = syncPrompt.newDurationUnit;
 
     for (const { dayId: dId, exId } of syncPrompt.otherDays) {
       await storage.updateExercise(splitId, dId, exId, payload);
@@ -811,35 +843,106 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
               onChange={(e) => setSetsVal(e.target.value)}
               autoFocus
               onKeyDown={(e) => {
-                if (e.key === 'Enter') setsRepsMutation.mutate({ sets: setsVal, reps: repsVal });
-                if (e.key === 'Escape') { setEditingSetsReps(false); setSetsVal(String(ex.sets ?? 3)); setRepsVal(String(ex.reps ?? 0)); }
+                if (e.key === 'Enter') {
+                  if (ex.duration > 0) {
+                    setsRepsMutation.mutate({ sets: setsVal, duration: durationVal, durationUnit: durationUnitVal });
+                  } else {
+                    setsRepsMutation.mutate({ sets: setsVal, reps: repsVal });
+                  }
+                }
+                if (e.key === 'Escape') {
+                  setEditingSetsReps(false);
+                  setSetsVal(String(ex.sets ?? 3));
+                  setRepsVal(String(ex.reps ?? 0));
+                  setDurationVal(String(ex.duration ?? 0));
+                  setDurationUnitVal(ex.durationUnit || 'sec');
+                }
               }}
               style={{ width: 38, padding: '3px 5px', borderRadius: 5, border: '1.5px solid var(--accent)', background: 'var(--bg3)', color: 'var(--text)', fontSize: 12, fontFamily: 'var(--font-mono)', textAlign: 'center', outline: 'none' }}
             />
             <span style={{ fontSize: 11, color: 'var(--text3)' }}>×</span>
-            <input
-              type="number" min="0" max="999"
-              value={repsVal}
-              onChange={(e) => setRepsVal(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') setsRepsMutation.mutate({ sets: setsVal, reps: repsVal });
-                if (e.key === 'Escape') { setEditingSetsReps(false); setSetsVal(String(ex.sets ?? 3)); setRepsVal(String(ex.reps ?? 0)); }
+            {ex.duration > 0 ? (
+              <>
+                <input
+                  type="number" min="1" max="999"
+                  value={durationVal}
+                  onChange={(e) => setDurationVal(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      setsRepsMutation.mutate({ sets: setsVal, duration: durationVal, durationUnit: durationUnitVal });
+                    }
+                    if (e.key === 'Escape') {
+                      setEditingSetsReps(false);
+                      setSetsVal(String(ex.sets ?? 3));
+                      setDurationVal(String(ex.duration ?? 0));
+                      setDurationUnitVal(ex.durationUnit || 'sec');
+                    }
+                  }}
+                  style={{ width: 44, padding: '3px 5px', borderRadius: 5, border: '1.5px solid var(--accent)', background: 'var(--bg3)', color: 'var(--text)', fontSize: 12, fontFamily: 'var(--font-mono)', textAlign: 'center', outline: 'none' }}
+                />
+                <select
+                  value={durationUnitVal}
+                  onChange={(e) => setDurationUnitVal(e.target.value)}
+                  style={{ padding: '3px 5px', borderRadius: 5, border: '1.5px solid var(--accent)', background: 'var(--bg3)', color: 'var(--text)', fontSize: 12, outline: 'none', cursor: 'pointer' }}
+                >
+                  <option value="sec">sec</option>
+                  <option value="min">min</option>
+                </select>
+              </>
+            ) : (
+              <input
+                type="number" min="0" max="999"
+                value={repsVal}
+                onChange={(e) => setRepsVal(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') setsRepsMutation.mutate({ sets: setsVal, reps: repsVal });
+                  if (e.key === 'Escape') {
+                    setEditingSetsReps(false);
+                    setSetsVal(String(ex.sets ?? 3));
+                    setRepsVal(String(ex.reps ?? 0));
+                  }
+                }}
+                style={{ width: 38, padding: '3px 5px', borderRadius: 5, border: '1.5px solid var(--accent)', background: 'var(--bg3)', color: 'var(--text)', fontSize: 12, fontFamily: 'var(--font-mono)', textAlign: 'center', outline: 'none' }}
+              />
+            )}
+            <button
+              onClick={() => {
+                if (ex.duration > 0) {
+                  setsRepsMutation.mutate({ sets: setsVal, duration: durationVal, durationUnit: durationUnitVal });
+                } else {
+                  setsRepsMutation.mutate({ sets: setsVal, reps: repsVal });
+                }
               }}
-              style={{ width: 38, padding: '3px 5px', borderRadius: 5, border: '1.5px solid var(--accent)', background: 'var(--bg3)', color: 'var(--text)', fontSize: 12, fontFamily: 'var(--font-mono)', textAlign: 'center', outline: 'none' }}
-            />
-            <button onClick={() => setsRepsMutation.mutate({ sets: setsVal, reps: repsVal })} disabled={setsRepsMutation.isPending}
-              style={{ padding: '2px 7px', borderRadius: 4, border: 'none', background: 'var(--accent)', color: '#0a0a0a', fontWeight: 900, fontSize: 11, cursor: 'pointer' }}>✓</button>
-            <button onClick={() => { setEditingSetsReps(false); setSetsVal(String(ex.sets ?? 3)); setRepsVal(String(ex.reps ?? 0)); }}
-              style={{ padding: '2px 6px', borderRadius: 4, border: '1px solid var(--border2)', background: 'transparent', color: 'var(--text3)', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>✕</button>
+              disabled={setsRepsMutation.isPending}
+              style={{ padding: '2px 7px', borderRadius: 4, border: 'none', background: 'var(--accent)', color: '#0a0a0a', fontWeight: 900, fontSize: 11, cursor: 'pointer' }}
+            >
+              ✓
+            </button>
+            <button
+              onClick={() => {
+                setEditingSetsReps(false);
+                setSetsVal(String(ex.sets ?? 3));
+                setRepsVal(String(ex.reps ?? 0));
+                setDurationVal(String(ex.duration ?? 0));
+                setDurationUnitVal(ex.durationUnit || 'sec');
+              }}
+              style={{ padding: '2px 6px', borderRadius: 4, border: '1px solid var(--border2)', background: 'transparent', color: 'var(--text3)', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}
+            >
+              ✕
+            </button>
           </div>
         ) : (
           <div style={{ display: 'flex', alignItems: 'center', marginTop: 2, flexWrap: 'wrap', gap: 4 }}>
             <div
               onClick={() => !readOnly && setEditingSetsReps(true)}
-              title={readOnly ? '' : 'Tap to edit sets & reps'}
+              title={readOnly ? '' : 'Tap to edit sets & reps/duration'}
               style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)', cursor: readOnly ? 'default' : 'pointer', display: 'inline-block' }}
             >
-              {ex.sets} × {repsLabel}
+              {ex.duration > 0 ? (
+                <span>{ex.sets} × {ex.duration}{ex.durationUnit || 'sec'}</span>
+              ) : (
+                <span>{ex.sets} × {repsLabel}</span>
+              )}
             </div>
             {!readOnly && (
               <>
@@ -1525,7 +1628,9 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
       exercises: done.map((e) => ({
         name: e.name, sets: e.sets, reps: e.reps, weight: e.weight, weightUnit: e.weightUnit,
         untilFailure: e.untilFailure, notes: e.notes || '', muscleTargets: e.muscleTargets || [],
-        category: e.category || 'workout'
+        category: e.category || 'workout',
+        duration: e.duration ?? 0,
+        durationUnit: e.durationUnit || 'sec'
       }))
     });
     setShowConfirmFinish(false);

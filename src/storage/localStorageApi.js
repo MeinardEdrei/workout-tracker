@@ -187,6 +187,8 @@ export function createExercise(splitId, dayId, data) {
     imageSource: data.imageUrl ? 'auto' : '',
     placeholderUsed: data.placeholderUsed || false,
     category: data.category || 'workout',
+    duration: data.duration ?? 0,
+    durationUnit: data.durationUnit || 'sec',
   };
   if (!day.exercises) day.exercises = [];
   day.exercises.push(ex);
@@ -202,7 +204,7 @@ export function updateExercise(splitId, dayId, exId, data) {
   if (!day) return Promise.reject(new Error('Day not found'));
   const ex = (day.exercises || []).find((e) => e._id === exId);
   if (!ex) return Promise.reject(new Error('Exercise not found'));
-  ['name', 'sets', 'reps', 'weight', 'weightUnit', 'muscleTargets', 'untilFailure', 'imageUrl', 'imageSource', 'placeholderUsed', 'category', 'notes'].forEach((f) => {
+  ['name', 'sets', 'reps', 'weight', 'weightUnit', 'muscleTargets', 'untilFailure', 'imageUrl', 'imageSource', 'placeholderUsed', 'category', 'notes', 'duration', 'durationUnit'].forEach((f) => {
     if (data[f] !== undefined) ex[f] = data[f];
   });
   writeSplits(splits);

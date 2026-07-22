@@ -532,7 +532,8 @@ function AddDayModal({ existingDays = [], onConfirm, onClose }) {
 
 function AddExerciseModal({ splitDays, onConfirm, onClose }) {
   const { storage, storageKey } = useStorage();
-  const [form, setForm] = useState({ name: '', sets: 3, reps: 10, weight: 0, weightUnit: 'kg', muscleTargets: [], untilFailure: false, imageUrl: '', placeholderUsed: false, category: 'workout' });
+  const [form, setForm] = useState({ name: '', sets: 3, reps: 10, weight: 0, weightUnit: 'kg', muscleTargets: [], untilFailure: false, imageUrl: '', placeholderUsed: false, category: 'workout', duration: 0, durationUnit: 'sec' });
+  const [isDuration, setIsDuration] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
 
   const { data: logs = [] } = useQuery({
@@ -559,6 +560,8 @@ function AddExerciseModal({ splitDays, onConfirm, onClose }) {
             weightUnit: ex.weightUnit || 'kg',
             untilFailure: ex.untilFailure || false,
             category: ex.category || 'workout',
+            duration: ex.duration ?? 0,
+            durationUnit: ex.durationUnit || 'sec',
             isCustom: true
           });
         }
@@ -615,7 +618,10 @@ function AddExerciseModal({ splitDays, onConfirm, onClose }) {
         imageUrl: match.imageUrl || s.imageUrl || '',
         placeholderUsed: match.placeholderUsed || false,
         category: match.category || 'workout',
+        duration: match.duration ?? 0,
+        durationUnit: match.durationUnit || 'sec',
       });
+      setIsDuration(match.duration > 0);
     } else if (s.isCustom) {
       setForm({
         name: s.name,
@@ -628,9 +634,13 @@ function AddExerciseModal({ splitDays, onConfirm, onClose }) {
         imageUrl: s.imageUrl || '',
         placeholderUsed: s.placeholderUsed || false,
         category: s.category || 'workout',
+        duration: s.duration ?? 0,
+        durationUnit: s.durationUnit || 'sec',
       });
+      setIsDuration(s.duration > 0);
     } else {
       setForm(f => ({ ...f, name: s.name, imageUrl: s.imageUrl || '', placeholderUsed: false }));
+      setIsDuration(false);
     }
     setSuggestions([]);
   }
@@ -666,8 +676,10 @@ function AddExerciseModal({ splitDays, onConfirm, onClose }) {
       ...form,
       name,
       sets: +form.sets,
-      reps: isFailure ? 0 : numReps,
-      untilFailure: isFailure,
+      reps: isDuration ? 0 : (isFailure ? 0 : numReps),
+      untilFailure: isDuration ? false : isFailure,
+      duration: isDuration ? (+form.duration || 60) : 0,
+      durationUnit: isDuration ? (form.durationUnit || 'sec') : 'sec',
       weight: finalWeight,
       weightUnit: finalWeightUnit,
       muscleTargets: finalMuscleTargets,
@@ -732,14 +744,27 @@ function AddExerciseModal({ splitDays, onConfirm, onClose }) {
             )}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+            <PickerPill label="Reps-based" selected={!isDuration} onClick={() => { setIsDuration(false); setForm(f => ({ ...f, duration: 0 })); }} small />
+            <PickerPill label="Duration-based" selected={isDuration} onClick={() => { setIsDuration(true); setForm(f => ({ ...f, reps: 0, untilFailure: false })); }} small />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: isDuration ? '1fr 1.5fr 1fr' : '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
             <div>
               <div style={{ ...LABEL, marginBottom: 4 }}>sets</div>
               <input className="input" type="number" min="0" step="1" value={form.sets} onChange={(e) => set('sets', e.target.value)} />
             </div>
             <div>
-              <div style={{ ...LABEL, marginBottom: 4 }}>reps</div>
-              {form.untilFailure ? (
+              <div style={{ ...LABEL, marginBottom: 4 }}>{isDuration ? 'duration' : 'reps'}</div>
+              {isDuration ? (
+                <div style={{ display: 'flex', gap: 4 }}>
+                  <input className="input" style={{ flex: 1, minWidth: 0, margin: 0 }} type="number" min="1" step="1" value={form.duration || ''} onChange={(e) => set('duration', e.target.value)} />
+                  <select className="select" style={{ padding: '0 8px', height: 44, borderRadius: 8, margin: 0 }} value={form.durationUnit || 'sec'} onChange={(e) => set('durationUnit', e.target.value)}>
+                    <option value="sec">sec</option>
+                    <option value="min">min</option>
+                  </select>
+                </div>
+              ) : form.untilFailure ? (
                 <div style={{ height: 44, display: 'flex', alignItems: 'center', padding: '0 10px', borderRadius: 8, border: '1px solid var(--border2)', fontSize: 11, fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.05em' }}>TO FAILURE</div>
               ) : (
                 <input className="input" type="number" min="0" step="1" value={form.reps} onChange={(e) => set('reps', e.target.value)} />
@@ -751,11 +776,12 @@ function AddExerciseModal({ splitDays, onConfirm, onClose }) {
             </div>
           </div>
 
-          {/* Until failure toggle */}
-          <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-            <PickerPill label="Specific reps" selected={!form.untilFailure} onClick={() => set('untilFailure', false)} small />
-            <PickerPill label="Until failure" selected={form.untilFailure} onClick={() => set('untilFailure', true)} small />
-          </div>
+          {!isDuration && (
+            <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+              <PickerPill label="Specific reps" selected={!form.untilFailure} onClick={() => set('untilFailure', false)} small />
+              <PickerPill label="Until failure" selected={form.untilFailure} onClick={() => set('untilFailure', true)} small />
+            </div>
+          )}
 
           <div style={{ ...LABEL, marginBottom: 4 }}>Category</div>
           <select className="select" style={{ width: '100%', marginBottom: 12 }} value={form.category} onChange={(e) => set('category', e.target.value)}>
@@ -799,7 +825,8 @@ function SwapIcon() {
 
 function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
   const { storage, storageKey } = useStorage();
-  const [form, setForm] = useState({ name: '', sets: 3, reps: 10, weight: 0, weightUnit: 'kg', muscleTargets: [], untilFailure: false });
+  const [form, setForm] = useState({ name: '', sets: 3, reps: 10, weight: 0, weightUnit: 'kg', muscleTargets: [], untilFailure: false, duration: 0, durationUnit: 'sec' });
+  const [isDuration, setIsDuration] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
 
   const { data: logs = [] } = useQuery({
@@ -825,6 +852,8 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
             weight: ex.weight || 0,
             weightUnit: ex.weightUnit || 'kg',
             untilFailure: ex.untilFailure || false,
+            duration: ex.duration ?? 0,
+            durationUnit: ex.durationUnit || 'sec',
             isCustom: true
           });
         }
@@ -878,7 +907,10 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
         untilFailure: !!match.untilFailure,
         imageUrl: match.imageUrl || s.imageUrl || '',
         placeholderUsed: match.placeholderUsed || false,
+        duration: match.duration ?? 0,
+        durationUnit: match.durationUnit || 'sec',
       });
+      setIsDuration(match.duration > 0);
     } else if (s.isCustom) {
       setForm({
         name: s.name,
@@ -890,9 +922,13 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
         untilFailure: s.untilFailure,
         imageUrl: s.imageUrl || '',
         placeholderUsed: s.placeholderUsed || false,
+        duration: s.duration ?? 0,
+        durationUnit: s.durationUnit || 'sec',
       });
+      setIsDuration(s.duration > 0);
     } else {
       setForm(f => ({ ...f, name: s.name, imageUrl: s.imageUrl || '', placeholderUsed: false }));
+      setIsDuration(false);
     }
     setSuggestions([]);
   }
@@ -920,8 +956,10 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
       ...form,
       name,
       sets: +form.sets,
-      reps: isFailure ? 0 : numReps,
-      untilFailure: isFailure,
+      reps: isDuration ? 0 : (isFailure ? 0 : numReps),
+      untilFailure: isDuration ? false : isFailure,
+      duration: isDuration ? (+form.duration || 60) : 0,
+      durationUnit: isDuration ? (form.durationUnit || 'sec') : 'sec',
       weight: finalWeight,
       weightUnit: finalWeightUnit,
       muscleTargets: finalMuscleTargets,
@@ -989,14 +1027,27 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
             )}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+            <button type="button" className={`btn ${!isDuration ? 'btn-accent' : ''}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => { setIsDuration(false); setForm(f => ({ ...f, duration: 0 })); }}>Reps-based</button>
+            <button type="button" className={`btn ${isDuration ? 'btn-accent' : ''}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => { setIsDuration(true); setForm(f => ({ ...f, reps: 0, untilFailure: false })); }}>Duration-based</button>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: isDuration ? '1fr 1.5fr 1fr' : '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
             <div>
               <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>sets</div>
               <input className="input" type="number" min="0" step="1" value={form.sets} onChange={(e) => setForm(f => ({ ...f, sets: e.target.value }))} />
             </div>
             <div>
-              <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>reps</div>
-              {form.untilFailure ? (
+              <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>{isDuration ? 'duration' : 'reps'}</div>
+              {isDuration ? (
+                <div style={{ display: 'flex', gap: 4 }}>
+                  <input className="input" style={{ flex: 1, minWidth: 0, margin: 0 }} type="number" min="1" step="1" value={form.duration || ''} onChange={(e) => setForm(f => ({ ...f, duration: e.target.value }))} />
+                  <select className="select" style={{ padding: '0 8px', height: 44, borderRadius: 8, margin: 0 }} value={form.durationUnit || 'sec'} onChange={(e) => setForm(f => ({ ...f, durationUnit: e.target.value }))}>
+                    <option value="sec">sec</option>
+                    <option value="min">min</option>
+                  </select>
+                </div>
+              ) : form.untilFailure ? (
                 <div style={{ height: 44, display: 'flex', alignItems: 'center', padding: '0 10px', borderRadius: 8, border: '1px solid var(--border2)', fontSize: 11, fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.05em' }}>TO FAILURE</div>
               ) : (
                 <input className="input" type="number" min="0" step="1" value={form.reps} onChange={(e) => setForm(f => ({ ...f, reps: e.target.value }))} />
@@ -1008,10 +1059,12 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-            <button type="button" className={`btn ${!form.untilFailure ? 'btn-accent' : ''}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setForm(f => ({ ...f, untilFailure: false }))}>Specific reps</button>
-            <button type="button" className={`btn ${form.untilFailure ? 'btn-accent' : ''}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setForm(f => ({ ...f, untilFailure: true }))}>Until failure</button>
-          </div>
+          {!isDuration && (
+            <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+              <button type="button" className={`btn ${!form.untilFailure ? 'btn-accent' : ''}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setForm(f => ({ ...f, untilFailure: false }))}>Specific reps</button>
+              <button type="button" className={`btn ${form.untilFailure ? 'btn-accent' : ''}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setForm(f => ({ ...f, untilFailure: true }))}>Until failure</button>
+            </div>
+          )}
 
           <select className="select" style={{ width: '100%', marginBottom: 16 }} value={form.weightUnit} onChange={(e) => setForm(f => ({ ...f, weightUnit: e.target.value }))}>
             <option value="kg">kg</option>
@@ -1041,7 +1094,10 @@ function EditExerciseModal({ ex, splitId, dayId, splitDays, onConfirm, onClose, 
     muscleTargets: ex.muscleTargets || [],
     untilFailure: ex.untilFailure || false,
     category: ex.category || 'workout',
+    duration: ex.duration ?? 0,
+    durationUnit: ex.durationUnit || 'sec',
   });
+  const [isDuration, setIsDuration] = useState(ex.duration > 0);
   const [suggestions, setSuggestions] = useState([]);
   const [currentImageUrl, setCurrentImageUrl] = useState(ex.imageUrl || '');
   const [imgFetching, setImgFetching] = useState(false);
@@ -1073,6 +1129,8 @@ function EditExerciseModal({ ex, splitId, dayId, splitDays, onConfirm, onClose, 
             weightUnit: ex.weightUnit || 'kg',
             untilFailure: ex.untilFailure || false,
             category: ex.category || 'workout',
+            duration: ex.duration ?? 0,
+            durationUnit: ex.durationUnit || 'sec',
             isCustom: true
           });
         }
@@ -1108,8 +1166,11 @@ function EditExerciseModal({ ex, splitId, dayId, splitDays, onConfirm, onClose, 
         muscleTargets: match.muscleTargets || [],
         untilFailure: !!match.untilFailure,
         category: match.category || 'workout',
+        duration: match.duration ?? 0,
+        durationUnit: match.durationUnit || 'sec',
       });
       setCurrentImageUrl(match.imageUrl || s.imageUrl || '');
+      setIsDuration(match.duration > 0);
     } else if (s.isCustom) {
       setForm({
         name: s.name,
@@ -1120,11 +1181,14 @@ function EditExerciseModal({ ex, splitId, dayId, splitDays, onConfirm, onClose, 
         muscleTargets: s.muscleTargets,
         untilFailure: s.untilFailure,
         category: s.category || 'workout',
+        duration: s.duration ?? 0,
+        durationUnit: s.durationUnit || 'sec',
       });
       setCurrentImageUrl(s.imageUrl);
+      setIsDuration(s.duration > 0);
     } else {
-      set('name', s.name);
-      setCurrentImageUrl(s.imageUrl || '');
+      setForm(f => ({ ...f, name: s.name, imageUrl: s.imageUrl || '', placeholderUsed: false }));
+      setIsDuration(false);
     }
     setSuggestions([]);
   }
@@ -1262,8 +1326,10 @@ function EditExerciseModal({ ex, splitId, dayId, splitDays, onConfirm, onClose, 
       ...form,
       name,
       sets: +form.sets,
-      reps: isFailure ? 0 : numReps,
-      untilFailure: isFailure,
+      reps: isDuration ? 0 : (isFailure ? 0 : numReps),
+      untilFailure: isDuration ? false : isFailure,
+      duration: isDuration ? (+form.duration || 60) : 0,
+      durationUnit: isDuration ? (form.durationUnit || 'sec') : 'sec',
       weight: finalWeight,
       weightUnit: finalWeightUnit,
       muscleTargets: finalMuscleTargets,
@@ -1328,14 +1394,27 @@ function EditExerciseModal({ ex, splitId, dayId, splitDays, onConfirm, onClose, 
             )}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+            <button type="button" className={`btn ${!isDuration ? 'btn-accent' : ''}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => { setIsDuration(false); setForm(f => ({ ...f, duration: 0 })); }}>Reps-based</button>
+            <button type="button" className={`btn ${isDuration ? 'btn-accent' : ''}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => { setIsDuration(true); setForm(f => ({ ...f, reps: 0, untilFailure: false })); }}>Duration-based</button>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: isDuration ? '1fr 1.5fr 1fr' : '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
             <div>
               <div style={{ ...LABEL, marginBottom: 4 }}>sets</div>
               <input className="input" type="number" min="0" step="1" value={form.sets} onChange={(e) => setForm(f => ({ ...f, sets: e.target.value }))} />
             </div>
             <div>
-              <div style={{ ...LABEL, marginBottom: 4 }}>reps</div>
-              {form.untilFailure ? (
+              <div style={{ ...LABEL, marginBottom: 4 }}>{isDuration ? 'duration' : 'reps'}</div>
+              {isDuration ? (
+                <div style={{ display: 'flex', gap: 4 }}>
+                  <input className="input" style={{ flex: 1, minWidth: 0, margin: 0 }} type="number" min="1" step="1" value={form.duration || ''} onChange={(e) => setForm(f => ({ ...f, duration: e.target.value }))} />
+                  <select className="select" style={{ padding: '0 8px', height: 44, borderRadius: 8, margin: 0 }} value={form.durationUnit || 'sec'} onChange={(e) => setForm(f => ({ ...f, durationUnit: e.target.value }))}>
+                    <option value="sec">sec</option>
+                    <option value="min">min</option>
+                  </select>
+                </div>
+              ) : form.untilFailure ? (
                 <div style={{ height: 44, display: 'flex', alignItems: 'center', padding: '0 10px', borderRadius: 8, border: '1px solid var(--border2)', fontSize: 11, fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.05em' }}>TO FAILURE</div>
               ) : (
                 <input className="input" type="number" min="0" step="1" value={form.reps} onChange={(e) => setForm(f => ({ ...f, reps: e.target.value }))} />
@@ -1347,10 +1426,12 @@ function EditExerciseModal({ ex, splitId, dayId, splitDays, onConfirm, onClose, 
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-            <button type="button" className={`btn ${!form.untilFailure ? 'btn-accent' : ''}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setForm(f => ({ ...f, untilFailure: false }))}>Specific reps</button>
-            <button type="button" className={`btn ${form.untilFailure ? 'btn-accent' : ''}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setForm(f => ({ ...f, untilFailure: true }))}>Until failure</button>
-          </div>
+          {!isDuration && (
+            <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+              <button type="button" className={`btn ${!form.untilFailure ? 'btn-accent' : ''}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setForm(f => ({ ...f, untilFailure: false }))}>Specific reps</button>
+              <button type="button" className={`btn ${form.untilFailure ? 'btn-accent' : ''}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setForm(f => ({ ...f, untilFailure: true }))}>Until failure</button>
+            </div>
+          )}
 
           <div style={{ marginBottom: 12 }}>
             <div style={{ ...LABEL, marginBottom: 4 }}>Category</div>
@@ -1581,7 +1662,9 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
   }
 
   const weightLabel = ex.weight > 0 ? ` · ${ex.weight}${ex.weightUnit}` : '';
-  const repsLabel = (ex.untilFailure || !ex.reps || ex.reps === 0) ? 'Until Failure' : `${ex.reps} reps`;
+  const repsLabel = ex.duration > 0
+    ? `${ex.duration}${ex.durationUnit || 'sec'}`
+    : ((ex.untilFailure || !ex.reps || ex.reps === 0) ? 'Until Failure' : `${ex.reps} reps`);
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 14px', borderBottom: '1px solid var(--border)' }}>
