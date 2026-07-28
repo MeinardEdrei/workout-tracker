@@ -560,6 +560,27 @@ router.delete('/:id/days/:dayId', async (req, res) => {
   }
 });
 
+router.post('/:id/days/:dayId/swap-with', async (req, res) => {
+  try {
+    const split = await Split.findOne({ _id: req.params.id, userId: req.userId });
+    if (!split) return res.status(404).json({ error: 'Split not found' });
+    const dayA = split.days.id(req.params.dayId);
+    const dayB = split.days.id(req.body.targetDayId);
+    if (!dayA || !dayB) return res.status(404).json({ error: 'Day not found' });
+    if (dayA._id.equals(dayB._id)) return res.status(400).json({ error: 'Cannot swap a day with itself' });
+
+    await snapshotVersion(split);
+    const exA = dayA.toObject().exercises;
+    const exB = dayB.toObject().exercises;
+    dayA.exercises = exB;
+    dayB.exercises = exA;
+    await split.save();
+    res.json(sortExercises(split));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── EXERCISES ────────────────────────────────────────────────────────────────
 
 router.get('/:id/days/:dayId/exercises', async (req, res) => {
@@ -623,6 +644,30 @@ router.patch('/:id/days/:dayId/exercises/reorder', async (req, res) => {
     });
     await split.save();
     res.json({ message: 'Reordered' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/:id/days/:dayId/exercises/:exId/move', async (req, res) => {
+  try {
+    const split = await Split.findOne({ _id: req.params.id, userId: req.userId });
+    if (!split) return res.status(404).json({ error: 'Split not found' });
+    const fromDay = split.days.id(req.params.dayId);
+    const toDay = split.days.id(req.body.targetDayId);
+    if (!fromDay || !toDay) return res.status(404).json({ error: 'Day not found' });
+    const ex = fromDay.exercises.id(req.params.exId);
+    if (!ex) return res.status(404).json({ error: 'Exercise not found' });
+    if (fromDay._id.equals(toDay._id)) return res.status(400).json({ error: 'Already on that day' });
+
+    await snapshotVersion(split);
+    const exObj = ex.toObject();
+    const maxOrder = toDay.exercises.reduce((m, e) => Math.max(m, e.order ?? 0), -1);
+    exObj.order = maxOrder + 1;
+    toDay.exercises.push(exObj);
+    fromDay.exercises.pull(req.params.exId);
+    await split.save();
+    res.json(sortExercises(split));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

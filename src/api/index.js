@@ -60,6 +60,8 @@ export const getDays = (splitId) => req('GET', `/api/splits/${splitId}/days`);
 export const createDay = (splitId, data) => req('POST', `/api/splits/${splitId}/days`, data);
 export const updateDay = (splitId, dayId, data) => req('PUT', `/api/splits/${splitId}/days/${dayId}`, data);
 export const deleteDay = (splitId, dayId) => req('DELETE', `/api/splits/${splitId}/days/${dayId}`);
+export const swapDays = (splitId, dayId, targetDayId) =>
+  req('POST', `/api/splits/${splitId}/days/${dayId}/swap-with`, { targetDayId });
 
 // ─── Exercises ────────────────────────────────────────────────────────────────
 export const getExercises = (splitId, dayId) =>
@@ -74,6 +76,8 @@ export const toggleExercise = (splitId, dayId, exId) =>
   req('PATCH', `/api/splits/${splitId}/days/${dayId}/exercises/${exId}/toggle`);
 export const reorderExercises = (splitId, dayId, exercises) =>
   req('PATCH', `/api/splits/${splitId}/days/${dayId}/exercises/reorder`, { exercises });
+export const moveExercise = (splitId, dayId, exId, targetDayId) =>
+  req('POST', `/api/splits/${splitId}/days/${dayId}/exercises/${exId}/move`, { targetDayId });
 
 // ─── Exercise Images ──────────────────────────────────────────────────────────
 export const fetchExerciseImage = (exerciseName) =>

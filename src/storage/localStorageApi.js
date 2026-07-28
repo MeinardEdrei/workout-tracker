@@ -315,6 +315,22 @@ export function deleteDay(splitId, dayId) {
   return Promise.resolve({ message: 'Deleted' });
 }
 
+export function swapDays(splitId, dayId, targetDayId) {
+  const splits = readSplits();
+  const split = splits.find((s) => s._id === splitId);
+  if (!split) return Promise.reject(new Error('Split not found'));
+  const dayA = split.days.find((d) => d._id === dayId);
+  const dayB = split.days.find((d) => d._id === targetDayId);
+  if (!dayA || !dayB) return Promise.reject(new Error('Day not found'));
+  if (dayA._id === dayB._id) return Promise.reject(new Error('Cannot swap a day with itself'));
+  snapshotVersion(split);
+  const exA = dayA.exercises;
+  dayA.exercises = dayB.exercises;
+  dayB.exercises = exA;
+  writeSplits(splits);
+  return Promise.resolve({ ...split });
+}
+
 // ─── Exercises ────────────────────────────────────────────────────────────────
 
 export function getExercises(splitId, dayId) {
@@ -418,6 +434,25 @@ export function reorderExercises(splitId, dayId, exercises) {
   });
   writeSplits(splits);
   return Promise.resolve({ message: 'Reordered' });
+}
+
+export function moveExercise(splitId, dayId, exId, targetDayId) {
+  const splits = readSplits();
+  const split = splits.find((s) => s._id === splitId);
+  if (!split) return Promise.reject(new Error('Split not found'));
+  const fromDay = split.days.find((d) => d._id === dayId);
+  const toDay = split.days.find((d) => d._id === targetDayId);
+  if (!fromDay || !toDay) return Promise.reject(new Error('Day not found'));
+  const ex = (fromDay.exercises || []).find((e) => e._id === exId);
+  if (!ex) return Promise.reject(new Error('Exercise not found'));
+  if (fromDay._id === toDay._id) return Promise.reject(new Error('Already on that day'));
+  snapshotVersion(split);
+  const maxOrder = (toDay.exercises || []).reduce((m, e) => Math.max(m, e.order ?? 0), -1);
+  ex.order = maxOrder + 1;
+  toDay.exercises = [...(toDay.exercises || []), ex];
+  fromDay.exercises = (fromDay.exercises || []).filter((e) => e._id !== exId);
+  writeSplits(splits);
+  return Promise.resolve({ ...split });
 }
 
 // ─── Logs ─────────────────────────────────────────────────────────────────────

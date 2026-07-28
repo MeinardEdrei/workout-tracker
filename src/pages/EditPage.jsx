@@ -1542,6 +1542,36 @@ function EditExerciseModal({ ex, splitId, dayId, splitDays, onConfirm, onClose, 
   );
 }
 
+/* ─── Day picker (used for "move exercise to day" and "swap day with") ─── */
+function DayPickerModal({ title, days, excludeDayId, onConfirm, onClose }) {
+  const options = days.filter((d) => d._id !== excludeDayId);
+  return (
+    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal">
+        <div className="modal-title" style={{ fontSize: 16 }}>{title}</div>
+        {options.length === 0 && (
+          <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 12 }}>No other days to choose from.</div>
+        )}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+          {options.map((d) => (
+            <button
+              key={d._id}
+              className="btn btn-ghost"
+              style={{ justifyContent: 'flex-start', fontSize: 13 }}
+              onClick={() => onConfirm(d._id)}
+            >
+              {d.name}{d.tag ? ` · ${d.tag}` : ''}
+            </button>
+          ))}
+        </div>
+        <div className="modal-actions">
+          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Exercise edit row ─── */
 function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDelete, dragHandleProps }) {
   const queryClient = useQueryClient();
@@ -1551,6 +1581,7 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [syncPrompt, setSyncPrompt] = useState(null);
   const [showSwapModal, setShowSwapModal] = useState(false);
+  const [showMoveModal, setShowMoveModal] = useState(false);
 
   const swapMutation = useMutation({
     mutationFn: (updatedData) => storage.updateExercise(splitId, dayId, ex._id, updatedData),
@@ -1558,6 +1589,15 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
       queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
       onUpdate(updated);
       setShowSwapModal(false);
+    },
+  });
+
+  const moveMutation = useMutation({
+    mutationFn: (targetDayId) => storage.moveExercise(splitId, dayId, ex._id, targetDayId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
+      onDelete(ex._id);
+      setShowMoveModal(false);
     },
   });
 
@@ -1711,6 +1751,13 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
         )}
       </div>
       <button className="btn-icon" style={{ flexShrink: 0 }} onClick={() => setShowSwapModal(true)} title="Switch/Swap"><SwapIcon /></button>
+      {(splitDays || []).length > 1 && (
+        <button className="btn-icon" style={{ flexShrink: 0 }} onClick={() => setShowMoveModal(true)} title="Move to another day">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
+          </svg>
+        </button>
+      )}
       <button className="btn-icon" style={{ flexShrink: 0 }} onClick={() => setEditing(true)} title="Edit"><EditPencil /></button>
       <button className="btn-icon" style={{ color: 'var(--red)', flexShrink: 0 }} onClick={() => setDeleteConfirm(true)} title="Delete"><TrashIcon /></button>
       
@@ -1726,6 +1773,16 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
             setCurrentImageUrl(updated.imageUrl || '');
             onUpdate(updated);
           }}
+        />
+      )}
+
+      {showMoveModal && (
+        <DayPickerModal
+          title={`Move "${ex.name}" to...`}
+          days={splitDays || []}
+          excludeDayId={dayId}
+          onConfirm={(targetDayId) => moveMutation.mutate(targetDayId)}
+          onClose={() => setShowMoveModal(false)}
         />
       )}
 
@@ -2125,6 +2182,17 @@ function SplitEditorInner({ split, onBack, onSplitUpdated }) {
   const [activeDayId, setActiveDayId] = useState(null);
   const [modal, setModal] = useState(null);
   const [deleteToast, setDeleteToast] = useState(null);
+  const [swappingDay, setSwappingDay] = useState(null);
+
+  const swapDaysMutation = useMutation({
+    mutationFn: (targetDayId) => storage.swapDays(split._id, swappingDay._id, targetDayId),
+    onSuccess: (updated) => {
+      setDays([...(updated.days || [])].sort((a, b) => (a.dayOrder ?? 8) - (b.dayOrder ?? 8)));
+      onSplitUpdated(updated);
+      queryClient.invalidateQueries({ queryKey: ['splits'] });
+      setSwappingDay(null);
+    },
+  });
 
   useEffect(() => {
     setDays([...(split.days || [])].sort((a, b) => (a.dayOrder ?? 8) - (b.dayOrder ?? 8)));
@@ -2200,6 +2268,18 @@ function SplitEditorInner({ split, onBack, onSplitUpdated }) {
                 </div>
               </div>
               {day.isRest && <span className="tag">Rest</span>}
+              {days.length > 1 && (
+                <button
+                  className="btn-icon"
+                  title="Swap with another day"
+                  onClick={(e) => { e.stopPropagation(); setSwappingDay(day); }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="17 1 21 5 17 9" /><path d="M3 11V9a4 4 0 0 1 4-4h14" />
+                    <polyline points="7 23 3 19 7 15" /><path d="M21 13v2a4 4 0 0 1-4 4H3" />
+                  </svg>
+                </button>
+              )}
               <button
                 className="btn-icon"
                 style={{ color: 'var(--red)' }}
@@ -2234,6 +2314,15 @@ function SplitEditorInner({ split, onBack, onSplitUpdated }) {
           message={`Delete "${modal.day.name}" and all its exercises?`}
           onConfirm={() => handleDeleteDay(modal.day)}
           onClose={() => setModal(null)}
+        />
+      )}
+      {swappingDay && (
+        <DayPickerModal
+          title={`Swap "${swappingDay.name}" with...`}
+          days={days}
+          excludeDayId={swappingDay._id}
+          onConfirm={(targetDayId) => swapDaysMutation.mutate(targetDayId)}
+          onClose={() => setSwappingDay(null)}
         />
       )}
     </div>
