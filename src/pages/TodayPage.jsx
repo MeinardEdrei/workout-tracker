@@ -7,6 +7,7 @@ import DailyShareCard from '../components/DailyShareCard';
 import BodyMap from '../components/BodyMap';
 import { MusclePill } from '../components/MusclePill';
 import ExerciseThumbnail from '../components/ExerciseThumbnail';
+import { isSyncExcluded, excludeFromSync } from '../utils/syncPrefs';
 import { createPortal } from 'react-dom';
 import AiChatBubble from '../components/AiChatBubble';
 
@@ -416,7 +417,7 @@ function WeightSyncModal({
   oldSets, newSets, oldReps, newReps, oldUntilFailure, newUntilFailure, 
   oldMuscleTargets = [], newMuscleTargets = [],
   oldCategory, newCategory,
-  otherDays, otherSplits = [], onSync, onSkip
+  otherDays, otherSplits = [], onSync, onSkip, onExclude
 }) {
   const oldWInNewUnit = convertWeight(oldWeight ?? 0, oldUnit || 'kg', newUnit || 'kg');
   const delta = (newWeight ?? 0) - oldWInNewUnit;
@@ -498,7 +499,15 @@ function WeightSyncModal({
           </strong>
           . Sync these changes there too?
         </div>
-        <div className="modal-actions">
+        <div className="modal-actions" style={{ flexWrap: 'wrap' }}>
+          <button
+            className="btn btn-ghost"
+            style={{ fontSize: 11, color: 'var(--text3)' }}
+            onClick={onExclude}
+            title="Stop asking to sync this exercise in the future"
+          >
+            Never sync this exercise
+          </button>
           <button className="btn btn-ghost" onClick={onSkip}>Keep separate</button>
           <button
             className="btn btn-accent"
@@ -681,7 +690,7 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
       const oldUnit = ex.weightUnit || 'kg';
       
       const oldWConverted = convertWeight(oldW, oldUnit, newUnit);
-      if (Math.abs(newW - oldWConverted) < 0.01) return;
+      if (Math.abs(newW - oldWConverted) < 0.01 || isSyncExcluded(ex.name)) return;
 
       // Find other days that have the same exercise name
       const otherDays = (splitDays || [])
@@ -747,7 +756,7 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
       const durationChanged = oldDuration !== newDuration || oldDurationUnit !== newDurationUnit;
       const repsChanged = newReps !== oldReps || newUntilFailure !== oldUntilFailure;
 
-      if (newSets === oldSets && !repsChanged && !durationChanged) return;
+      if ((newSets === oldSets && !repsChanged && !durationChanged) || isSyncExcluded(ex.name)) return;
 
       const otherDays = (splitDays || [])
         .filter((d) => d._id !== dayId && !d.isRest)
@@ -1063,6 +1072,7 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
           otherSplits={syncPrompt.otherSplits}
           onSync={handleSync}
           onSkip={() => setSyncPrompt(null)}
+          onExclude={() => { excludeFromSync(ex.name); setSyncPrompt(null); }}
         />
       )}
 

@@ -127,6 +127,7 @@ router.get('/:id/versions', async (req, res) => {
       _id: v._id,
       name: v.name,
       createdAt: v.createdAt,
+      days: v.days || [],
       dayCount: (v.days || []).length,
       exerciseCount: (v.days || []).reduce((sum, d) => sum + (d.exercises || []).length, 0),
     })));
@@ -173,6 +174,42 @@ router.post('/:id/duplicate', async (req, res) => {
     });
     await copy.save();
     res.status(201).json(sortExercises(copy));
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// ─── IMPORT / EXPORT ──────────────────────────────────────────────────────────
+
+const EXERCISE_IMPORT_FIELDS = [
+  'name', 'sets', 'reps', 'untilFailure', 'weight', 'weightUnit', 'muscleTargets',
+  'category', 'notes', 'duration', 'durationUnit',
+];
+const DAY_IMPORT_FIELDS = ['name', 'tag', 'isRest'];
+
+router.post('/import', async (req, res) => {
+  try {
+    const { name, days } = req.body;
+    if (!name || typeof name !== 'string') return res.status(400).json({ error: 'name is required' });
+    if (!Array.isArray(days)) return res.status(400).json({ error: 'days must be an array' });
+
+    const sanitizedDays = days.map((d) => {
+      const day = {};
+      DAY_IMPORT_FIELDS.forEach((f) => { if (d[f] !== undefined) day[f] = d[f]; });
+      day.dayOrder = getDayOrder(day.name || '');
+      day.exercises = Array.isArray(d.exercises)
+        ? d.exercises.map((e, i) => {
+            const ex = { order: i };
+            EXERCISE_IMPORT_FIELDS.forEach((f) => { if (e[f] !== undefined) ex[f] = e[f]; });
+            return ex;
+          })
+        : [];
+      return day;
+    });
+
+    const split = new Split({ name, days: sanitizedDays, userId: req.userId });
+    await split.save();
+    res.status(201).json(sortExercises(split));
   } catch (err) {
     res.status(400).json({ error: err.message });
   }

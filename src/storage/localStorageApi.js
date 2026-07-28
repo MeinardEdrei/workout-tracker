@@ -137,6 +137,7 @@ export function getSplitVersions(splitId) {
     _id: v._id,
     name: v.name,
     createdAt: v.createdAt,
+    days: v.days || [],
     dayCount: (v.days || []).length,
     exerciseCount: (v.days || []).reduce((sum, d) => sum + (d.exercises || []).length, 0),
   })));
@@ -179,6 +180,47 @@ export function duplicateSplit(splitId) {
   splits.unshift(copy);
   writeSplits(splits);
   return Promise.resolve(copy);
+}
+
+export function importSplit(data) {
+  const splits = readSplits();
+  const split = {
+    _id: uid(),
+    name: data.name || 'Imported Split',
+    isActive: false,
+    days: (data.days || []).map((d) => ({
+      _id: uid(),
+      name: d.name || '',
+      tag: d.tag || '',
+      isRest: !!d.isRest,
+      dayOrder: getDayOrder(d.name || ''),
+      exercises: (d.exercises || []).map((e, i) => ({
+        _id: uid(),
+        name: e.name || '',
+        sets: e.sets ?? 3,
+        reps: e.reps ?? 10,
+        untilFailure: !!e.untilFailure,
+        weight: e.weight ?? 0,
+        weightUnit: e.weightUnit || 'kg',
+        checked: false,
+        lastCheckedDate: '',
+        order: i,
+        muscleTargets: e.muscleTargets || [],
+        imageUrl: '',
+        imageSource: '',
+        placeholderUsed: false,
+        category: e.category || 'workout',
+        notes: e.notes || '',
+        duration: e.duration ?? 0,
+        durationUnit: e.durationUnit || 'sec',
+      })),
+    })),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  splits.unshift(split);
+  writeSplits(splits);
+  return Promise.resolve(split);
 }
 
 // ─── Cross-Split Sync ─────────────────────────────────────────────────────────

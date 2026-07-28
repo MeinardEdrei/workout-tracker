@@ -50,6 +50,7 @@ export const getRanking = (filter = 'weekly') => req('GET', `/api/splits/ranking
 export const getSplitVersions = (id) => req('GET', `/api/splits/${id}/versions`);
 export const revertSplitVersion = (id, versionId) => req('POST', `/api/splits/${id}/revert`, { versionId });
 export const duplicateSplit = (id) => req('POST', `/api/splits/${id}/duplicate`);
+export const importSplit = (data) => req('POST', '/api/splits/import', data);
 export const getSyncMatches = (name, excludeSplitId) =>
   req('GET', `/api/splits/sync-matches?name=${encodeURIComponent(name)}&excludeSplitId=${excludeSplitId}`);
 export const applySync = (fields, targets) => req('POST', '/api/splits/sync-apply', { fields, targets });

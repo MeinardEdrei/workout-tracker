@@ -152,8 +152,141 @@ function timeAgo(iso) {
   return new Date(iso).toLocaleDateString();
 }
 
+// Diffs two `days` arrays by day name / exercise name (order-independent) so a version's
+// changes read as "what would restoring this undo", not a raw structural comparison.
+function diffSplitDays(fromDays = [], toDays = []) {
+  const fromExByName = new Map();
+  (fromDays || []).forEach((d) => (d.exercises || []).forEach((e) => fromExByName.set(e.name?.trim().toLowerCase(), { ex: e, dayName: d.name })));
+  const toExByName = new Map();
+  (toDays || []).forEach((d) => (d.exercises || []).forEach((e) => toExByName.set(e.name?.trim().toLowerCase(), { ex: e, dayName: d.name })));
+
+  const added = [];
+  const removed = [];
+  const changed = [];
+  const FIELDS = [
+    { key: 'weight', label: 'Weight' },
+    { key: 'sets', label: 'Sets' },
+    { key: 'reps', label: 'Reps' },
+    { key: 'category', label: 'Category' },
+  ];
+
+  toExByName.forEach((entry, key) => {
+    if (!fromExByName.has(key)) added.push(entry);
+  });
+  fromExByName.forEach((entry, key) => {
+    if (!toExByName.has(key)) removed.push(entry);
+  });
+  fromExByName.forEach((fromEntry, key) => {
+    const toEntry = toExByName.get(key);
+    if (!toEntry) return;
+    const fieldChanges = FIELDS
+      .filter((f) => (fromEntry.ex[f.key] ?? '') !== (toEntry.ex[f.key] ?? ''))
+      .map((f) => ({ label: f.label, from: fromEntry.ex[f.key], to: toEntry.ex[f.key] }));
+    if (fieldChanges.length > 0) changed.push({ name: toEntry.ex.name, dayName: toEntry.dayName, fieldChanges });
+  });
+
+  const fromDayNames = new Set((fromDays || []).map((d) => d.name));
+  const toDayNames = new Set((toDays || []).map((d) => d.name));
+  const addedDays = [...toDayNames].filter((n) => !fromDayNames.has(n));
+  const removedDays = [...fromDayNames].filter((n) => !toDayNames.has(n));
+
+  return { added, removed, changed, addedDays, removedDays };
+}
+
+function VersionDiff({ diff }) {
+  const { added, removed, changed, addedDays, removedDays } = diff;
+  const nothingChanged = !added.length && !removed.length && !changed.length && !addedDays.length && !removedDays.length;
+  return (
+    <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 8, background: 'var(--bg3)', fontSize: 12 }}>
+      {nothingChanged && <div style={{ color: 'var(--text3)' }}>No differences from the current split.</div>}
+      {addedDays.map((n) => <div key={`ad-${n}`} style={{ color: 'var(--green)' }}>+ Day added since: {n}</div>)}
+      {removedDays.map((n) => <div key={`rd-${n}`} style={{ color: '#f87171' }}>− Day removed since: {n}</div>)}
+      {added.map(({ ex, dayName }) => (
+        <div key={`a-${ex.name}`} style={{ color: 'var(--green)' }}>+ Added since: {ex.name} ({dayName})</div>
+      ))}
+      {removed.map(({ ex, dayName }) => (
+        <div key={`r-${ex.name}`} style={{ color: '#f87171' }}>− Removed since: {ex.name} ({dayName})</div>
+      ))}
+      {changed.map((c) => (
+        <div key={`c-${c.name}`} style={{ color: 'var(--text2)', marginTop: 2 }}>
+          <strong style={{ color: 'var(--text)' }}>{c.name}</strong> ({c.dayName}):{' '}
+          {c.fieldChanges.map((fc, i) => (
+            <span key={fc.label}>
+              {i > 0 ? ', ' : ''}{fc.label} {fc.from ?? '—'} → {fc.to ?? '—'}
+            </span>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SplitCompareModal({ splits, initialLeftId, onClose }) {
+  const [leftId, setLeftId] = useState(initialLeftId || splits[0]?._id);
+  const [rightId, setRightId] = useState(splits.find((s) => s._id !== initialLeftId)?._id || splits[1]?._id);
+
+  const left = splits.find((s) => s._id === leftId);
+  const right = splits.find((s) => s._id === rightId);
+  const dayNames = left && right
+    ? [...new Set([...(left.days || []).map((d) => d.name), ...(right.days || []).map((d) => d.name)])]
+    : [];
+
+  function renderDay(split, name) {
+    const day = (split?.days || []).find((d) => d.name === name);
+    if (!day) return <div style={{ fontSize: 12, color: 'var(--text3)', fontStyle: 'italic' }}>No matching day</div>;
+    if (!(day.exercises || []).length) return <div style={{ fontSize: 12, color: 'var(--text3)' }}>{day.isRest ? 'Rest day' : 'No exercises'}</div>;
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {day.exercises.map((e) => (
+          <div key={e._id || e.name} style={{ fontSize: 12, color: 'var(--text2)' }}>
+            {e.name} <span style={{ color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>
+              {e.sets}×{e.untilFailure || !e.reps ? 'F' : e.reps}{e.weight > 0 ? ` · ${e.weight}${e.weightUnit}` : ''}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 640 }}>
+        <div className="modal-title" style={{ fontSize: 16 }}>Compare Splits</div>
+        <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
+          <select value={leftId || ''} onChange={(e) => setLeftId(e.target.value)} style={{ flex: 1, padding: '8px 10px', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--border2)', color: 'var(--text)', fontSize: 13 }}>
+            {splits.map((s) => <option key={s._id} value={s._id}>{s.name}</option>)}
+          </select>
+          <select value={rightId || ''} onChange={(e) => setRightId(e.target.value)} style={{ flex: 1, padding: '8px 10px', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--border2)', color: 'var(--text)', fontSize: 13 }}>
+            {splits.map((s) => <option key={s._id} value={s._id}>{s.name}</option>)}
+          </select>
+        </div>
+        {left && right && left._id === right._id && (
+          <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 10 }}>Pick two different splits to compare.</div>
+        )}
+        <div style={{ maxHeight: 420, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {dayNames.map((name) => (
+            <div key={name} style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text3)', padding: '8px 12px', background: 'var(--bg3)' }}>
+                {name}
+              </div>
+              <div style={{ display: 'flex', gap: 0 }}>
+                <div style={{ flex: 1, padding: 10, borderRight: '1px solid var(--border)' }}>{renderDay(left, name)}</div>
+                <div style={{ flex: 1, padding: 10 }}>{renderDay(right, name)}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="modal-actions">
+          <button className="btn btn-ghost" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SplitHistoryModal({ split, onRevert, isReverting, onClose }) {
   const { storage } = useStorage();
+  const [expandedId, setExpandedId] = useState(null);
   const { data: versions, isLoading } = useQuery({
     queryKey: ['splitVersions', split._id],
     queryFn: () => storage.getSplitVersions(split._id),
@@ -161,7 +294,7 @@ function SplitHistoryModal({ split, onRevert, isReverting, onClose }) {
 
   return (
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth: 420 }}>
+      <div className="modal" style={{ maxWidth: 460 }}>
         <div className="modal-title" style={{ fontSize: 16 }}>Version History — {split.name}</div>
         <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 14 }}>
           Every edit is snapshotted automatically. Restore any past version below.
@@ -170,31 +303,43 @@ function SplitHistoryModal({ split, onRevert, isReverting, onClose }) {
         {!isLoading && (!versions || versions.length === 0) && (
           <div style={{ color: 'var(--text3)', fontSize: 13 }}>No past versions yet — edits will start appearing here.</div>
         )}
-        <div style={{ maxHeight: 320, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {(versions || []).map((v) => (
-            <div
-              key={v._id}
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
-                padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--bg2)',
-              }}
-            >
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 700 }}>{timeAgo(v.createdAt)}</div>
-                <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>
-                  {v.dayCount} day{v.dayCount === 1 ? '' : 's'} · {v.exerciseCount} exercise{v.exerciseCount === 1 ? '' : 's'}
-                </div>
-              </div>
-              <button
-                className="btn btn-ghost"
-                style={{ fontSize: 12, padding: '6px 12px', flexShrink: 0 }}
-                disabled={isReverting}
-                onClick={() => onRevert(v._id)}
+        <div style={{ maxHeight: 380, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {(versions || []).map((v) => {
+            const expanded = expandedId === v._id;
+            return (
+              <div
+                key={v._id}
+                style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--bg2)' }}
               >
-                Restore
-              </button>
-            </div>
-          ))}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700 }}>{timeAgo(v.createdAt)}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>
+                      {v.dayCount} day{v.dayCount === 1 ? '' : 's'} · {v.exerciseCount} exercise{v.exerciseCount === 1 ? '' : 's'}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    <button
+                      className="btn btn-ghost"
+                      style={{ fontSize: 12, padding: '6px 10px' }}
+                      onClick={() => setExpandedId(expanded ? null : v._id)}
+                    >
+                      {expanded ? 'Hide' : 'View changes'}
+                    </button>
+                    <button
+                      className="btn btn-ghost"
+                      style={{ fontSize: 12, padding: '6px 12px' }}
+                      disabled={isReverting}
+                      onClick={() => onRevert(v._id)}
+                    >
+                      Restore
+                    </button>
+                  </div>
+                </div>
+                {expanded && <VersionDiff diff={diffSplitDays(v.days, split.days)} />}
+              </div>
+            );
+          })}
         </div>
         <div className="modal-actions">
           <button className="btn btn-ghost" onClick={onClose}>Close</button>
@@ -409,6 +554,8 @@ export default function SplitsPage() {
   const [signInFailed, setSignInFailed] = useState(false);
   const [shareModal, setShareModal] = useState(null);
   const [historyModal, setHistoryModal] = useState(null);
+  const [compareModal, setCompareModal] = useState(false);
+  const importInputRef = useRef(null);
   const [toast, setToast] = useState(null);
   const signInTimer = useRef(null);
 
@@ -598,6 +745,49 @@ Coach:`;
     onSuccess: () => { invalidate(); showToast('Split reverted!'); setHistoryModal(null); },
     onError: (err) => showToast(err.message || 'Revert failed', 'error'),
   });
+  const importMutation = useMutation({
+    mutationFn: (data) => storage.importSplit(data),
+    onSuccess: () => { invalidate(); showToast('Split imported!'); },
+    onError: (err) => showToast(err.message || 'Import failed', 'error'),
+  });
+
+  function handleExportSplit(split) {
+    const payload = {
+      name: split.name,
+      days: (split.days || []).map((d) => ({
+        name: d.name, tag: d.tag, isRest: d.isRest,
+        exercises: (d.exercises || []).map((e) => ({
+          name: e.name, sets: e.sets, reps: e.reps, untilFailure: e.untilFailure,
+          weight: e.weight, weightUnit: e.weightUnit, muscleTargets: e.muscleTargets,
+          category: e.category, notes: e.notes, duration: e.duration, durationUnit: e.durationUnit,
+        })),
+      })),
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${split.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function handleImportFile(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result);
+        if (!data.name || !Array.isArray(data.days)) throw new Error('Invalid split file');
+        importMutation.mutate(data);
+      } catch (err) {
+        showToast(err.message || 'Could not read that file', 'error');
+      }
+    };
+    reader.readAsText(file);
+  }
 
   async function handleActivate(split) {
     if (split.isActive || actionLoading) return;
@@ -814,6 +1004,31 @@ Coach:`;
             <ShopIcon />
             <span style={{ display: 'var(--browse-label-display, inline)' }}>Browse</span>
           </button>
+
+          {/* Import a split exported as JSON */}
+          <button
+            onClick={() => importInputRef.current?.click()}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              padding: '6px 10px', borderRadius: 6,
+              background: 'transparent', border: '1px solid var(--border2)',
+              color: 'var(--text2)', cursor: 'pointer',
+              fontSize: 11, fontWeight: 600, letterSpacing: '0.04em',
+              fontFamily: 'var(--font-display)', textTransform: 'uppercase',
+              transition: 'all 0.15s', whiteSpace: 'nowrap',
+              WebkitTapHighlightColor: 'transparent',
+            }}
+            title="Import a split from a JSON file"
+          >
+            Import
+          </button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept="application/json"
+            style={{ display: 'none' }}
+            onChange={handleImportFile}
+          />
 
           {/* Primary action: always accent, always prominent */}
           <button className="btn btn-accent" onClick={() => setModal({ type: 'add' })}>
@@ -1111,6 +1326,13 @@ Coach:`;
           onClose={() => setHistoryModal(null)}
         />
       )}
+      {compareModal && (
+        <SplitCompareModal
+          splits={splits}
+          initialLeftId={compareModal}
+          onClose={() => setCompareModal(false)}
+        />
+      )}
 
       {/* ── Portal dropdown — escapes overflow:hidden on split cards ── */}
       {menuOpenId && (() => {
@@ -1247,6 +1469,38 @@ Coach:`;
                   <path d="M3 3v5h5" /><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8" /><path d="M12 7v5l4 2" />
                 </svg>
                 Version History
+              </button>
+
+              {/* Compare with another split */}
+              {splits.length > 1 && (
+                <button
+                  onClick={() => { setCompareModal(s._id); setMenuOpenId(null); }}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '11px 16px', background: 'none', border: 'none',
+                    cursor: 'pointer', color: 'var(--text)', fontSize: 13, fontWeight: 600,
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M8 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3" /><path d="M16 3h3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-3" /><line x1="12" y1="3" x2="12" y2="21" />
+                  </svg>
+                  Compare
+                </button>
+              )}
+
+              {/* Export as JSON */}
+              <button
+                onClick={() => { handleExportSplit(s); setMenuOpenId(null); }}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '11px 16px', background: 'none', border: 'none',
+                  cursor: 'pointer', color: 'var(--text)', fontSize: 13, fontWeight: 600,
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                Export as JSON
               </button>
 
               {/* Copy as Text */}

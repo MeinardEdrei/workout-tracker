@@ -4,6 +4,7 @@ import { useStorage } from '../hooks/useStorage';
 import { MusclePill, MUSCLE_COLORS, MUSCLE_GROUPS } from '../components/MusclePill';
 import { capitalizeWords } from '../utils/textFormat';
 import ExerciseThumbnail from '../components/ExerciseThumbnail';
+import { isSyncExcluded, excludeFromSync } from '../utils/syncPrefs';
 import { createPortal } from 'react-dom';
 import * as api from '../api/index.js';
 import {
@@ -250,7 +251,7 @@ function WeightSyncModal({
   oldSets, newSets, oldReps, newReps, oldUntilFailure, newUntilFailure, 
   oldMuscleTargets = [], newMuscleTargets = [],
   oldCategory, newCategory,
-  otherDays, otherSplits = [], onSync, onSkip
+  otherDays, otherSplits = [], onSync, onSkip, onExclude
 }) {
   const oldWInNewUnit = convertWeight(oldWeight ?? 0, oldUnit || 'kg', newUnit || 'kg');
   const delta = (newWeight ?? 0) - oldWInNewUnit;
@@ -332,7 +333,15 @@ function WeightSyncModal({
           </strong>
           . Sync these changes there too?
         </div>
-        <div className="modal-actions">
+        <div className="modal-actions" style={{ flexWrap: 'wrap' }}>
+          <button
+            className="btn btn-ghost"
+            style={{ fontSize: 11, color: 'var(--text3)' }}
+            onClick={onExclude}
+            title="Stop asking to sync this exercise in the future"
+          >
+            Never sync this exercise
+          </button>
           <button className="btn btn-ghost" onClick={onSkip}>Keep separate</button>
           <button
             className="btn btn-accent"
@@ -1612,7 +1621,7 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
       const newCategory = updatedForm.category || 'workout';
       const categoryChanged = oldCategory !== newCategory;
 
-      if (weightChanged || setsChanged || repsChanged || tagsChanged || categoryChanged) {
+      if ((weightChanged || setsChanged || repsChanged || tagsChanged || categoryChanged) && !isSyncExcluded(ex.name)) {
         const otherDays = (splitDays || [])
           .filter((d) => d._id !== dayId && !d.isRest)
           .flatMap((d) =>
@@ -1741,6 +1750,7 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
           otherSplits={syncPrompt.otherSplits}
           onSync={handleSync}
           onSkip={() => setSyncPrompt(null)}
+          onExclude={() => { excludeFromSync(ex.name); setSyncPrompt(null); }}
         />
       )}
       {showSwapModal && (
@@ -1876,6 +1886,7 @@ function DayEditor({ day, split, onBack, onDayUpdated }) {
   const [modal, setModal] = useState(null);
   const [isRest, setIsRest] = useState(day.isRest);
   const [reorderError, setReorderError] = useState(null);
+  const [deleteToast, setDeleteToast] = useState(null);
 
   useEffect(() => {
     setExercises(day.exercises || []);
@@ -1937,6 +1948,8 @@ function DayEditor({ day, split, onBack, onDayUpdated }) {
     await storage.deleteExercise(split._id, day._id, exId);
     setExercises((prev) => prev.filter((e) => e._id !== exId));
     queryClient.invalidateQueries({ queryKey: ['splits'] });
+    setDeleteToast('Exercise deleted. Restore it from Version History on the split menu.');
+    setTimeout(() => setDeleteToast(null), 4000);
   }
 
   async function toggleRest() {
@@ -1990,6 +2003,16 @@ function DayEditor({ day, split, onBack, onDayUpdated }) {
           maxWidth: 320, textAlign: 'center',
         }}>
           {reorderError}
+        </div>
+      )}
+      {deleteToast && (
+        <div style={{
+          position: 'fixed', bottom: 80, left: '50%', transform: 'translateX(-50%)',
+          background: '#1e3a0f', color: '#fff', padding: '10px 16px',
+          borderRadius: 8, fontSize: 13, fontWeight: 600, zIndex: 200,
+          maxWidth: 320, textAlign: 'center',
+        }}>
+          {deleteToast}
         </div>
       )}
 
@@ -2101,6 +2124,7 @@ function SplitEditorInner({ split, onBack, onSplitUpdated }) {
   );
   const [activeDayId, setActiveDayId] = useState(null);
   const [modal, setModal] = useState(null);
+  const [deleteToast, setDeleteToast] = useState(null);
 
   useEffect(() => {
     setDays([...(split.days || [])].sort((a, b) => (a.dayOrder ?? 8) - (b.dayOrder ?? 8)));
@@ -2127,6 +2151,8 @@ function SplitEditorInner({ split, onBack, onSplitUpdated }) {
     await storage.deleteDay(split._id, day._id);
     setDays((prev) => prev.filter((d) => d._id !== day._id));
     queryClient.invalidateQueries({ queryKey: ['splits'] });
+    setDeleteToast('Day deleted. Restore it from Version History on the split menu.');
+    setTimeout(() => setDeleteToast(null), 4000);
   }
 
   if (activeDay) {
@@ -2186,6 +2212,17 @@ function SplitEditorInner({ split, onBack, onSplitUpdated }) {
               </svg>
             </div>
           ))}
+        </div>
+      )}
+
+      {deleteToast && (
+        <div style={{
+          position: 'fixed', bottom: 80, left: '50%', transform: 'translateX(-50%)',
+          background: '#1e3a0f', color: '#fff', padding: '10px 16px',
+          borderRadius: 8, fontSize: 13, fontWeight: 600, zIndex: 200,
+          maxWidth: 320, textAlign: 'center',
+        }}>
+          {deleteToast}
         </div>
       )}
 
