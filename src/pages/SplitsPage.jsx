@@ -140,6 +140,70 @@ function ConfirmModal({ message, onConfirm, onClose }) {
   );
 }
 
+function timeAgo(iso) {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString();
+}
+
+function SplitHistoryModal({ split, onRevert, isReverting, onClose }) {
+  const { storage } = useStorage();
+  const { data: versions, isLoading } = useQuery({
+    queryKey: ['splitVersions', split._id],
+    queryFn: () => storage.getSplitVersions(split._id),
+  });
+
+  return (
+    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 420 }}>
+        <div className="modal-title" style={{ fontSize: 16 }}>Version History — {split.name}</div>
+        <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 14 }}>
+          Every edit is snapshotted automatically. Restore any past version below.
+        </div>
+        {isLoading && <div style={{ color: 'var(--text3)', fontSize: 13 }}>Loading…</div>}
+        {!isLoading && (!versions || versions.length === 0) && (
+          <div style={{ color: 'var(--text3)', fontSize: 13 }}>No past versions yet — edits will start appearing here.</div>
+        )}
+        <div style={{ maxHeight: 320, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {(versions || []).map((v) => (
+            <div
+              key={v._id}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+                padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--bg2)',
+              }}
+            >
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>{timeAgo(v.createdAt)}</div>
+                <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>
+                  {v.dayCount} day{v.dayCount === 1 ? '' : 's'} · {v.exerciseCount} exercise{v.exerciseCount === 1 ? '' : 's'}
+                </div>
+              </div>
+              <button
+                className="btn btn-ghost"
+                style={{ fontSize: 12, padding: '6px 12px', flexShrink: 0 }}
+                disabled={isReverting}
+                onClick={() => onRevert(v._id)}
+              >
+                Restore
+              </button>
+            </div>
+          ))}
+        </div>
+        <div className="modal-actions">
+          <button className="btn btn-ghost" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── External Gemini API Helper ─── */
 async function callExternalGeminiApi(apiKey, systemPrompt, chatHistory, userText) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
@@ -344,6 +408,7 @@ export default function SplitsPage() {
   const [signingIn, setSigningIn] = useState(false);
   const [signInFailed, setSignInFailed] = useState(false);
   const [shareModal, setShareModal] = useState(null);
+  const [historyModal, setHistoryModal] = useState(null);
   const [toast, setToast] = useState(null);
   const signInTimer = useRef(null);
 
@@ -522,6 +587,16 @@ Coach:`;
     mutationFn: (id) => reapplySplitApi(id),
     onSuccess: () => { invalidate(); showToast('Split updated from source!'); },
     onError: (err) => showToast(err.message || 'Reapply failed', 'error'),
+  });
+  const duplicateMutation = useMutation({
+    mutationFn: (id) => storage.duplicateSplit(id),
+    onSuccess: () => { invalidate(); showToast('Split duplicated!'); },
+    onError: (err) => showToast(err.message || 'Duplicate failed', 'error'),
+  });
+  const revertMutation = useMutation({
+    mutationFn: ({ id, versionId }) => storage.revertSplitVersion(id, versionId),
+    onSuccess: () => { invalidate(); showToast('Split reverted!'); setHistoryModal(null); },
+    onError: (err) => showToast(err.message || 'Revert failed', 'error'),
   });
 
   async function handleActivate(split) {
@@ -1028,6 +1103,14 @@ Coach:`;
       {modal?.type === 'rename' && <SplitModal title="Rename Split" initial={modal.split.name} onConfirm={handleRename} onClose={() => setModal(null)} />}
       {modal?.type === 'delete' && <ConfirmModal message={`Delete "${modal.split.name}"? This cannot be undone.`} onConfirm={handleDelete} onClose={() => setModal(null)} />}
       {shareModal && <SplitShareModal split={shareModal} onClose={() => setShareModal(null)} />}
+      {historyModal && (
+        <SplitHistoryModal
+          split={historyModal}
+          isReverting={revertMutation.isPending}
+          onRevert={(versionId) => revertMutation.mutate({ id: historyModal._id, versionId })}
+          onClose={() => setHistoryModal(null)}
+        />
+      )}
 
       {/* ── Portal dropdown — escapes overflow:hidden on split cards ── */}
       {menuOpenId && (() => {
@@ -1133,6 +1216,37 @@ Coach:`;
                   <path d="M11.5 2.5a1.5 1.5 0 0 1 2.12 2.12L5 13.24l-3 .76.76-3L11.5 2.5Z" />
                 </svg>
                 Rename
+              </button>
+
+              {/* Duplicate */}
+              <button
+                onClick={() => { duplicateMutation.mutate(s._id); setMenuOpenId(null); }}
+                disabled={duplicateMutation.isPending}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '11px 16px', background: 'none', border: 'none',
+                  cursor: 'pointer', color: 'var(--text)', fontSize: 13, fontWeight: 600,
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+                Duplicate
+              </button>
+
+              {/* Version History */}
+              <button
+                onClick={() => { setHistoryModal(s); setMenuOpenId(null); }}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '11px 16px', background: 'none', border: 'none',
+                  cursor: 'pointer', color: 'var(--text)', fontSize: 13, fontWeight: 600,
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 3v5h5" /><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8" /><path d="M12 7v5l4 2" />
+                </svg>
+                Version History
               </button>
 
               {/* Copy as Text */}

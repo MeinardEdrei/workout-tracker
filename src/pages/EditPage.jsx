@@ -250,7 +250,7 @@ function WeightSyncModal({
   oldSets, newSets, oldReps, newReps, oldUntilFailure, newUntilFailure, 
   oldMuscleTargets = [], newMuscleTargets = [],
   oldCategory, newCategory,
-  otherDays, onSync, onSkip 
+  otherDays, otherSplits = [], onSync, onSkip
 }) {
   const oldWInNewUnit = convertWeight(oldWeight ?? 0, oldUnit || 'kg', newUnit || 'kg');
   const delta = (newWeight ?? 0) - oldWInNewUnit;
@@ -327,6 +327,8 @@ function WeightSyncModal({
           This exercise also appears in{' '}
           <strong style={{ color: 'var(--text2)' }}>
             {otherDays.map((d) => d.dayName).join(', ')}
+            {otherDays.length > 0 && otherSplits.length > 0 ? ', ' : ''}
+            {otherSplits.map((d) => `${d.dayName} (${d.splitName})`).join(', ')}
           </strong>
           . Sync these changes there too?
         </div>
@@ -1618,9 +1620,16 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
               .filter((e) => e.name.toLowerCase() === ex.name.toLowerCase())
               .map((e) => ({ dayName: d.name, dayId: d._id, exId: e._id }))
           );
-        if (otherDays.length > 0) {
+        let otherSplits = [];
+        try {
+          otherSplits = await storage.getSyncMatches(ex.name, splitId);
+        } catch (err) {
+          console.error(err);
+        }
+        if (otherDays.length > 0 || otherSplits.length > 0) {
           setSyncPrompt({
             otherDays,
+            otherSplits,
             oldWeight,
             oldUnit,
             newWeight,
@@ -1656,6 +1665,9 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
 
     for (const { dayId: dId, exId } of syncPrompt.otherDays) {
       await storage.updateExercise(splitId, dId, exId, payload);
+    }
+    for (const { splitId: sId, dayId: dId, exId } of (syncPrompt.otherSplits || [])) {
+      await storage.updateExercise(sId, dId, exId, payload);
     }
     queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
     setSyncPrompt(null);
@@ -1726,6 +1738,7 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
           oldCategory={syncPrompt.oldCategory}
           newCategory={syncPrompt.newCategory}
           otherDays={syncPrompt.otherDays}
+          otherSplits={syncPrompt.otherSplits}
           onSync={handleSync}
           onSkip={() => setSyncPrompt(null)}
         />

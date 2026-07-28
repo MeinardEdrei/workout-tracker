@@ -34,6 +34,7 @@ const SplitSchema = new mongoose.Schema(
     isActive: { type: Boolean, default: false },
     isPublic: { type: Boolean, default: false },
     sourceId: { type: mongoose.Schema.Types.ObjectId, ref: 'Split', default: null },
+    duplicatedFrom: { type: mongoose.Schema.Types.ObjectId, ref: 'Split', default: null },
     days: [DaySchema],
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
   },

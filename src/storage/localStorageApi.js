@@ -3,8 +3,29 @@
 
 const SPLITS_KEY = 'wt_guest_splits';
 const LOGS_KEY = 'wt_guest_logs';
+const VERSIONS_KEY = 'wt_guest_versions';
+const MAX_VERSIONS_PER_SPLIT = 50;
 const TODAY = () => new Date().toISOString().slice(0, 10);
 const uid = () => crypto.randomUUID();
+
+function readVersions() {
+  try { return JSON.parse(localStorage.getItem(VERSIONS_KEY) || '{}'); } catch { return {}; }
+}
+function writeVersions(v) { localStorage.setItem(VERSIONS_KEY, JSON.stringify(v)); }
+
+// Snapshots a split's pre-change state so it can later be reverted to.
+function snapshotVersion(split) {
+  const all = readVersions();
+  const list = all[split._id] || [];
+  list.unshift({
+    _id: uid(),
+    name: split.name,
+    days: JSON.parse(JSON.stringify(split.days || [])),
+    createdAt: new Date().toISOString(),
+  });
+  all[split._id] = list.slice(0, MAX_VERSIONS_PER_SPLIT);
+  writeVersions(all);
+}
 
 const DAY_ORDER_MAP = { monday: 0, tuesday: 1, wednesday: 2, thursday: 3, friday: 4, saturday: 5, sunday: 6, rest: 7 };
 const getDayOrder = (name) => DAY_ORDER_MAP[name.trim().toLowerCase()] ?? 8;
@@ -108,6 +129,100 @@ export function activateSplit(id) {
   return Promise.resolve(split);
 }
 
+// ─── Version History ──────────────────────────────────────────────────────────
+
+export function getSplitVersions(splitId) {
+  const list = readVersions()[splitId] || [];
+  return Promise.resolve(list.map((v) => ({
+    _id: v._id,
+    name: v.name,
+    createdAt: v.createdAt,
+    dayCount: (v.days || []).length,
+    exerciseCount: (v.days || []).reduce((sum, d) => sum + (d.exercises || []).length, 0),
+  })));
+}
+
+export function revertSplitVersion(splitId, versionId) {
+  const splits = readSplits();
+  const split = splits.find((s) => s._id === splitId);
+  if (!split) return Promise.reject(new Error('Split not found'));
+  const list = readVersions()[splitId] || [];
+  const version = list.find((v) => v._id === versionId);
+  if (!version) return Promise.reject(new Error('Version not found'));
+  snapshotVersion(split);
+  split.name = version.name;
+  split.days = JSON.parse(JSON.stringify(version.days));
+  split.updatedAt = new Date().toISOString();
+  writeSplits(splits);
+  return Promise.resolve({ ...split });
+}
+
+// ─── Duplicate ────────────────────────────────────────────────────────────────
+
+export function duplicateSplit(splitId) {
+  const splits = readSplits();
+  const split = splits.find((s) => s._id === splitId);
+  if (!split) return Promise.reject(new Error('Split not found'));
+  const copy = {
+    _id: uid(),
+    name: `${split.name} (copy)`,
+    isActive: false,
+    duplicatedFrom: split._id,
+    days: JSON.parse(JSON.stringify(split.days || [])).map((d) => ({
+      ...d,
+      _id: uid(),
+      exercises: (d.exercises || []).map((e) => ({ ...e, _id: uid() })),
+    })),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  splits.unshift(copy);
+  writeSplits(splits);
+  return Promise.resolve(copy);
+}
+
+// ─── Cross-Split Sync ─────────────────────────────────────────────────────────
+
+export function getSyncMatches(name, excludeSplitId) {
+  if (!name) return Promise.resolve([]);
+  const targetName = name.trim().toLowerCase();
+  const matches = [];
+  readSplits().forEach((s) => {
+    if (s._id === excludeSplitId) return;
+    (s.days || []).forEach((d) => {
+      if (d.isRest) return;
+      (d.exercises || []).forEach((e) => {
+        if (e.name && e.name.trim().toLowerCase() === targetName) {
+          matches.push({ splitId: s._id, splitName: s.name, dayId: d._id, dayName: d.name, exId: e._id });
+        }
+      });
+    });
+  });
+  return Promise.resolve(matches);
+}
+
+export function applySync(fields, targets) {
+  const splits = readSplits();
+  const bySplit = new Map();
+  targets.forEach((t) => {
+    if (!bySplit.has(t.splitId)) bySplit.set(t.splitId, []);
+    bySplit.get(t.splitId).push(t);
+  });
+  bySplit.forEach((splitTargets, splitId) => {
+    const split = splits.find((s) => s._id === splitId);
+    if (!split) return;
+    snapshotVersion(split);
+    splitTargets.forEach(({ dayId, exId }) => {
+      const day = (split.days || []).find((d) => d._id === dayId);
+      const ex = day && (day.exercises || []).find((e) => e._id === exId);
+      if (!ex) return;
+      Object.keys(fields).forEach((f) => { ex[f] = fields[f]; });
+    });
+  });
+  writeSplits(splits);
+  return Promise.resolve({ message: 'Synced' });
+}
+
 // ─── Days ─────────────────────────────────────────────────────────────────────
 
 export function getDays(splitId) {
@@ -120,6 +235,7 @@ export function createDay(splitId, data) {
   const splits = readSplits();
   const split = splits.find((s) => s._id === splitId);
   if (!split) return Promise.reject(new Error('Split not found'));
+  snapshotVersion(split);
   const day = {
     _id: uid(),
     name: data.name,
@@ -139,6 +255,7 @@ export function updateDay(splitId, dayId, data) {
   if (!split) return Promise.reject(new Error('Split not found'));
   const day = split.days.find((d) => d._id === dayId);
   if (!day) return Promise.reject(new Error('Day not found'));
+  snapshotVersion(split);
   if (data.name !== undefined) day.name = data.name;
   if (data.tag !== undefined) day.tag = data.tag;
   if (data.isRest !== undefined) day.isRest = data.isRest;
@@ -150,6 +267,7 @@ export function deleteDay(splitId, dayId) {
   const splits = readSplits();
   const split = splits.find((s) => s._id === splitId);
   if (!split) return Promise.reject(new Error('Split not found'));
+  snapshotVersion(split);
   split.days = split.days.filter((d) => d._id !== dayId);
   writeSplits(splits);
   return Promise.resolve({ message: 'Deleted' });
@@ -171,6 +289,7 @@ export function createExercise(splitId, dayId, data) {
   if (!split) return Promise.reject(new Error('Split not found'));
   const day = split.days.find((d) => d._id === dayId);
   if (!day) return Promise.reject(new Error('Day not found'));
+  snapshotVersion(split);
   const maxOrder = (day.exercises || []).reduce((m, e) => Math.max(m, e.order ?? 0), -1);
   const ex = {
     _id: uid(),
@@ -204,6 +323,7 @@ export function updateExercise(splitId, dayId, exId, data) {
   if (!day) return Promise.reject(new Error('Day not found'));
   const ex = (day.exercises || []).find((e) => e._id === exId);
   if (!ex) return Promise.reject(new Error('Exercise not found'));
+  snapshotVersion(split);
   ['name', 'sets', 'reps', 'weight', 'weightUnit', 'muscleTargets', 'untilFailure', 'imageUrl', 'imageSource', 'placeholderUsed', 'category', 'notes', 'duration', 'durationUnit'].forEach((f) => {
     if (data[f] !== undefined) ex[f] = data[f];
   });
@@ -217,6 +337,7 @@ export function deleteExercise(splitId, dayId, exId) {
   if (!split) return Promise.reject(new Error('Split not found'));
   const day = split.days.find((d) => d._id === dayId);
   if (!day) return Promise.reject(new Error('Day not found'));
+  snapshotVersion(split);
   day.exercises = (day.exercises || []).filter((e) => e._id !== exId);
   writeSplits(splits);
   return Promise.resolve({ message: 'Deleted' });
@@ -248,6 +369,7 @@ export function reorderExercises(splitId, dayId, exercises) {
   if (!split) return Promise.reject(new Error('Split not found'));
   const day = split.days.find((d) => d._id === dayId);
   if (!day) return Promise.reject(new Error('Day not found'));
+  snapshotVersion(split);
   exercises.forEach(({ _id, order }) => {
     const ex = (day.exercises || []).find((e) => e._id === _id);
     if (ex) ex.order = order;

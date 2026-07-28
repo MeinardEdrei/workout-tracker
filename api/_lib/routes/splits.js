@@ -1,11 +1,33 @@
 const express = require('express');
 const router = express.Router();
 const Split = require('../models/Split');
+const SplitVersion = require('../models/SplitVersion');
 const WorkoutLog = require('../models/WorkoutLog');
 const User = require('../models/User');
 const { requireAuth } = require('../middleware/auth');
 
 router.use(requireAuth);
+
+const MAX_VERSIONS_PER_SPLIT = 50;
+
+// Snapshots a split's pre-change state so it can later be reverted to.
+// Call this BEFORE mutating `split` in memory, using the freshly-fetched document.
+async function snapshotVersion(split) {
+  await SplitVersion.create({
+    splitId: split._id,
+    userId: split.userId,
+    name: split.name,
+    days: split.toObject().days,
+  });
+  const count = await SplitVersion.countDocuments({ splitId: split._id });
+  if (count > MAX_VERSIONS_PER_SPLIT) {
+    const excess = await SplitVersion.find({ splitId: split._id })
+      .sort({ createdAt: 1 })
+      .limit(count - MAX_VERSIONS_PER_SPLIT)
+      .select('_id');
+    await SplitVersion.deleteMany({ _id: { $in: excess.map((v) => v._id) } });
+  }
+}
 
 const DAY_ORDER_MAP = { monday: 0, tuesday: 1, wednesday: 2, thursday: 3, friday: 4, saturday: 5, sunday: 6, rest: 7 };
 function getDayOrder(name) { return DAY_ORDER_MAP[name.trim().toLowerCase()] ?? 8; }
@@ -87,6 +109,125 @@ router.patch('/:id/activate', async (req, res) => {
     );
     if (!split) return res.status(404).json({ error: 'Split not found' });
     res.json(sortExercises(split));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── VERSION HISTORY ──────────────────────────────────────────────────────────
+
+router.get('/:id/versions', async (req, res) => {
+  try {
+    const split = await Split.findOne({ _id: req.params.id, userId: req.userId }).select('_id');
+    if (!split) return res.status(404).json({ error: 'Split not found' });
+    const versions = await SplitVersion.find({ splitId: split._id })
+      .sort({ createdAt: -1 })
+      .select('_id name createdAt days');
+    res.json(versions.map((v) => ({
+      _id: v._id,
+      name: v.name,
+      createdAt: v.createdAt,
+      dayCount: (v.days || []).length,
+      exerciseCount: (v.days || []).reduce((sum, d) => sum + (d.exercises || []).length, 0),
+    })));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/:id/revert', async (req, res) => {
+  try {
+    const split = await Split.findOne({ _id: req.params.id, userId: req.userId });
+    if (!split) return res.status(404).json({ error: 'Split not found' });
+    const version = await SplitVersion.findOne({ _id: req.body.versionId, splitId: split._id });
+    if (!version) return res.status(404).json({ error: 'Version not found' });
+
+    // Preserve the current state as a version too, so this revert itself can be undone (redo).
+    await snapshotVersion(split);
+
+    split.name = version.name;
+    split.days = version.days;
+    await split.save();
+    res.json(sortExercises(split));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── DUPLICATE ────────────────────────────────────────────────────────────────
+
+router.post('/:id/duplicate', async (req, res) => {
+  try {
+    const split = await Split.findOne({ _id: req.params.id, userId: req.userId });
+    if (!split) return res.status(404).json({ error: 'Split not found' });
+    const copy = new Split({
+      name: `${split.name} (copy)`,
+      days: split.toObject().days.map((d) => {
+        const { _id, ...day } = d;
+        return { ...day, exercises: (day.exercises || []).map((e) => { const { _id: exId, ...ex } = e; return ex; }) };
+      }),
+      userId: req.userId,
+      isActive: false,
+      isPublic: false,
+      duplicatedFrom: split._id,
+    });
+    await copy.save();
+    res.status(201).json(sortExercises(copy));
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// ─── CROSS-SPLIT SYNC ─────────────────────────────────────────────────────────
+
+router.get('/sync-matches', async (req, res) => {
+  try {
+    const { name, excludeSplitId } = req.query;
+    if (!name) return res.status(400).json({ error: 'name is required' });
+    const targetName = name.trim().toLowerCase();
+    const splits = await Split.find({ userId: req.userId, _id: { $ne: excludeSplitId || null } });
+    const matches = [];
+    splits.forEach((s) => {
+      s.days.forEach((d) => {
+        if (d.isRest) return;
+        d.exercises.forEach((e) => {
+          if (e.name && e.name.trim().toLowerCase() === targetName) {
+            matches.push({ splitId: s._id, splitName: s.name, dayId: d._id, dayName: d.name, exId: e._id });
+          }
+        });
+      });
+    });
+    res.json(matches);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/sync-apply', async (req, res) => {
+  try {
+    const { fields, targets } = req.body;
+    if (!fields || typeof fields !== 'object') return res.status(400).json({ error: 'fields is required' });
+    if (!Array.isArray(targets)) return res.status(400).json({ error: 'targets must be an array' });
+
+    const bySplit = new Map();
+    targets.forEach((t) => {
+      if (!bySplit.has(t.splitId)) bySplit.set(t.splitId, []);
+      bySplit.get(t.splitId).push(t);
+    });
+
+    for (const [splitId, splitTargets] of bySplit) {
+      const split = await Split.findOne({ _id: splitId, userId: req.userId });
+      if (!split) continue;
+      await snapshotVersion(split);
+      splitTargets.forEach(({ dayId, exId }) => {
+        const day = split.days.id(dayId);
+        const ex = day && day.exercises.id(exId);
+        if (!ex) return;
+        Object.keys(fields).forEach((f) => { ex[f] = fields[f]; });
+      });
+      await split.save();
+    }
+    res.json({ message: 'Synced' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -277,6 +418,8 @@ router.post('/:id/reapply', async (req, res) => {
     const source = await Split.findOne({ _id: split.sourceId, isPublic: true });
     if (!source) return res.status(404).json({ error: 'Source split is no longer public' });
 
+    await snapshotVersion(split);
+
     // Build a map of existing exercise weights by name for preservation
     const weightMap = {};
     split.days.forEach((d) => {
@@ -335,6 +478,7 @@ router.post('/:id/days', async (req, res) => {
   try {
     const split = await Split.findOne({ _id: req.params.id, userId: req.userId });
     if (!split) return res.status(404).json({ error: 'Split not found' });
+    await snapshotVersion(split);
     split.days.push({
       name: req.body.name,
       tag: req.body.tag || '',
@@ -355,6 +499,7 @@ router.put('/:id/days/:dayId', async (req, res) => {
     if (!split) return res.status(404).json({ error: 'Split not found' });
     const day = split.days.id(req.params.dayId);
     if (!day) return res.status(404).json({ error: 'Day not found' });
+    await snapshotVersion(split);
     if (req.body.name !== undefined) { day.name = req.body.name; day.dayOrder = getDayOrder(req.body.name); }
     if (req.body.tag !== undefined) day.tag = req.body.tag;
     if (req.body.isRest !== undefined) day.isRest = req.body.isRest;
@@ -369,6 +514,7 @@ router.delete('/:id/days/:dayId', async (req, res) => {
   try {
     const split = await Split.findOne({ _id: req.params.id, userId: req.userId });
     if (!split) return res.status(404).json({ error: 'Split not found' });
+    await snapshotVersion(split);
     split.days.pull(req.params.dayId);
     await split.save();
     res.json({ message: 'Deleted' });
@@ -398,6 +544,7 @@ router.post('/:id/days/:dayId/exercises', async (req, res) => {
     if (!split) return res.status(404).json({ error: 'Split not found' });
     const day = split.days.id(req.params.dayId);
     if (!day) return res.status(404).json({ error: 'Day not found' });
+    await snapshotVersion(split);
     const maxOrder = day.exercises.reduce((m, e) => Math.max(m, e.order ?? 0), -1);
     const untilFailure = req.body.untilFailure === true;
     day.exercises.push({
@@ -432,6 +579,7 @@ router.patch('/:id/days/:dayId/exercises/reorder', async (req, res) => {
     if (!day) return res.status(404).json({ error: 'Day not found' });
     const updates = req.body.exercises;
     if (!Array.isArray(updates)) return res.status(400).json({ error: 'exercises must be an array' });
+    await snapshotVersion(split);
     updates.forEach(({ _id, order }) => {
       const ex = day.exercises.id(_id);
       if (ex) ex.order = order;
@@ -451,6 +599,7 @@ router.put('/:id/days/:dayId/exercises/:exId', async (req, res) => {
     if (!day) return res.status(404).json({ error: 'Day not found' });
     const ex = day.exercises.id(req.params.exId);
     if (!ex) return res.status(404).json({ error: 'Exercise not found' });
+    await snapshotVersion(split);
     const fields = ['name', 'sets', 'reps', 'weight', 'weightUnit', 'muscleTargets', 'untilFailure', 'imageUrl', 'imageSource', 'placeholderUsed', 'category', 'notes'];
     fields.forEach((f) => { if (req.body[f] !== undefined) ex[f] = req.body[f]; });
     if (req.body.untilFailure === true) ex.reps = null;
@@ -498,6 +647,7 @@ router.delete('/:id/days/:dayId/exercises/:exId', async (req, res) => {
     if (!split) return res.status(404).json({ error: 'Split not found' });
     const day = split.days.id(req.params.dayId);
     if (!day) return res.status(404).json({ error: 'Day not found' });
+    await snapshotVersion(split);
     day.exercises.pull(req.params.exId);
     await split.save();
     res.json({ message: 'Deleted' });

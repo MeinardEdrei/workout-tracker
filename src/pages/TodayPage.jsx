@@ -416,7 +416,7 @@ function WeightSyncModal({
   oldSets, newSets, oldReps, newReps, oldUntilFailure, newUntilFailure, 
   oldMuscleTargets = [], newMuscleTargets = [],
   oldCategory, newCategory,
-  otherDays, onSync, onSkip 
+  otherDays, otherSplits = [], onSync, onSkip
 }) {
   const oldWInNewUnit = convertWeight(oldWeight ?? 0, oldUnit || 'kg', newUnit || 'kg');
   const delta = (newWeight ?? 0) - oldWInNewUnit;
@@ -493,6 +493,8 @@ function WeightSyncModal({
           This exercise also appears in{' '}
           <strong style={{ color: 'var(--text2)' }}>
             {otherDays.map((d) => d.dayName).join(', ')}
+            {otherDays.length > 0 && otherSplits.length > 0 ? ', ' : ''}
+            {otherSplits.map((d) => `${d.dayName} (${d.splitName})`).join(', ')}
           </strong>
           . Sync these changes there too?
         </div>
@@ -690,21 +692,23 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
             .map((e) => ({ dayName: d.name, dayId: d._id, exId: e._id }))
         );
 
-      if (otherDays.length > 0) {
-        setSyncPrompt({ 
-          otherDays, 
-          oldWeight: oldW, 
-          oldUnit: oldUnit,
-          newWeight: newW, 
-          newUnit: newUnit,
-          oldSets: ex.sets ?? 3,
-          newSets: ex.sets ?? 3,
-          oldReps: ex.reps ?? 10,
-          newReps: ex.reps ?? 10,
-          oldUntilFailure: !!ex.untilFailure,
-          newUntilFailure: !!ex.untilFailure,
-        });
-      }
+      const syncFields = {
+        otherDays,
+        oldWeight: oldW,
+        oldUnit: oldUnit,
+        newWeight: newW,
+        newUnit: newUnit,
+        oldSets: ex.sets ?? 3,
+        newSets: ex.sets ?? 3,
+        oldReps: ex.reps ?? 10,
+        newReps: ex.reps ?? 10,
+        oldUntilFailure: !!ex.untilFailure,
+        newUntilFailure: !!ex.untilFailure,
+      };
+      if (otherDays.length > 0) setSyncPrompt(syncFields);
+      storage.getSyncMatches(ex.name, splitId).then((otherSplits) => {
+        if (otherSplits.length > 0) setSyncPrompt((p) => ({ ...syncFields, ...(p || {}), otherSplits }));
+      }).catch(() => {});
     },
   });
 
@@ -753,25 +757,27 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
             .map((e) => ({ dayName: d.name, dayId: d._id, exId: e._id }))
         );
 
-      if (otherDays.length > 0) {
-        setSyncPrompt({
-          otherDays,
-          oldWeight: ex.weight ?? 0,
-          oldUnit: ex.weightUnit || 'kg',
-          newWeight: ex.weight ?? 0,
-          newUnit: ex.weightUnit || 'kg',
-          oldSets,
-          newSets,
-          oldReps: oldUntilFailure ? 0 : oldReps,
-          newReps: newUntilFailure ? 0 : newReps,
-          oldUntilFailure,
-          newUntilFailure,
-          oldDuration,
-          newDuration,
-          oldDurationUnit,
-          newDurationUnit,
-        });
-      }
+      const syncFields = {
+        otherDays,
+        oldWeight: ex.weight ?? 0,
+        oldUnit: ex.weightUnit || 'kg',
+        newWeight: ex.weight ?? 0,
+        newUnit: ex.weightUnit || 'kg',
+        oldSets,
+        newSets,
+        oldReps: oldUntilFailure ? 0 : oldReps,
+        newReps: newUntilFailure ? 0 : newReps,
+        oldUntilFailure,
+        newUntilFailure,
+        oldDuration,
+        newDuration,
+        oldDurationUnit,
+        newDurationUnit,
+      };
+      if (otherDays.length > 0) setSyncPrompt(syncFields);
+      storage.getSyncMatches(ex.name, splitId).then((otherSplits) => {
+        if (otherSplits.length > 0) setSyncPrompt((p) => ({ ...syncFields, ...(p || {}), otherSplits }));
+      }).catch(() => {});
     },
   });
 
@@ -788,6 +794,9 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
 
     for (const { dayId: dId, exId } of syncPrompt.otherDays) {
       await storage.updateExercise(splitId, dId, exId, payload);
+    }
+    for (const { splitId: sId, dayId: dId, exId } of (syncPrompt.otherSplits || [])) {
+      await storage.updateExercise(sId, dId, exId, payload);
     }
     queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
     setSyncPrompt(null);
@@ -1051,6 +1060,7 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
           oldUntilFailure={syncPrompt.oldUntilFailure}
           newUntilFailure={syncPrompt.newUntilFailure}
           otherDays={syncPrompt.otherDays}
+          otherSplits={syncPrompt.otherSplits}
           onSync={handleSync}
           onSkip={() => setSyncPrompt(null)}
         />

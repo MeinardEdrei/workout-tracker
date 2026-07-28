@@ -47,6 +47,12 @@ export const getPublicSplits = (page = 1) => req('GET', `/api/splits/public?page
 export const copyPublicSplit = (id) => req('POST', `/api/splits/public/${id}/copy`);
 export const reapplySplit = (id) => req('POST', `/api/splits/${id}/reapply`);
 export const getRanking = (filter = 'weekly') => req('GET', `/api/splits/ranking?filter=${filter}`);
+export const getSplitVersions = (id) => req('GET', `/api/splits/${id}/versions`);
+export const revertSplitVersion = (id, versionId) => req('POST', `/api/splits/${id}/revert`, { versionId });
+export const duplicateSplit = (id) => req('POST', `/api/splits/${id}/duplicate`);
+export const getSyncMatches = (name, excludeSplitId) =>
+  req('GET', `/api/splits/sync-matches?name=${encodeURIComponent(name)}&excludeSplitId=${excludeSplitId}`);
+export const applySync = (fields, targets) => req('POST', '/api/splits/sync-apply', { fields, targets });
 
 // ─── Days ─────────────────────────────────────────────────────────────────────
 export const getDays = (splitId) => req('GET', `/api/splits/${splitId}/days`);
