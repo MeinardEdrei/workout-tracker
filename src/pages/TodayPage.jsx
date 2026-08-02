@@ -230,9 +230,9 @@ function CompletionScreen({ log, onClose, onShare, sharing }) {
         </div>
 
         {/* Dynamic Muscle Scanner Map */}
-        <div style={{ background: '#08080a', borderRadius: 12, padding: '14px 10px', display: 'flex', justifyContent: 'center', border: '1px solid var(--border)' }}>
+        {/* <div style={{ background: '#08080a', borderRadius: 12, padding: '14px 10px', display: 'flex', justifyContent: 'center', border: '1px solid var(--border)' }}>
           <BodyMap exercises={log.exercises} size={90} />
-        </div>
+        </div> */}
 
         {/* Action Buttons */}
         <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>

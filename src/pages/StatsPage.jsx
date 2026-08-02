@@ -985,7 +985,7 @@ export default function StatsPage() {
           </div>
 
           {/* ── Muscle Volume Breakdown ── */}
-          <MuscleVolumeBreakdown weekLogs={weekLogs} />
+          {/* <MuscleVolumeBreakdown weekLogs={weekLogs} /> */}
 
           {/* ── Activity Tracker ── */}
           {logs.length > 0 && (

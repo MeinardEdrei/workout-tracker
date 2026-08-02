@@ -127,7 +127,7 @@ export default function DailyShareCard({ log, cardRef }) {
       </div>
 
       {/* Cybernetic Muscle Target Map Visual */}
-      <div style={{
+      {/* <div style={{
         background: '#08080a',
         padding: '20px 24px',
         display: 'flex',
@@ -135,7 +135,7 @@ export default function DailyShareCard({ log, cardRef }) {
         borderBottom: '1px solid #181820',
       }}>
         <BodyMap exercises={log.exercises} size={110} />
-      </div>
+      </div> */}
 
       {/* Exercise list */}
       <div style={{ padding: '8px 0 4px', background: '#0a0a0d' }}>
