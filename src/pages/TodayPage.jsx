@@ -900,7 +900,7 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
                 textTransform: 'uppercase',
               }}
             >
-              ↺ Last Week
+              {ex.isFromOtherDay ? `↺ ${ex.isFromOtherDay}` : '↺ Last Week'}
             </span>
           )}
           {prInfo && (
@@ -1397,6 +1397,309 @@ function SwapIcon() {
   );
 }
 
+function AddExerciseFromOtherDaysModal({ splitDays, logs, onConfirm, onClose }) {
+  const [activeTab, setActiveTab] = useState('split'); // 'split' or 'custom'
+  const [form, setForm] = useState({ name: '', sets: 3, reps: 10, weight: 0, weightUnit: 'kg', category: 'workout', duration: 0, durationUnit: 'sec', untilFailure: false });
+  const [suggestions, setSuggestions] = useState([]);
+
+  const pastExercises = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+    (logs || []).forEach((log) => {
+      (log.exercises || []).forEach((ex) => {
+        if (!ex.name) return;
+        const lowerName = ex.name.trim().toLowerCase();
+        if (!seen.has(lowerName)) {
+          seen.add(lowerName);
+          list.push({
+            name: ex.name.trim(),
+            imageUrl: ex.imageUrl || '',
+            muscleTargets: ex.muscleTargets || [],
+            sets: ex.sets || 3,
+            reps: ex.reps || 10,
+            weight: ex.weight || 0,
+            weightUnit: ex.weightUnit || 'kg',
+            untilFailure: ex.untilFailure || false,
+            category: ex.category || 'workout',
+            duration: ex.duration ?? 0,
+            durationUnit: ex.durationUnit || 'sec',
+            isCustom: true
+          });
+        }
+      });
+    });
+    return list;
+  }, [logs]);
+
+  useEffect(() => {
+    const q = form.name.trim();
+    if (q.length < 2) { setSuggestions([]); return; }
+    const timer = setTimeout(async () => {
+      try {
+        const userMatches = pastExercises.filter(e => 
+          e.name.toLowerCase().includes(q.toLowerCase())
+        );
+        const dbMatches = await api.suggestExercises(q);
+        const combined = [...userMatches];
+        dbMatches.forEach(db => {
+          const dbName = typeof db === 'string' ? db : db.name;
+          const dbImg = typeof db === 'string' ? null : db.imageUrl;
+          if (!combined.some(c => c.name.toLowerCase() === dbName.toLowerCase())) {
+            combined.push({
+              name: dbName,
+              imageUrl: dbImg,
+              isCustom: false
+            });
+          }
+        });
+        setSuggestions(combined.slice(0, 10));
+      } catch {
+        const userMatches = pastExercises.filter(e => 
+          e.name.toLowerCase().includes(q.toLowerCase())
+        );
+        setSuggestions(userMatches.slice(0, 10));
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [form.name, pastExercises]);
+
+  function handleSelectSuggestion(s) {
+    const match = findMatchingExercise(s.name, splitDays, pastExercises);
+    if (match) {
+      setForm({
+        name: s.name,
+        sets: match.sets ?? 3,
+        reps: match.reps ?? 10,
+        weight: match.weight ?? 0,
+        weightUnit: match.weightUnit || 'kg',
+        category: match.category || 'workout',
+        untilFailure: !!match.untilFailure,
+        duration: match.duration ?? 0,
+        durationUnit: match.durationUnit || 'sec',
+        imageUrl: match.imageUrl || s.imageUrl || '',
+      });
+    } else if (s.isCustom) {
+      setForm({
+        name: s.name,
+        sets: s.sets,
+        reps: s.reps ?? 10,
+        weight: s.weight,
+        weightUnit: s.weightUnit,
+        category: s.category || 'workout',
+        untilFailure: s.untilFailure,
+        duration: s.duration ?? 0,
+        durationUnit: s.durationUnit || 'sec',
+        imageUrl: s.imageUrl || '',
+      });
+    } else {
+      setForm(f => ({ ...f, name: s.name, imageUrl: s.imageUrl || '' }));
+    }
+    setSuggestions([]);
+  }
+
+  function submit(e) {
+    e.preventDefault();
+    if (!form.name.trim()) return;
+    const name = form.name.trim();
+    const match = findMatchingExercise(name, splitDays, pastExercises);
+    const finalWeight = form.weight !== 0 ? +form.weight : (match ? match.weight ?? 0 : 0);
+    const finalWeightUnit = form.weightUnit || (match ? match.weightUnit || 'kg' : 'kg');
+    const numReps = +form.reps;
+    const isFailure = form.untilFailure || numReps === 0;
+
+    onConfirm({
+      name,
+      sets: +form.sets,
+      reps: isFailure ? 0 : numReps,
+      untilFailure: isFailure,
+      weight: finalWeight,
+      weightUnit: finalWeightUnit,
+      category: form.category || 'workout',
+      duration: form.duration ?? 0,
+      durationUnit: form.durationUnit || 'sec',
+      imageUrl: form.imageUrl || (match ? match.imageUrl || '' : ''),
+    });
+  }
+
+  return createPortal(
+    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 440, width: '90%' }}>
+        <div className="modal-title">Add Exercise to Today</div>
+
+        {/* Tab Headers */}
+        <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 16 }}>
+          <button
+            type="button"
+            onClick={() => setActiveTab('split')}
+            style={{
+              flex: 1, padding: '10px', background: 'none', border: 'none',
+              borderBottom: activeTab === 'split' ? '2.5px solid var(--accent)' : 'none',
+              color: activeTab === 'split' ? 'var(--accent)' : 'var(--text3)',
+              fontWeight: 800, fontSize: 13, cursor: 'pointer', textTransform: 'uppercase'
+            }}
+          >
+            From Split Days
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('custom')}
+            style={{
+              flex: 1, padding: '10px', background: 'none', border: 'none',
+              borderBottom: activeTab === 'custom' ? '2.5px solid var(--accent)' : 'none',
+              color: activeTab === 'custom' ? 'var(--accent)' : 'var(--text3)',
+              fontWeight: 800, fontSize: 13, cursor: 'pointer', textTransform: 'uppercase'
+            }}
+          >
+            Search / Custom
+          </button>
+        </div>
+
+        {activeTab === 'split' ? (
+          /* Split Days Selector */
+          <div style={{ maxHeight: 300, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12, paddingRight: 4 }}>
+            {splitDays && splitDays.length > 0 ? (
+              splitDays.map((d) => {
+                if (d.isRest) return null;
+                const exs = d.exercises || [];
+                if (exs.length === 0) return null;
+
+                return (
+                  <div key={d._id} style={{ border: '1px solid var(--border2)', borderRadius: 8, background: 'var(--bg3)', overflow: 'hidden' }}>
+                    <div style={{ padding: '6px 12px', background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid var(--border2)', fontSize: 11, fontWeight: 900, fontFamily: 'var(--font-mono)', color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      {d.name} {d.tag ? `(${d.tag})` : ''}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      {exs.map((ex, exIdx) => {
+                        const rLabel = (ex.untilFailure || !ex.reps || ex.reps === 0) ? 'Failure' : ex.reps;
+                        return (
+                          <div key={ex._id || exIdx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderBottom: exIdx < exs.length - 1 ? '1px solid var(--border2)' : 'none' }}>
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', textTransform: 'uppercase', fontFamily: 'var(--font-display)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {ex.name}
+                              </div>
+                              <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
+                                {ex.sets}×{rLabel} {ex.weight > 0 ? `@ ${ex.weight}${ex.weightUnit}` : ''}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => onConfirm({
+                                name: ex.name,
+                                sets: ex.sets || 3,
+                                reps: ex.reps || 10,
+                                weight: ex.weight || 0,
+                                weightUnit: ex.weightUnit || 'kg',
+                                category: ex.category || 'workout',
+                                duration: ex.duration || 0,
+                                durationUnit: ex.durationUnit || 'sec',
+                                notes: ex.notes || '',
+                                imageUrl: ex.imageUrl || '',
+                                isFromOtherDay: d.name
+                              })}
+                              style={{
+                                padding: '4px 10px', fontSize: 11, fontWeight: 700, borderRadius: 6,
+                                background: 'var(--accent)', color: '#0a0a0a', border: 'none', cursor: 'pointer'
+                              }}
+                            >
+                              + Add
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="empty-state">No split days found</div>
+            )}
+          </div>
+        ) : (
+          /* Custom Exercise Entry Form */
+          <form onSubmit={submit}>
+            <div style={{ position: 'relative', marginBottom: 12 }}>
+              <input
+                className="input"
+                value={form.name}
+                onChange={(e) => setForm(f => ({ ...f, name: capitalizeWords(e.target.value) }))}
+                onBlur={() => setTimeout(() => setSuggestions([]), 150)}
+                placeholder="Search or enter exercise name"
+                autoFocus
+                autoComplete="off"
+                style={{ width: '100%', margin: 0 }}
+              />
+              {suggestions.length > 0 && (
+                <div style={{ 
+                  position: 'absolute', top: '100%', left: 0, right: 0, 
+                  background: 'var(--bg2)', border: '1px solid var(--border)', 
+                  borderRadius: 8, zIndex: 150, overflow: 'hidden', marginTop: 2,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+                }}>
+                  {suggestions.map((s, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        handleSelectSuggestion(s);
+                      }}
+                      style={{ 
+                        display: 'flex', width: '100%', alignItems: 'center', gap: 10,
+                        textAlign: 'left', padding: '8px 12px', fontSize: 13, 
+                        background: 'none', border: 'none', color: 'var(--text)', 
+                        cursor: 'pointer', borderBottom: '1px solid var(--border)' 
+                      }}
+                    >
+                      <span>{s.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+              <div>
+                <label className="label">Sets</label>
+                <input className="input" type="number" min="1" max="20" value={form.sets} onChange={(e) => setForm(f => ({ ...f, sets: +e.target.value }))} style={{ width: '100%' }} />
+              </div>
+              <div>
+                <label className="label">Reps</label>
+                <input className="input" type="number" min="0" max="100" value={form.reps} onChange={(e) => setForm(f => ({ ...f, reps: +e.target.value }))} style={{ width: '100%' }} />
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 10, marginBottom: 16 }}>
+              <div>
+                <label className="label">Weight</label>
+                <input className="input" type="number" step="any" min="0" value={form.weight} onChange={(e) => setForm(f => ({ ...f, weight: +e.target.value }))} style={{ width: '100%' }} />
+              </div>
+              <div>
+                <label className="label">Unit</label>
+                <select className="input" value={form.weightUnit} onChange={(e) => setForm(f => ({ ...f, weightUnit: e.target.value }))} style={{ width: '100%' }}>
+                  <option value="kg">kg</option>
+                  <option value="lbs">lbs</option>
+                </select>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button type="submit" className="btn btn-accent" style={{ flex: 1 }}>Add Custom</button>
+              <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
+            </div>
+          </form>
+        )}
+
+        {activeTab === 'split' && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+            <button type="button" className="btn btn-ghost" onClick={onClose}>Close</button>
+          </div>
+        )}
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
   const { storage, storageKey } = useStorage();
   const [form, setForm] = useState({ name: '', sets: 3, reps: 10, weight: 0, weightUnit: 'kg', muscleTargets: [], untilFailure: false });
@@ -1639,6 +1942,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
   const shareCardRef = useRef(null);
   const [showConfirmFinish, setShowConfirmFinish] = useState(false);
   const [isRetaking, setIsRetaking] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
 
   const getPastDateStr = (baseDate, daysOffset) => {
     const parts = baseDate.split('-');
@@ -1669,6 +1973,30 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
     setExercises(prev => [...prev, newEx]);
     if (onShowToast) {
       onShowToast(`💪 Added "${lwEx.name}" to today's session!`);
+    }
+  }
+
+  function handleConfirmAddExercise(exData) {
+    const newEx = {
+      _id: crypto.randomUUID(),
+      name: exData.name,
+      sets: exData.sets || 3,
+      reps: exData.reps || 10,
+      weight: exData.weight || 0,
+      weightUnit: exData.weightUnit || 'kg',
+      category: exData.category || 'workout',
+      notes: exData.notes || '',
+      duration: exData.duration || 0,
+      durationUnit: exData.durationUnit || 'sec',
+      checked: false,
+      lastCheckedDate: '',
+      isLastWeekWorkout: true,
+      isFromOtherDay: exData.isFromOtherDay || 'Added'
+    };
+    setExercises(prev => [...prev, newEx]);
+    setShowAddModal(false);
+    if (onShowToast) {
+      onShowToast(`💪 Added "${exData.name}" to today's session!`);
     }
   }
 
@@ -1929,6 +2257,40 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
                   })}
                 </div>
               </div>
+            )}
+
+            {(isToday || isRetaking) && !isCompleted && (
+              <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => setShowAddModal(true)}
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 700,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '6px 12px',
+                    borderRadius: 6,
+                    background: 'rgba(255, 255, 255, 0.02)',
+                    border: '1px solid var(--border)',
+                    cursor: 'pointer',
+                    color: 'var(--text2)',
+                  }}
+                >
+                  <span style={{ fontSize: 14, fontWeight: 900, color: 'var(--accent)' }}>+</span> Add Exercise
+                </button>
+              </div>
+            )}
+
+            {showAddModal && (
+              <AddExerciseFromOtherDaysModal
+                splitDays={splitDays}
+                logs={logs}
+                onConfirm={handleConfirmAddExercise}
+                onClose={() => setShowAddModal(false)}
+              />
             )}
 
             {(isToday || isRetaking) && !isCompleted && (
