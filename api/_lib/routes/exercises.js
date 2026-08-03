@@ -30,7 +30,8 @@ router.get('/suggest', async (req, res) => {
       .slice(0, 8)
       .map(e => {
         const imageUrl = e.images && e.images.length ? `${FREE_EXERCISE_IMAGES}/${e.images[0]}` : null;
-        return { name: e.name, imageUrl };
+        const muscleTargets = [...(e.primaryMuscles || []), ...(e.secondaryMuscles || [])];
+        return { name: e.name, imageUrl, muscleTargets };
       });
     return res.json(matches);
   } catch (err) {

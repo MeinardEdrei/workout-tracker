@@ -1465,6 +1465,9 @@ function AddExerciseFromOtherDaysModal({ splitDays, logs, onConfirm, onClose }) 
 
   function handleSelectSuggestion(s) {
     const match = findMatchingExercise(s.name, splitDays, pastExercises);
+    const finalMuscleTargets = (match && match.muscleTargets && match.muscleTargets.length > 0)
+      ? match.muscleTargets
+      : (s.muscleTargets && s.muscleTargets.length > 0 ? s.muscleTargets : []);
     if (match) {
       setForm({
         name: s.name,
@@ -1477,7 +1480,7 @@ function AddExerciseFromOtherDaysModal({ splitDays, logs, onConfirm, onClose }) 
         duration: match.duration ?? 0,
         durationUnit: match.durationUnit || 'sec',
         imageUrl: match.imageUrl || s.imageUrl || '',
-        muscleTargets: match.muscleTargets || s.muscleTargets || [],
+        muscleTargets: finalMuscleTargets,
       });
     } else if (s.isCustom) {
       setForm({
@@ -1491,10 +1494,10 @@ function AddExerciseFromOtherDaysModal({ splitDays, logs, onConfirm, onClose }) 
         duration: s.duration ?? 0,
         durationUnit: s.durationUnit || 'sec',
         imageUrl: s.imageUrl || '',
-        muscleTargets: s.muscleTargets || [],
+        muscleTargets: s.muscleTargets && s.muscleTargets.length > 0 ? s.muscleTargets : [],
       });
     } else {
-      setForm(f => ({ ...f, name: s.name, imageUrl: s.imageUrl || '', muscleTargets: s.muscleTargets || [] }));
+      setForm(f => ({ ...f, name: s.name, imageUrl: s.imageUrl || '', muscleTargets: s.muscleTargets && s.muscleTargets.length > 0 ? s.muscleTargets : [] }));
     }
     setSuggestions([]);
   }
@@ -1777,6 +1780,9 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
 
   function handleSelectSuggestion(s) {
     const match = findMatchingExercise(s.name, splitDays, pastExercises);
+    const finalMuscleTargets = (match && match.muscleTargets && match.muscleTargets.length > 0)
+      ? match.muscleTargets
+      : (s.muscleTargets && s.muscleTargets.length > 0 ? s.muscleTargets : []);
     if (match) {
       setForm({
         name: s.name,
@@ -1784,7 +1790,7 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
         reps: match.reps ?? 10,
         weight: match.weight ?? 0,
         weightUnit: match.weightUnit || 'kg',
-        muscleTargets: match.muscleTargets || [],
+        muscleTargets: finalMuscleTargets,
         untilFailure: !!match.untilFailure,
         imageUrl: match.imageUrl || s.imageUrl || '',
         placeholderUsed: match.placeholderUsed || false,
@@ -1796,13 +1802,13 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
         reps: s.reps ?? 10,
         weight: s.weight,
         weightUnit: s.weightUnit,
-        muscleTargets: s.muscleTargets,
+        muscleTargets: s.muscleTargets && s.muscleTargets.length > 0 ? s.muscleTargets : [],
         untilFailure: s.untilFailure,
         imageUrl: s.imageUrl || '',
         placeholderUsed: s.placeholderUsed || false,
       });
     } else {
-      setForm(f => ({ ...f, name: s.name, imageUrl: s.imageUrl || '', placeholderUsed: false }));
+      setForm(f => ({ ...f, name: s.name, imageUrl: s.imageUrl || '', placeholderUsed: false, muscleTargets: s.muscleTargets && s.muscleTargets.length > 0 ? s.muscleTargets : [] }));
     }
     setSuggestions([]);
   }
