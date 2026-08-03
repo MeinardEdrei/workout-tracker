@@ -6,7 +6,9 @@ export const MUSCLE_COLORS = {
   'Upper Back':    { bg: 'rgba(76,175,125,0.18)',  text: '#5cc990' },
   'Lats':          { bg: 'rgba(56,160,110,0.18)',  text: '#4db87e' },
   'Lower Back':    { bg: 'rgba(40,140,90,0.18)',   text: '#3dab72' },
+  'Traps':         { bg: 'rgba(60,179,113,0.18)',  text: '#3cb371' },
   // Shoulders
+  'Shoulders':     { bg: 'rgba(147,112,219,0.18)', text: '#ba55d3' },
   'Front Delts':   { bg: 'rgba(155,111,212,0.18)', text: '#b088e8' },
   'Side Delts':    { bg: 'rgba(140,90,200,0.18)',  text: '#a070d8' },
   'Rear Delts':    { bg: 'rgba(120,75,185,0.18)',  text: '#9060c8' },
@@ -20,6 +22,8 @@ export const MUSCLE_COLORS = {
   'Glutes':        { bg: 'rgba(225,80,120,0.18)',  text: '#e8708a' },
   'Calves':        { bg: 'rgba(190,60,60,0.18)',   text: '#d05555' },
   'Hip Flexors':   { bg: 'rgba(215,70,90,0.18)',   text: '#d86070' },
+  'Adductors':     { bg: 'rgba(205,92,92,0.18)',   text: '#cd5c5c' },
+  'Abductors':     { bg: 'rgba(219,112,147,0.18)', text: '#db7093' },
   // Core
   'Abs':           { bg: 'rgba(201,162,39,0.18)',  text: '#d9b84e' },
   'Obliques':      { bg: 'rgba(185,145,30,0.18)',  text: '#c9a840' },
@@ -27,16 +31,17 @@ export const MUSCLE_COLORS = {
   // Other
   'Full Body':     { bg: 'rgba(140,140,140,0.18)', text: '#a0a0a0' },
   'Cardio':        { bg: 'rgba(120,120,120,0.18)', text: '#909090' },
+  'Neck':          { bg: 'rgba(169,169,169,0.18)', text: '#d3d3d3' },
 };
 
 export const MUSCLE_GROUPS = [
   { label: 'Chest',     muscles: ['Chest', 'Upper Chest'] },
-  { label: 'Back',      muscles: ['Upper Back', 'Lats', 'Lower Back'] },
-  { label: 'Shoulders', muscles: ['Front Delts', 'Side Delts', 'Rear Delts'] },
+  { label: 'Back',      muscles: ['Upper Back', 'Lats', 'Lower Back', 'Traps'] },
+  { label: 'Shoulders', muscles: ['Shoulders', 'Front Delts', 'Side Delts', 'Rear Delts'] },
   { label: 'Arms',      muscles: ['Biceps', 'Triceps', 'Forearms'] },
-  { label: 'Legs',      muscles: ['Quads', 'Hamstrings', 'Glutes', 'Calves', 'Hip Flexors'] },
+  { label: 'Legs',      muscles: ['Quads', 'Hamstrings', 'Glutes', 'Calves', 'Hip Flexors', 'Adductors', 'Abductors'] },
   { label: 'Core',      muscles: ['Abs', 'Obliques', 'Core'] },
-  { label: 'Other',     muscles: ['Full Body', 'Cardio'] },
+  { label: 'Other',     muscles: ['Full Body', 'Cardio', 'Neck'] },
 ];
 
 export function MusclePill({ target }) {

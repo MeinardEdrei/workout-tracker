@@ -19,6 +19,32 @@ async function getExercises() {
   return _exerciseCache;
 }
 
+function mapDatabaseMuscle(muscle) {
+  if (!muscle) return '';
+  const m = muscle.toLowerCase().trim();
+  switch (m) {
+    case 'abdominals': return 'Abs';
+    case 'hamstrings': return 'Hamstrings';
+    case 'calves': return 'Calves';
+    case 'shoulders': return 'Shoulders';
+    case 'adductors': return 'Adductors';
+    case 'abductors': return 'Abductors';
+    case 'glutes': return 'Glutes';
+    case 'quadriceps': return 'Quads';
+    case 'biceps': return 'Biceps';
+    case 'forearms': return 'Forearms';
+    case 'triceps': return 'Triceps';
+    case 'chest': return 'Chest';
+    case 'lower back': return 'Lower Back';
+    case 'traps': return 'Traps';
+    case 'middle back': return 'Upper Back';
+    case 'lats': return 'Lats';
+    case 'neck': return 'Neck';
+    default: 
+      return muscle.charAt(0).toUpperCase() + muscle.slice(1);
+  }
+}
+
 // GET /api/exercises/suggest?q=bench
 router.get('/suggest', async (req, res) => {
   const q = (req.query.q || '').toLowerCase().trim();
@@ -30,7 +56,10 @@ router.get('/suggest', async (req, res) => {
       .slice(0, 8)
       .map(e => {
         const imageUrl = e.images && e.images.length ? `${FREE_EXERCISE_IMAGES}/${e.images[0]}` : null;
-        const muscleTargets = [...(e.primaryMuscles || []), ...(e.secondaryMuscles || [])];
+        const muscleTargets = [
+          ...(e.primaryMuscles || []).map(mapDatabaseMuscle),
+          ...(e.secondaryMuscles || []).map(mapDatabaseMuscle)
+        ];
         return { name: e.name, imageUrl, muscleTargets };
       });
     return res.json(matches);
