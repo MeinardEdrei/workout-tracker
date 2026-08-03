@@ -602,7 +602,7 @@ function CategoryHeader({ type }) {
   );
 }
 
-function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly, isCompleted, dateStr, logs, onShowToast }) {
+function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly, isCompleted, dateStr, logs, onShowToast, localOnly }) {
   const queryClient = useQueryClient();
   const { storage, storageKey } = useStorage();
   const [editingWeight, setEditingWeight] = useState(false);
@@ -630,9 +630,16 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
   }, [ex]);
 
   const notesMutation = useMutation({
-    mutationFn: (notes) => storage.updateExercise(splitId, dayId, ex._id, { notes }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
+    mutationFn: (notes) => {
+      if (localOnly) return Promise.resolve({ notes });
+      return storage.updateExercise(splitId, dayId, ex._id, { notes });
+    },
+    onSuccess: (data) => {
+      if (localOnly) {
+        onToggle({ ...ex, notes: data.notes });
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
+      }
       setEditingNotes(false);
     },
   });
@@ -659,19 +666,34 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
   }, [logs, dateStr, ex.name, ex.weight, ex.weightUnit]);
 
   const swapMutation = useMutation({
-    mutationFn: (updatedData) => storage.updateExercise(splitId, dayId, ex._id, updatedData),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
+    mutationFn: (updatedData) => {
+      if (localOnly) return Promise.resolve(updatedData);
+      return storage.updateExercise(splitId, dayId, ex._id, updatedData);
+    },
+    onSuccess: (data) => {
+      if (localOnly) {
+        onToggle({ ...ex, ...data });
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
+      }
       setShowSwapModal(false);
     },
   });
   const effectiveChecked = isCompleted ? true : (ex.lastCheckedDate === TODAY_STR ? ex.checked : false);
 
   const toggleMutation = useMutation({
-    mutationFn: () => storage.toggleExercise(splitId, dayId, ex._id),
+    mutationFn: () => {
+      if (localOnly) {
+        const nextChecked = !effectiveChecked;
+        return Promise.resolve({ ...ex, checked: nextChecked, lastCheckedDate: TODAY_STR });
+      }
+      return storage.toggleExercise(splitId, dayId, ex._id);
+    },
     onSuccess: (updated) => {
       onToggle(updated);
-      queryClient.invalidateQueries({ queryKey: ['splits'] });
+      if (!localOnly) {
+        queryClient.invalidateQueries({ queryKey: ['splits'] });
+      }
       if (updated.checked && prInfo?.isPr && onShowToast) {
         onShowToast(`🏆 NEW PR! ${ex.name} @ ${ex.weight}${ex.weightUnit}`);
       }
@@ -679,45 +701,53 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
   });
 
   const weightMutation = useMutation({
-    mutationFn: ({ weight, unit }) => storage.updateExercise(splitId, dayId, ex._id, { weight: +weight, weightUnit: unit }),
-    onSuccess: (_, { weight, unit }) => {
-      queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
-      setEditingWeight(false);
+    mutationFn: ({ weight, unit }) => {
+      if (localOnly) return Promise.resolve({ weight: +weight, weightUnit: unit });
+      return storage.updateExercise(splitId, dayId, ex._id, { weight: +weight, weightUnit: unit });
+    },
+    onSuccess: (data) => {
+      if (localOnly) {
+        onToggle({ ...ex, weight: data.weight, weightUnit: data.weightUnit });
+        setEditingWeight(false);
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
+        setEditingWeight(false);
 
-      const newW = +weight;
-      const oldW = ex.weight ?? 0;
-      const newUnit = unit;
-      const oldUnit = ex.weightUnit || 'kg';
-      
-      const oldWConverted = convertWeight(oldW, oldUnit, newUnit);
-      if (Math.abs(newW - oldWConverted) < 0.01 || isSyncExcluded(ex.name)) return;
+        const newW = data.weight;
+        const oldW = ex.weight ?? 0;
+        const newUnit = data.weightUnit;
+        const oldUnit = ex.weightUnit || 'kg';
+        
+        const oldWConverted = convertWeight(oldW, oldUnit, newUnit);
+        if (Math.abs(newW - oldWConverted) < 0.01 || isSyncExcluded(ex.name)) return;
 
-      // Find other days that have the same exercise name
-      const otherDays = (splitDays || [])
-        .filter((d) => d._id !== dayId && !d.isRest)
-        .flatMap((d) =>
-          (d.exercises || [])
-            .filter((e) => e.name.toLowerCase() === ex.name.toLowerCase())
-            .map((e) => ({ dayName: d.name, dayId: d._id, exId: e._id }))
-        );
+        // Find other days that have the same exercise name
+        const otherDays = (splitDays || [])
+          .filter((d) => d._id !== dayId && !d.isRest)
+          .flatMap((d) =>
+            (d.exercises || [])
+              .filter((e) => e.name.toLowerCase() === ex.name.toLowerCase())
+              .map((e) => ({ dayName: d.name, dayId: d._id, exId: e._id }))
+          );
 
-      const syncFields = {
-        otherDays,
-        oldWeight: oldW,
-        oldUnit: oldUnit,
-        newWeight: newW,
-        newUnit: newUnit,
-        oldSets: ex.sets ?? 3,
-        newSets: ex.sets ?? 3,
-        oldReps: ex.reps ?? 10,
-        newReps: ex.reps ?? 10,
-        oldUntilFailure: !!ex.untilFailure,
-        newUntilFailure: !!ex.untilFailure,
-      };
-      if (otherDays.length > 0) setSyncPrompt(syncFields);
-      storage.getSyncMatches(ex.name, splitId).then((otherSplits) => {
-        if (otherSplits.length > 0) setSyncPrompt((p) => ({ ...syncFields, ...(p || {}), otherSplits }));
-      }).catch(() => {});
+        const syncFields = {
+          otherDays,
+          oldWeight: oldW,
+          oldUnit: oldUnit,
+          newWeight: newW,
+          newUnit: newUnit,
+          oldSets: ex.sets ?? 3,
+          newSets: ex.sets ?? 3,
+          oldReps: ex.reps ?? 10,
+          newReps: ex.reps ?? 10,
+          oldUntilFailure: !!ex.untilFailure,
+          newUntilFailure: !!ex.untilFailure,
+        };
+        if (otherDays.length > 0) setSyncPrompt(syncFields);
+        storage.getSyncMatches(ex.name, splitId).then((otherSplits) => {
+          if (otherSplits.length > 0) setSyncPrompt((p) => ({ ...syncFields, ...(p || {}), otherSplits }));
+        }).catch(() => {});
+      }
     },
   });
 
@@ -735,58 +765,64 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
         payload.untilFailure = numReps === 0;
         payload.duration = 0;
       }
+      if (localOnly) return Promise.resolve(payload);
       return storage.updateExercise(splitId, dayId, ex._id, payload);
     },
-    onSuccess: (_, { sets, reps, duration, durationUnit }) => {
-      queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
-      setEditingSetsReps(false);
+    onSuccess: (data, { sets, reps, duration, durationUnit }) => {
+      if (localOnly) {
+        onToggle({ ...ex, ...data });
+        setEditingSetsReps(false);
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
+        setEditingSetsReps(false);
 
-      const newSets = +sets;
-      const newReps = reps !== undefined ? +reps : 0;
-      const newUntilFailure = reps !== undefined && newReps === 0;
-      const newDuration = duration !== undefined ? +duration : 0;
-      const newDurationUnit = durationUnit || 'sec';
+        const newSets = +sets;
+        const newReps = reps !== undefined ? +reps : 0;
+        const newUntilFailure = reps !== undefined && newReps === 0;
+        const newDuration = duration !== undefined ? +duration : 0;
+        const newDurationUnit = durationUnit || 'sec';
 
-      const oldSets = ex.sets ?? 3;
-      const oldReps = ex.reps ?? 10;
-      const oldUntilFailure = !!ex.untilFailure;
-      const oldDuration = ex.duration ?? 0;
-      const oldDurationUnit = ex.durationUnit || 'sec';
+        const oldSets = ex.sets ?? 3;
+        const oldReps = ex.reps ?? 10;
+        const oldUntilFailure = !!ex.untilFailure;
+        const oldDuration = ex.duration ?? 0;
+        const oldDurationUnit = ex.durationUnit || 'sec';
 
-      const durationChanged = oldDuration !== newDuration || oldDurationUnit !== newDurationUnit;
-      const repsChanged = newReps !== oldReps || newUntilFailure !== oldUntilFailure;
+        const durationChanged = oldDuration !== newDuration || oldDurationUnit !== newDurationUnit;
+        const repsChanged = newReps !== oldReps || newUntilFailure !== oldUntilFailure;
 
-      if ((newSets === oldSets && !repsChanged && !durationChanged) || isSyncExcluded(ex.name)) return;
+        if ((newSets === oldSets && !repsChanged && !durationChanged) || isSyncExcluded(ex.name)) return;
 
-      const otherDays = (splitDays || [])
-        .filter((d) => d._id !== dayId && !d.isRest)
-        .flatMap((d) =>
-          (d.exercises || [])
-            .filter((e) => e.name.toLowerCase() === ex.name.toLowerCase())
-            .map((e) => ({ dayName: d.name, dayId: d._id, exId: e._id }))
-        );
+        const otherDays = (splitDays || [])
+          .filter((d) => d._id !== dayId && !d.isRest)
+          .flatMap((d) =>
+            (d.exercises || [])
+              .filter((e) => e.name.toLowerCase() === ex.name.toLowerCase())
+              .map((e) => ({ dayName: d.name, dayId: d._id, exId: e._id }))
+          );
 
-      const syncFields = {
-        otherDays,
-        oldWeight: ex.weight ?? 0,
-        oldUnit: ex.weightUnit || 'kg',
-        newWeight: ex.weight ?? 0,
-        newUnit: ex.weightUnit || 'kg',
-        oldSets,
-        newSets,
-        oldReps: oldUntilFailure ? 0 : oldReps,
-        newReps: newUntilFailure ? 0 : newReps,
-        oldUntilFailure,
-        newUntilFailure,
-        oldDuration,
-        newDuration,
-        oldDurationUnit,
-        newDurationUnit,
-      };
-      if (otherDays.length > 0) setSyncPrompt(syncFields);
-      storage.getSyncMatches(ex.name, splitId).then((otherSplits) => {
-        if (otherSplits.length > 0) setSyncPrompt((p) => ({ ...syncFields, ...(p || {}), otherSplits }));
-      }).catch(() => {});
+        const syncFields = {
+          otherDays,
+          oldWeight: ex.weight ?? 0,
+          oldUnit: ex.weightUnit || 'kg',
+          newWeight: ex.weight ?? 0,
+          newUnit: ex.weightUnit || 'kg',
+          oldSets,
+          newSets,
+          oldReps: oldUntilFailure ? 0 : oldReps,
+          newReps: newUntilFailure ? 0 : newReps,
+          oldUntilFailure,
+          newUntilFailure,
+          oldDuration,
+          newDuration,
+          oldDurationUnit,
+          newDurationUnit,
+        };
+        if (otherDays.length > 0) setSyncPrompt(syncFields);
+        storage.getSyncMatches(ex.name, splitId).then((otherSplits) => {
+          if (otherSplits.length > 0) setSyncPrompt((p) => ({ ...syncFields, ...(p || {}), otherSplits }));
+        }).catch(() => {});
+      }
     },
   });
 
@@ -852,6 +888,21 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
           }}>
             {ex.name}
           </div>
+          {ex.isLastWeekWorkout && (
+            <span
+              style={{
+                fontSize: 9, fontWeight: 900, letterSpacing: '0.04em',
+                color: 'var(--accent)',
+                background: 'rgba(232, 255, 90, 0.1)',
+                border: '1px solid var(--accent)',
+                padding: '2px 7px', borderRadius: 10,
+                display: 'inline-flex', alignItems: 'center',
+                textTransform: 'uppercase',
+              }}
+            >
+              ↺ Last Week
+            </span>
+          )}
           {prInfo && (
             <span
               style={{
@@ -1589,9 +1640,49 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
   const [showConfirmFinish, setShowConfirmFinish] = useState(false);
   const [isRetaking, setIsRetaking] = useState(false);
 
+  const getPastDateStr = (baseDate, daysOffset) => {
+    const parts = baseDate.split('-');
+    if (parts.length !== 3) return '';
+    const d = new Date(Date.UTC(+parts[0], +parts[1] - 1, +parts[2]));
+    d.setUTCDate(d.getUTCDate() + daysOffset);
+    return d.toISOString().slice(0, 10);
+  };
+  const lastWeekDateStr = getPastDateStr(dateStr, -7);
+  const lastWeekLog = logs && logs.find(l => l.date === lastWeekDateStr);
+
+  function handleAddLastWeekExercise(lwEx) {
+    const newEx = {
+      _id: crypto.randomUUID(),
+      name: lwEx.name,
+      sets: lwEx.sets || 3,
+      reps: lwEx.reps || 10,
+      weight: lwEx.weight || 0,
+      weightUnit: lwEx.weightUnit || 'kg',
+      category: lwEx.category || 'workout',
+      notes: lwEx.notes || '',
+      duration: lwEx.duration || 0,
+      durationUnit: lwEx.durationUnit || 'sec',
+      checked: false,
+      lastCheckedDate: '',
+      isLastWeekWorkout: true,
+    };
+    setExercises(prev => [...prev, newEx]);
+    if (onShowToast) {
+      onShowToast(`💪 Added "${lwEx.name}" to today's session!`);
+    }
+  }
 
   useEffect(() => {
-    setExercises(day.exercises || []);
+    const lastWeekExs = exercises.filter(e => e.isLastWeekWorkout);
+    if (lastWeekExs.length > 0) {
+      const templateExs = (day.exercises || []).map(te => {
+        const existing = exercises.find(e => e._id === te._id);
+        return existing || te;
+      });
+      setExercises([...templateExs, ...lastWeekExs]);
+    } else {
+      setExercises(day.exercises || []);
+    }
   }, [day.exercises]);
 
 
@@ -1666,7 +1757,8 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
         untilFailure: e.untilFailure, notes: e.notes || '', muscleTargets: e.muscleTargets || [],
         category: e.category || 'workout',
         duration: e.duration ?? 0,
-        durationUnit: e.durationUnit || 'sec'
+        durationUnit: e.durationUnit || 'sec',
+        isLastWeekWorkout: e.isLastWeekWorkout || false
       }))
     });
     setShowConfirmFinish(false);
@@ -1744,7 +1836,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
                       <div>
                         <CategoryHeader type="warmup" />
                         {warmups.map((ex, i) => (
-                          <ExerciseRow key={ex._id || i} ex={ex} index={displayExercises.indexOf(ex)} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} dateStr={dateStr} logs={logs} onShowToast={onShowToast} />
+                          <ExerciseRow key={ex._id || i} ex={ex} index={displayExercises.indexOf(ex)} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} dateStr={dateStr} logs={logs} onShowToast={onShowToast} localOnly={ex.isLastWeekWorkout} />
                         ))}
                       </div>
                     )}
@@ -1753,7 +1845,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
                       <div>
                         <CategoryHeader type="workout" />
                         {workouts.map((ex, i) => (
-                          <ExerciseRow key={ex._id || i} ex={ex} index={displayExercises.indexOf(ex)} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} dateStr={dateStr} logs={logs} onShowToast={onShowToast} />
+                          <ExerciseRow key={ex._id || i} ex={ex} index={displayExercises.indexOf(ex)} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} dateStr={dateStr} logs={logs} onShowToast={onShowToast} localOnly={ex.isLastWeekWorkout} />
                         ))}
                       </div>
                     )}
@@ -1762,7 +1854,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
                       <div>
                         <CategoryHeader type="cooldown" />
                         {cooldowns.map((ex, i) => (
-                          <ExerciseRow key={ex._id || i} ex={ex} index={displayExercises.indexOf(ex)} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} dateStr={dateStr} logs={logs} onShowToast={onShowToast} />
+                          <ExerciseRow key={ex._id || i} ex={ex} index={displayExercises.indexOf(ex)} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} dateStr={dateStr} logs={logs} onShowToast={onShowToast} localOnly={ex.isLastWeekWorkout} />
                         ))}
                       </div>
                     )}
@@ -1770,6 +1862,75 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
                 );
               })()
             )}
+
+            {/* Last Week's Exercises Preview Section */}
+            {isToday && !isCompleted && lastWeekLog && lastWeekLog.exercises && lastWeekLog.exercises.length > 0 && (
+              <div style={{
+                padding: '16px',
+                borderTop: '1px solid var(--border)',
+                background: 'rgba(255, 255, 255, 0.01)',
+              }}>
+                <div style={{
+                  fontSize: 11,
+                  fontWeight: 900,
+                  fontFamily: 'var(--font-mono)',
+                  color: 'var(--accent)',
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  marginBottom: 10,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}>
+                  <span style={{ fontSize: 12 }}>↺</span> Last Week's Exercises
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {lastWeekLog.exercises.map((lwEx, idx) => {
+                    const alreadyAdded = exercises.some(e => e.name.toLowerCase() === lwEx.name.toLowerCase());
+                    const rLabel = (lwEx.untilFailure || !lwEx.reps || lwEx.reps === 0) ? 'Failure' : lwEx.reps;
+                    
+                    return (
+                      <div key={idx} style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '8px 12px',
+                        borderRadius: 8,
+                        background: 'var(--bg3)',
+                        border: '1px solid var(--border2)',
+                      }}>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', textTransform: 'uppercase', fontFamily: 'var(--font-display)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {lwEx.name}
+                          </div>
+                          <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
+                            {lwEx.sets}×{rLabel} {lwEx.weight > 0 ? `@ ${lwEx.weight}${lwEx.weightUnit}` : ''}
+                          </div>
+                        </div>
+                        <button
+                          className="btn"
+                          disabled={alreadyAdded}
+                          onClick={() => handleAddLastWeekExercise(lwEx)}
+                          style={{
+                            padding: '4px 10px',
+                            fontSize: 11,
+                            fontWeight: 700,
+                            borderRadius: 6,
+                            background: alreadyAdded ? 'rgba(255,255,255,0.05)' : 'var(--accent)',
+                            color: alreadyAdded ? 'var(--text3)' : '#0a0a0a',
+                            border: 'none',
+                            cursor: alreadyAdded ? 'default' : 'pointer',
+                          }}
+                        >
+                          {alreadyAdded ? 'Added' : '+ Add'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {(isToday || isRetaking) && !isCompleted && (
               <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', display: 'flex', gap: 8 }}>
                 {checkedCount > 0 ? (

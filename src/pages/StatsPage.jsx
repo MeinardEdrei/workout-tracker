@@ -715,8 +715,26 @@ function LogCard({ log, onDelete }) {
             }
             return (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 14px', borderBottom: i < log.exercises.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                <div style={nameStyle}>{prefix}{ex.name}</div>
-                <div style={{ fontSize: 11, color: 'var(--text2)', fontFamily: 'var(--font-mono)', display: 'flex', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
+                  <div style={nameStyle}>{prefix}{ex.name}</div>
+                  {ex.isLastWeekWorkout && (
+                    <span style={{
+                      fontSize: 8,
+                      fontWeight: 900,
+                      color: 'var(--accent)',
+                      background: 'rgba(232, 255, 90, 0.1)',
+                      border: '1px solid var(--accent)',
+                      padding: '1px 5px',
+                      borderRadius: 4,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                      flexShrink: 0
+                    }}>
+                      ↺ Last Week
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text2)', fontFamily: 'var(--font-mono)', display: 'flex', gap: 8, flexShrink: 0 }}>
                   <span>{ex.sets}×{rLabel}</span>
                   <span style={{ color: ex.weight > 0 ? 'var(--accent)' : 'var(--text3)', fontWeight: 700 }}>{wLabel}</span>
                 </div>

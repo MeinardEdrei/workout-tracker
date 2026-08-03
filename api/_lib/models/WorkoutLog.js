@@ -10,6 +10,7 @@ const LogExerciseSchema = new mongoose.Schema({
   notes: { type: String, default: '' },
   duration: { type: Number, default: 0 },
   durationUnit: { type: String, enum: ['sec', 'min'], default: 'sec' },
+  isLastWeekWorkout: { type: Boolean, default: false },
 });
 
 const WorkoutLogSchema = new mongoose.Schema(
