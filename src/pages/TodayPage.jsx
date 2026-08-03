@@ -1399,7 +1399,7 @@ function SwapIcon() {
 
 function AddExerciseFromOtherDaysModal({ splitDays, logs, onConfirm, onClose }) {
   const [activeTab, setActiveTab] = useState('split'); // 'split' or 'custom'
-  const [form, setForm] = useState({ name: '', sets: 3, reps: 10, weight: 0, weightUnit: 'kg', category: 'workout', duration: 0, durationUnit: 'sec', untilFailure: false });
+  const [form, setForm] = useState({ name: '', sets: 3, reps: 10, weight: 0, weightUnit: 'kg', category: 'workout', duration: 0, durationUnit: 'sec', untilFailure: false, muscleTargets: [] });
   const [suggestions, setSuggestions] = useState([]);
 
   const pastExercises = useMemo(() => {
@@ -1477,6 +1477,7 @@ function AddExerciseFromOtherDaysModal({ splitDays, logs, onConfirm, onClose }) 
         duration: match.duration ?? 0,
         durationUnit: match.durationUnit || 'sec',
         imageUrl: match.imageUrl || s.imageUrl || '',
+        muscleTargets: match.muscleTargets || s.muscleTargets || [],
       });
     } else if (s.isCustom) {
       setForm({
@@ -1490,9 +1491,10 @@ function AddExerciseFromOtherDaysModal({ splitDays, logs, onConfirm, onClose }) 
         duration: s.duration ?? 0,
         durationUnit: s.durationUnit || 'sec',
         imageUrl: s.imageUrl || '',
+        muscleTargets: s.muscleTargets || [],
       });
     } else {
-      setForm(f => ({ ...f, name: s.name, imageUrl: s.imageUrl || '' }));
+      setForm(f => ({ ...f, name: s.name, imageUrl: s.imageUrl || '', muscleTargets: s.muscleTargets || [] }));
     }
     setSuggestions([]);
   }
@@ -1506,6 +1508,9 @@ function AddExerciseFromOtherDaysModal({ splitDays, logs, onConfirm, onClose }) 
     const finalWeightUnit = form.weightUnit || (match ? match.weightUnit || 'kg' : 'kg');
     const numReps = +form.reps;
     const isFailure = form.untilFailure || numReps === 0;
+    const finalMuscleTargets = (form.muscleTargets && form.muscleTargets.length > 0)
+      ? form.muscleTargets
+      : (match ? match.muscleTargets || [] : []);
 
     onConfirm({
       name,
@@ -1518,6 +1523,7 @@ function AddExerciseFromOtherDaysModal({ splitDays, logs, onConfirm, onClose }) 
       duration: form.duration ?? 0,
       durationUnit: form.durationUnit || 'sec',
       imageUrl: form.imageUrl || (match ? match.imageUrl || '' : ''),
+      muscleTargets: finalMuscleTargets,
     });
   }
 
@@ -1594,6 +1600,7 @@ function AddExerciseFromOtherDaysModal({ splitDays, logs, onConfirm, onClose }) 
                                 durationUnit: ex.durationUnit || 'sec',
                                 notes: ex.notes || '',
                                 imageUrl: ex.imageUrl || '',
+                                muscleTargets: ex.muscleTargets || [],
                                 isFromOtherDay: d.name
                               })}
                               style={{
@@ -1991,7 +1998,8 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
       checked: false,
       lastCheckedDate: '',
       isLastWeekWorkout: true,
-      isFromOtherDay: exData.isFromOtherDay || 'Added'
+      isFromOtherDay: exData.isFromOtherDay || 'Added',
+      muscleTargets: exData.muscleTargets || []
     };
     setExercises(prev => [...prev, newEx]);
     setShowAddModal(false);
