@@ -1,13 +1,14 @@
 import { useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
-import * as apiStorage from '../api/index.js';
+import * as offlineSyncStorage from '../storage/offlineSyncStorage.js';
 import * as guestStorage from '../storage/localStorageApi.js';
 
 /**
  * Returns { storage, storageKey }.
  *
  * storage — object of async functions matching src/api/index.js exports.
- *   Routes to MongoDB via API when logged in, localStorage when guest.
+ *   Routes to MongoDB via apiStorage wrapped in offlineSyncStorage when logged in,
+ *   localStorage when guest.
  *
  * storageKey — unique string per identity ('guest' or userId).
  *   Include in React Query keys so guest and logged-in caches stay separate:
@@ -17,7 +18,7 @@ export function useStorage() {
   const { isLoggedIn, user } = useAuth();
 
   const storage = useMemo(
-    () => (isLoggedIn ? apiStorage : guestStorage),
+    () => (isLoggedIn ? offlineSyncStorage : guestStorage),
     [isLoggedIn]
   );
 

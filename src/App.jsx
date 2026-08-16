@@ -1,7 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
+import { useQueryClient } from '@tanstack/react-query';
 import './index.css';
 import { useAuth } from './context/AuthContext';
+import { useOnlineStatus } from './hooks/useOnlineStatus';
+import { syncOfflineQueue } from './storage/offlineSyncStorage';
 import InvitePage from './pages/InvitePage';
 import TodayPage from './pages/TodayPage';
 import SplitsPage from './pages/SplitsPage';
@@ -392,8 +395,29 @@ export default function App() {
   const inviteMatch = window.location.pathname.match(/^\/invite\/([a-f0-9]+)$/i);
   if (inviteMatch) return <InvitePage token={inviteMatch[1]} />;
 
-  const { loading, isAdmin } = useAuth();
-  
+  const queryClient = useQueryClient();
+  const { isOnline, wasOffline, setWasOffline } = useOnlineStatus();
+  const { loading, isAdmin, isLoggedIn } = useAuth();
+  const [syncState, setSyncState] = useState(null);
+
+  useEffect(() => {
+    if (isOnline && isLoggedIn) {
+      syncOfflineQueue(({ status, count }) => {
+        if (status === 'syncing') {
+          setSyncState({ status: 'syncing', count });
+        } else if (status === 'success') {
+          setSyncState({ status: 'success' });
+          queryClient.invalidateQueries();
+          setWasOffline(false);
+          setTimeout(() => setSyncState(null), 3000);
+        } else if (status === 'error') {
+          setSyncState({ status: 'error' });
+          setTimeout(() => setSyncState(null), 3000);
+        }
+      });
+    }
+  }, [isOnline, isLoggedIn, queryClient, setWasOffline]);
+
   const [tab, setTab] = useState(() => {
     const saved = localStorage.getItem('wt_active_tab');
     if (saved && ['today', 'splits', 'stats', 'calc', 'admin'].includes(saved)) {
@@ -437,6 +461,87 @@ export default function App() {
 
   return (
     <>
+      {/* Offline Status Banner */}
+      {!isOnline && (
+        <div style={{
+          background: 'rgba(25, 20, 5, 0.95)',
+          backdropFilter: 'blur(8px)',
+          borderBottom: '1px solid rgba(232, 255, 90, 0.3)',
+          color: 'var(--accent)',
+          padding: '10px 16px',
+          textAlign: 'center',
+          fontSize: '12px',
+          fontWeight: 800,
+          letterSpacing: '0.05em',
+          textTransform: 'uppercase',
+          zIndex: 200,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 8,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+          animation: 'slideDown 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+        }}>
+          <span style={{
+            display: 'inline-block',
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            background: 'var(--accent)',
+            boxShadow: '0 0 10px var(--accent)',
+            animation: 'pulse 1.5s infinite',
+          }} />
+          Working Offline — Syncs on Connection
+        </div>
+      )}
+
+      {/* Sync Status Toast */}
+      {syncState?.status === 'syncing' && (
+        <div style={{
+          position: 'fixed', bottom: 76, left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--bg2)', border: '1px solid var(--accent)',
+          color: 'var(--text)', padding: '12px 20px', borderRadius: 12,
+          fontSize: 13, fontWeight: 600, zIndex: 300, minWidth: 260, textAlign: 'center',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+          animation: 'fadeIn 0.2s ease',
+        }}>
+          <InlineSpinner />
+          <span>Syncing {syncState.count} offline changes…</span>
+        </div>
+      )}
+
+      {syncState?.status === 'success' && (
+        <div style={{
+          position: 'fixed', bottom: 76, left: '50%', transform: 'translateX(-50%)',
+          background: 'rgba(10, 40, 20, 0.95)', border: '1px solid var(--green)',
+          color: 'var(--green)', padding: '12px 20px', borderRadius: 12,
+          fontSize: 13, fontWeight: 700, zIndex: 300, minWidth: 260, textAlign: 'center',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+          animation: 'fadeIn 0.2s ease',
+        }}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+          <span>All changes synced successfully!</span>
+        </div>
+      )}
+
+      {syncState?.status === 'error' && (
+        <div style={{
+          position: 'fixed', bottom: 76, left: '50%', transform: 'translateX(-50%)',
+          background: 'rgba(40, 10, 10, 0.95)', border: '1px solid var(--red)',
+          color: 'var(--red)', padding: '12px 20px', borderRadius: 12,
+          fontSize: 13, fontWeight: 700, zIndex: 300, minWidth: 260, textAlign: 'center',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+          animation: 'fadeIn 0.2s ease',
+        }}>
+          <span>Sync failed. Retrying later.</span>
+        </div>
+      )}
+
       {/* Auth error toast is global — shows on every tab */}
       <AuthErrorToast />
       <ReloadPrompt />

@@ -1,17 +1,22 @@
 // Guest storage — mirrors the shape of src/api/index.js but uses localStorage.
 // All functions return Promises so they're drop-in replacements for fetch calls.
 
-const SPLITS_KEY = 'wt_guest_splits';
-const LOGS_KEY = 'wt_guest_logs';
-const VERSIONS_KEY = 'wt_guest_versions';
+let currentPrefix = 'wt_guest';
+export function setStoragePrefix(prefix) {
+  currentPrefix = prefix;
+}
+
+const SPLITS_KEY = () => `${currentPrefix}_splits`;
+const LOGS_KEY = () => `${currentPrefix}_logs`;
+const VERSIONS_KEY = () => `${currentPrefix}_versions`;
 const MAX_VERSIONS_PER_SPLIT = 50;
 const TODAY = () => new Date().toISOString().slice(0, 10);
 const uid = () => crypto.randomUUID();
 
 function readVersions() {
-  try { return JSON.parse(localStorage.getItem(VERSIONS_KEY) || '{}'); } catch { return {}; }
+  try { return JSON.parse(localStorage.getItem(VERSIONS_KEY()) || '{}'); } catch { return {}; }
 }
-function writeVersions(v) { localStorage.setItem(VERSIONS_KEY, JSON.stringify(v)); }
+function writeVersions(v) { localStorage.setItem(VERSIONS_KEY(), JSON.stringify(v)); }
 
 // Snapshots a split's pre-change state so it can later be reverted to.
 function snapshotVersion(split) {
@@ -33,15 +38,15 @@ const getDayOrder = (name) => DAY_ORDER_MAP[name.trim().toLowerCase()] ?? 8;
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function readSplits() {
-  try { return JSON.parse(localStorage.getItem(SPLITS_KEY) || '[]'); } catch { return []; }
+  try { return JSON.parse(localStorage.getItem(SPLITS_KEY()) || '[]'); } catch { return []; }
 }
-function writeSplits(s) { localStorage.setItem(SPLITS_KEY, JSON.stringify(s)); }
+function writeSplits(s) { localStorage.setItem(SPLITS_KEY(), JSON.stringify(s)); }
 
 function readLogs() {
   try {
-    const logs = JSON.parse(localStorage.getItem(LOGS_KEY) || '[]');
+    const logs = JSON.parse(localStorage.getItem(LOGS_KEY()) || '[]');
     // Run migration if not already migrated
-    if (typeof window !== 'undefined' && typeof localStorage !== 'undefined' && !localStorage.getItem('wt_logs_migrated_vol_v1') && logs.length > 0) {
+    if (typeof window !== 'undefined' && typeof localStorage !== 'undefined' && !localStorage.getItem(`${currentPrefix}_logs_migrated_vol_v1`) && logs.length > 0) {
       let migrated = false;
       const migratedLogs = logs.map(log => {
         const correctVol = Math.round((log.exercises || []).reduce((sum, ex) => {
@@ -56,11 +61,11 @@ function readLogs() {
         return log;
       });
       if (migrated) {
-        localStorage.setItem(LOGS_KEY, JSON.stringify(migratedLogs));
-        localStorage.setItem('wt_logs_migrated_vol_v1', 'true');
+        localStorage.setItem(LOGS_KEY(), JSON.stringify(migratedLogs));
+        localStorage.setItem(`${currentPrefix}_logs_migrated_vol_v1`, 'true');
         return migratedLogs;
       }
-      localStorage.setItem('wt_logs_migrated_vol_v1', 'true');
+      localStorage.setItem(`${currentPrefix}_logs_migrated_vol_v1`, 'true');
     }
     return logs;
   } catch {
