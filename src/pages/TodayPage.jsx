@@ -2056,7 +2056,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
 
   const isCompleted = !!logForDate;
   const isPast = dateStr < TODAY_STR;
-  const readOnly = (isPast && !isRetaking) || isCompleted || !isToday;
+  const readOnly = (!isRetaking && !isToday) || isCompleted;
 
   const displayExercises = isCompleted
     ? logForDate.exercises.map(logEx => {
@@ -2206,7 +2206,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
             )}
 
             {/* Last Week's Exercises Preview Section */}
-            {isToday && !isCompleted && lastWeekLog && lastWeekLog.exercises && lastWeekLog.exercises.length > 0 && (
+            {(isToday || isRetaking) && !isCompleted && lastWeekLog && lastWeekLog.exercises && lastWeekLog.exercises.length > 0 && (
               <div style={{
                 padding: '16px',
                 borderTop: '1px solid var(--border)',
