@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { validateInviteToken, claimInviteToken } from '../api/index';
+import { Dumbbell, CheckCircle2 } from 'lucide-react';
 
 export default function InvitePage({ token }) {
   const [status, setStatus] = useState('loading'); // loading | valid | invalid | done
@@ -41,7 +42,7 @@ export default function InvitePage({ token }) {
         background: 'var(--bg2)', border: '1px solid var(--border)',
         borderRadius: 16, padding: '32px 24px', textAlign: 'center',
       }}>
-        <div style={{ fontSize: 40, marginBottom: 16 }}>💪</div>
+        <div style={{ display: 'flex', justifyContent: 'center', color: 'var(--accent)', marginBottom: 16 }}><Dumbbell size={40} /></div>
         <div style={{
           fontSize: 22, fontWeight: 800, textTransform: 'uppercase',
           letterSpacing: '0.02em', color: 'var(--accent)', marginBottom: 6,
@@ -100,7 +101,7 @@ export default function InvitePage({ token }) {
 
         {status === 'done' && (
           <div style={{ marginTop: 8 }}>
-            <div style={{ fontSize: 32, marginBottom: 12 }}>✅</div>
+            <div style={{ display: 'flex', justifyContent: 'center', color: 'var(--green)', marginBottom: 12 }}><CheckCircle2 size={32} /></div>
             <div style={{ color: 'var(--text)', fontSize: 15, fontWeight: 700, marginBottom: 8 }}>
               Access granted!
             </div>

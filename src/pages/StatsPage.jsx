@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom';
 import { capitalizeWords, formatRelativeDate } from '../utils/textFormat';
 import { normKey, findDuplicatePairs } from '../utils/matchExercise';
 import BodyMuscleMap, { resolveExerciseMuscles } from '../components/BodyMuscleMap';
+import { X, TrendingUp, TrendingDown, ArrowRight, RotateCcw, BarChart3, FolderOpen, Download, Tag } from 'lucide-react';
 
 function convertWeight(weight, fromUnit, toUnit) {
   if (fromUnit === toUnit) return weight;
@@ -423,11 +424,11 @@ function MuscleVolumeBreakdown({ weekLogs }) {
           Muscle Volume (This Week)
         </div>
         {selectedMuscle && (
-          <button 
-            onClick={() => setSelectedMuscle(null)} 
-            style={{ fontSize: 10, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}
+          <button
+            onClick={() => setSelectedMuscle(null)}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}
           >
-            Show All ({selectedMuscle} ✕)
+            Show All ({selectedMuscle} <X size={10} />)
           </button>
         )}
       </div>
@@ -509,10 +510,10 @@ function ProgressionCard({ exercise }) {
   const lastVal = last ? (use1RM ? calc1RM(last) : last.weight) : 0;
   const firstConverted = first && last ? convertWeight(firstVal, first.weightUnit, last.weightUnit) : 0;
 
-  const trend = !first || !last ? '→'
-    : lastVal > firstConverted ? '↑'
-    : lastVal < firstConverted ? '↓' : '→';
-  const trendColor = trend === '↑' ? 'var(--green)' : trend === '↓' ? 'var(--red)' : 'var(--text3)';
+  const TrendIcon = (!first || !last) ? ArrowRight
+    : lastVal > firstConverted ? TrendingUp
+    : lastVal < firstConverted ? TrendingDown : ArrowRight;
+  const trendColor = TrendIcon === TrendingUp ? 'var(--green)' : TrendIcon === TrendingDown ? 'var(--red)' : 'var(--text3)';
 
   const last6Converted = last ? last6.map(s => {
     const rawVal = use1RM ? calc1RM(s) : s.weight;
@@ -551,7 +552,7 @@ function ProgressionCard({ exercise }) {
           {first && last && (
             <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text3)', marginTop: 3 }}>
               <span>{Math.round(firstVal * 10) / 10}{first.weightUnit}</span>
-              <span style={{ color: trendColor, margin: '0 5px', fontWeight: 700 }}>{trend}</span>
+              <span style={{ color: trendColor, margin: '0 5px', display: 'inline-flex', verticalAlign: 'middle' }}><TrendIcon size={13} /></span>
               <span style={{ color: lastVal > firstConverted ? 'var(--green)' : 'var(--text2)', fontWeight: 700 }}>{Math.round(lastVal * 10) / 10}{last.weightUnit}</span>
             </div>
           )}
@@ -729,9 +730,9 @@ function LogCard({ log, onDelete }) {
                       borderRadius: 4,
                       textTransform: 'uppercase',
                       letterSpacing: '0.05em',
-                      flexShrink: 0
+                      flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 3
                     }}>
-                      ↺ Last Week
+                      <RotateCcw size={9} /> Last Week
                     </span>
                   )}
                 </div>
@@ -853,13 +854,13 @@ function BackupModal({ logs, splits, storage, queryClient, onClose }) {
       <div className="modal" style={{ maxWidth: 440 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <div className="modal-title" style={{ fontSize: 18, margin: 0 }}>Data & Backups</div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text3)', fontSize: 16, cursor: 'pointer' }}>✕</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', display: 'flex' }}><X size={18} /></button>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
           <div style={{ padding: 14, borderRadius: 10, background: 'var(--bg3)', border: '1px solid var(--border2)' }}>
-            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4, color: 'var(--text)' }}>
-              📊 Export Workout History (CSV)
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 14, marginBottom: 4, color: 'var(--text)' }}>
+              <BarChart3 size={15} /> Export Workout History (CSV)
             </div>
             <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 10 }}>
               Download your complete workout logs as a spreadsheet compatible with Excel and Google Sheets.
@@ -870,8 +871,8 @@ function BackupModal({ logs, splits, storage, queryClient, onClose }) {
           </div>
 
           <div style={{ padding: 14, borderRadius: 10, background: 'var(--bg3)', border: '1px solid var(--border2)' }}>
-            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4, color: 'var(--text)' }}>
-              📁 Export Full Backup (JSON)
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 14, marginBottom: 4, color: 'var(--text)' }}>
+              <FolderOpen size={15} /> Export Full Backup (JSON)
             </div>
             <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 10 }}>
               Export all your custom splits, exercise routines, and workout history as a JSON backup file.
@@ -882,8 +883,8 @@ function BackupModal({ logs, splits, storage, queryClient, onClose }) {
           </div>
 
           <div style={{ padding: 14, borderRadius: 10, background: 'var(--bg3)', border: '1px solid var(--border2)' }}>
-            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4, color: 'var(--text)' }}>
-              📥 Restore / Import Backup (JSON)
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 14, marginBottom: 4, color: 'var(--text)' }}>
+              <Download size={15} /> Restore / Import Backup (JSON)
             </div>
             <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 10 }}>
               Upload a `.json` backup file to restore past workouts and split programs.
@@ -994,7 +995,7 @@ function ManageExercisesModal({ logs, storage, storageKey, queryClient, onClose 
       <div className="modal" style={{ maxWidth: 460 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <div className="modal-title" style={{ fontSize: 18, margin: 0 }}>Manage Exercises</div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text3)', fontSize: 16, cursor: 'pointer' }}>✕</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', display: 'flex' }}><X size={18} /></button>
         </div>
 
         {mergeTarget ? (
@@ -1138,14 +1139,14 @@ export default function StatsPage() {
             style={{ fontSize: 11, padding: '5px 10px', gap: 5 }}
             onClick={() => setShowManageExercises(true)}
           >
-            🏷️ Exercises
+            <Tag size={13} /> Exercises
           </button>
           <button
             className="btn btn-ghost"
             style={{ fontSize: 11, padding: '5px 10px', gap: 5 }}
             onClick={() => setShowBackupModal(true)}
           >
-            📁 Backups
+            <FolderOpen size={13} /> Backups
           </button>
           {logs.length > 0 && (
             <button className="btn-icon" style={{ color: 'var(--red)' }} onClick={() => setConfirm('clear')}><TrashIcon /></button>

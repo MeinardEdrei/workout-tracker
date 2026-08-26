@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
+import { Check } from 'lucide-react';
 import {
   getAdminUsers, deleteAdminUser,
   getAllowedEmails, addAllowedEmail, deleteAllowedEmail,
@@ -238,7 +239,7 @@ export default function AdminPage() {
                         style={{ color: copiedId === inv._id ? 'var(--accent)' : 'var(--text2)', flexShrink: 0 }}
                         title="Copy link"
                       >
-                        {copiedId === inv._id ? '✓' : <CopyIcon />}
+                        {copiedId === inv._id ? <Check size={14} /> : <CopyIcon />}
                       </button>
                     )}
                     <button

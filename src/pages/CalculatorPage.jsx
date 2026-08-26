@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { ArrowRight } from 'lucide-react';
 
 // Plate specifications for KG
 const KG_PLATES_CONFIG = {
@@ -619,6 +620,7 @@ export default function CalculatorPage() {
             <button
               onClick={() => setRefTab('kg-grid')}
               style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
                 background: 'none', border: 'none', cursor: 'pointer',
                 color: refTab === 'kg-grid' ? 'var(--accent)' : 'var(--text3)',
                 fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em',
@@ -626,11 +628,12 @@ export default function CalculatorPage() {
                 transition: 'color 0.15s'
               }}
             >
-              KG ➔ LBS Grid
+              KG <ArrowRight size={12} /> LBS Grid
             </button>
             <button
               onClick={() => setRefTab('lbs-grid')}
               style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
                 background: 'none', border: 'none', cursor: 'pointer',
                 color: refTab === 'lbs-grid' ? 'var(--accent)' : 'var(--text3)',
                 fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em',
@@ -638,7 +641,7 @@ export default function CalculatorPage() {
                 transition: 'color 0.15s'
               }}
             >
-              LBS ➔ KG Grid
+              LBS <ArrowRight size={12} /> KG Grid
             </button>
           </div>
 

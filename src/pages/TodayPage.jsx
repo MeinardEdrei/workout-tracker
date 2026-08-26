@@ -11,6 +11,7 @@ import ExerciseThumbnail from '../components/ExerciseThumbnail';
 import { isSyncExcluded, excludeFromSync } from '../utils/syncPrefs';
 import { createPortal } from 'react-dom';
 import AiChatBubble from '../components/AiChatBubble';
+import { X, Check, RotateCcw, Trophy, BarChart3, StickyNote, Dumbbell, Zap, Moon, PartyPopper, Flame } from 'lucide-react';
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const TODAY_DOW = new Date().getDay();
@@ -99,7 +100,7 @@ function ExerciseHistoryModal({ exName, logs, onClose }) {
           <div className="modal-title" style={{ fontSize: 17, margin: 0, textTransform: 'uppercase' }}>
             {exName} History
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text3)', fontSize: 16, cursor: 'pointer' }}>✕</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', display: 'flex' }}><X size={18} /></button>
         </div>
 
         {history.length === 0 ? (
@@ -147,7 +148,7 @@ function ExerciseHistoryModal({ exName, logs, onClose }) {
                       background: 'rgba(232, 255, 90, 0.12)', border: '1px solid rgba(232, 255, 90, 0.25)',
                       padding: '2px 7px', borderRadius: 10, textTransform: 'uppercase', letterSpacing: '0.04em'
                     }}>
-                      🏆 Max
+                      <Trophy size={11} style={{ verticalAlign: -1, marginRight: 3 }} />Max
                     </span>
                   )}
                 </div>
@@ -207,7 +208,7 @@ function CompletionScreen({ log, onClose, onShare, sharing }) {
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300, animation: 'fadeIn 0.2s ease', padding: 16 }}>
       <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 20, width: '100%', maxWidth: 440, padding: '24px 20px 28px', animation: 'scaleIn 0.25s ease', display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 32, marginBottom: 4 }}>🏆</div>
+          <div style={{ display: 'flex', justifyContent: 'center', color: 'var(--accent)', marginBottom: 4 }}><Trophy size={36} /></div>
           <div style={{ fontSize: 22, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--accent)' }}>Workout Complete!</div>
           <div style={{ fontSize: 13, color: 'var(--text2)', marginTop: 2 }}>{log.dayName}{log.dayTag ? ` · ${log.dayTag}` : ''}</div>
         </div>
@@ -697,7 +698,7 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
         queryClient.invalidateQueries({ queryKey: ['splits'] });
       }
       if (updated.checked && prInfo?.isPr && onShowToast) {
-        onShowToast(`🏆 NEW PR! ${ex.name} @ ${ex.weight}${ex.weightUnit}`);
+        onShowToast(`NEW PR! ${ex.name} @ ${ex.weight}${ex.weightUnit}`, 'success', Trophy);
       }
     },
   });
@@ -897,11 +898,11 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
           onClick={() => weightMutation.mutate({ weight: weightVal, unit: weightUnit })}
           disabled={weightMutation.isPending}
           style={{ padding: '3px 12px', borderRadius: 4, border: 'none', background: 'var(--accent)', color: '#0a0a0a', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}
-        >✓</button>
+        ><Check size={12} /></button>
         <button
           onClick={() => { setEditingWeight(false); setWeightVal(String(ex.weight ?? 0)); setWeightUnit(ex.weightUnit || 'kg'); }}
           style={{ padding: '3px 10px', borderRadius: 4, border: '1px solid var(--border2)', background: 'transparent', color: 'var(--text3)', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}
-        >✕</button>
+        ><X size={12} /></button>
       </div>
     </div>
   ) : (
@@ -939,14 +940,14 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
         style={{ color: 'var(--text3)', fontSize: isHero ? 11 : 10, fontFamily: 'var(--font-mono)', cursor: 'pointer', padding: isHero ? '4px 8px' : '2px 5px', borderRadius: 4, border: '1.5px solid var(--border2)', background: 'var(--bg3)', display: 'inline-flex', alignItems: 'center', gap: 3 }}
         title="View exercise history"
       >
-        📊 History
+        <BarChart3 size={12} /> History
       </button>
       <button
         onClick={() => setEditingNotes(v => !v)}
         style={{ color: ex.notes ? 'var(--accent)' : 'var(--text3)', fontSize: isHero ? 11 : 10, fontFamily: 'var(--font-mono)', cursor: 'pointer', padding: isHero ? '4px 8px' : '2px 5px', borderRadius: 4, border: ex.notes ? '1.5px solid rgba(232,255,90,0.3)' : '1.5px solid var(--border2)', background: ex.notes ? 'rgba(232,255,90,0.06)' : 'var(--bg3)', display: 'inline-flex', alignItems: 'center', gap: 3 }}
         title="Add or edit notes"
       >
-        📝 Note
+        <StickyNote size={12} /> Note
       </button>
     </div>
   );
@@ -961,7 +962,7 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
         onKeyDown={(e) => { if (e.key === 'Enter') notesMutation.mutate(notesVal); }}
         style={{ flex: 1, padding: '3px 7px', fontSize: 11, borderRadius: 5, border: '1px solid var(--accent)', background: 'var(--bg3)', color: 'var(--text)', outline: 'none' }}
       />
-      <button onClick={() => notesMutation.mutate(notesVal)} style={{ padding: '2px 8px', borderRadius: 4, background: 'var(--accent)', color: '#0a0a0a', fontWeight: 800, fontSize: 11, border: 'none', cursor: 'pointer' }}>✓</button>
+      <button onClick={() => notesMutation.mutate(notesVal)} style={{ padding: '2px 8px', borderRadius: 4, background: 'var(--accent)', color: '#0a0a0a', fontWeight: 800, fontSize: 11, border: 'none', cursor: 'pointer' }}><Check size={12} /></button>
     </div>
   ) : ex.notes ? (
     <div
@@ -969,7 +970,7 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
       style={{ fontSize: 11, color: 'var(--text2)', fontStyle: 'italic', cursor: readOnly ? 'default' : 'pointer', background: 'rgba(255,255,255,0.02)', padding: '3px 6px', borderRadius: 4, border: '1px solid var(--border)' }}
       title={readOnly ? '' : 'Tap to edit note'}
     >
-      📝 "{ex.notes}"
+      <StickyNote size={11} style={{ verticalAlign: -1, marginRight: 3 }} />"{ex.notes}"
     </div>
   ) : null;
 
@@ -1026,13 +1027,13 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
           {(ex.isLastWeekWorkout || prInfo) && (
             <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
               {ex.isLastWeekWorkout && (
-                <span style={{ fontSize: 9, fontWeight: 900, letterSpacing: '0.04em', color: 'var(--accent)', background: 'rgba(232,255,90,0.1)', border: '1px solid var(--accent)', padding: '2px 7px', borderRadius: 10, textTransform: 'uppercase' }}>
-                  {ex.isFromOtherDay ? `↺ ${ex.isFromOtherDay}` : '↺ Last Week'}
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 9, fontWeight: 900, letterSpacing: '0.04em', color: 'var(--accent)', background: 'rgba(232,255,90,0.1)', border: '1px solid var(--accent)', padding: '2px 7px', borderRadius: 10, textTransform: 'uppercase' }}>
+                  <RotateCcw size={10} />{ex.isFromOtherDay ? ex.isFromOtherDay : 'Last Week'}
                 </span>
               )}
               {prInfo && (
-                <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.04em', color: 'var(--accent)', background: 'rgba(232,255,90,0.1)', border: '1px solid rgba(232,255,90,0.25)', padding: '2px 7px', borderRadius: 10, textTransform: 'uppercase' }} title={`Previous PR: ${prInfo.prevWeight}${prInfo.prevUnit}`}>
-                  🏆 PR {prInfo.diff ? `(${prInfo.diff})` : ''}
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 800, letterSpacing: '0.04em', color: 'var(--accent)', background: 'rgba(232,255,90,0.1)', border: '1px solid rgba(232,255,90,0.25)', padding: '2px 7px', borderRadius: 10, textTransform: 'uppercase' }} title={`Previous PR: ${prInfo.prevWeight}${prInfo.prevUnit}`}>
+                  <Trophy size={11} /> PR {prInfo.diff ? `(${prInfo.diff})` : ''}
                 </span>
               )}
             </div>
@@ -1084,11 +1085,11 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
               onClick={() => { if (ex.duration > 0) setsRepsMutation.mutate({ sets: setsVal, duration: durationVal, durationUnit: durationUnitVal }); else setsRepsMutation.mutate({ sets: setsVal, reps: repsVal }); }}
               disabled={setsRepsMutation.isPending}
               style={{ padding: '4px 10px', borderRadius: 4, border: 'none', background: 'var(--accent)', color: '#0a0a0a', fontWeight: 900, fontSize: 13, cursor: 'pointer' }}
-            >✓</button>
+            ><Check size={12} /></button>
             <button
               onClick={() => { setEditingSetsReps(false); setSetsVal(String(ex.sets ?? 3)); setRepsVal(String(ex.reps ?? 0)); setDurationVal(String(ex.duration ?? 0)); setDurationUnitVal(ex.durationUnit || 'sec'); }}
               style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border2)', background: 'transparent', color: 'var(--text3)', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
-            >✕</button>
+            ><X size={12} /></button>
           </div>
         ) : (
           <div
@@ -1175,11 +1176,11 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
                 background: 'rgba(232, 255, 90, 0.1)',
                 border: '1px solid var(--accent)',
                 padding: '2px 7px', borderRadius: 10,
-                display: 'inline-flex', alignItems: 'center',
+                display: 'inline-flex', alignItems: 'center', gap: 3,
                 textTransform: 'uppercase',
               }}
             >
-              {ex.isFromOtherDay ? `↺ ${ex.isFromOtherDay}` : '↺ Last Week'}
+              <RotateCcw size={10} />{ex.isFromOtherDay ? ex.isFromOtherDay : 'Last Week'}
             </span>
           )}
           {prInfo && (
@@ -1195,7 +1196,7 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
               }}
               title={`Previous PR: ${prInfo.prevWeight}${prInfo.prevUnit}`}
             >
-              🏆 PR {prInfo.diff ? `(${prInfo.diff})` : ''}
+              <Trophy size={11} /> PR {prInfo.diff ? `(${prInfo.diff})` : ''}
             </span>
           )}
         </div>
@@ -1278,9 +1279,9 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
                 }
               }}
               disabled={setsRepsMutation.isPending}
-              style={{ padding: '2px 7px', borderRadius: 4, border: 'none', background: 'var(--accent)', color: '#0a0a0a', fontWeight: 900, fontSize: 11, cursor: 'pointer' }}
+              style={{ padding: '2px 7px', borderRadius: 4, border: 'none', background: 'var(--accent)', color: '#0a0a0a', fontWeight: 900, fontSize: 11, cursor: 'pointer', display: 'inline-flex' }}
             >
-              ✓
+              <Check size={12} />
             </button>
             <button
               onClick={() => {
@@ -1290,9 +1291,9 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
                 setDurationVal(String(ex.duration ?? 0));
                 setDurationUnitVal(ex.durationUnit || 'sec');
               }}
-              style={{ padding: '2px 6px', borderRadius: 4, border: '1px solid var(--border2)', background: 'transparent', color: 'var(--text3)', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}
+              style={{ padding: '2px 6px', borderRadius: 4, border: '1px solid var(--border2)', background: 'transparent', color: 'var(--text3)', fontWeight: 700, fontSize: 11, cursor: 'pointer', display: 'inline-flex' }}
             >
-              ✕
+              <X size={12} />
             </button>
           </div>
         ) : (
@@ -1333,7 +1334,7 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
                   }}
                   title="View exercise history"
                 >
-                  📊 History
+                  <BarChart3 size={12} /> History
                 </button>
                 <button
                   onClick={() => setEditingNotes(v => !v)}
@@ -1347,7 +1348,7 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
                   }}
                   title="Add or edit notes"
                 >
-                  📝 Note
+                  <StickyNote size={12} /> Note
                 </button>
               </>
             )}
@@ -1367,7 +1368,7 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
               }}
               style={{ flex: 1, padding: '3px 7px', fontSize: 11, borderRadius: 5, border: '1px solid var(--accent)', background: 'var(--bg3)', color: 'var(--text)', outline: 'none' }}
             />
-            <button onClick={() => notesMutation.mutate(notesVal)} style={{ padding: '2px 8px', borderRadius: 4, background: 'var(--accent)', color: '#0a0a0a', fontWeight: 800, fontSize: 11, border: 'none', cursor: 'pointer' }}>✓</button>
+            <button onClick={() => notesMutation.mutate(notesVal)} style={{ padding: '2px 8px', borderRadius: 4, background: 'var(--accent)', color: '#0a0a0a', fontWeight: 800, fontSize: 11, border: 'none', cursor: 'pointer' }}><Check size={12} /></button>
           </div>
         ) : ex.notes ? (
           <div
@@ -1375,7 +1376,7 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
             style={{ fontSize: 11, color: 'var(--text2)', fontStyle: 'italic', marginTop: 4, cursor: readOnly ? 'default' : 'pointer', background: 'rgba(255,255,255,0.02)', padding: '3px 6px', borderRadius: 4, border: '1px solid var(--border)' }}
             title={readOnly ? '' : 'Tap to edit note'}
           >
-            📝 "{ex.notes}"
+            <StickyNote size={11} style={{ verticalAlign: -1, marginRight: 3 }} />"{ex.notes}"
           </div>
         ) : null}
         {ex.muscleTargets?.length > 0 && (
@@ -1511,8 +1512,8 @@ function ActionPermissionModal({ pendingAction, onAllow, onDeny }) {
   return createPortal(
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onDeny()}>
       <div className="modal">
-        <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: 10 }}>
-          ⚡ AI wants to make a change
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: 10 }}>
+          <Zap size={13} /> AI wants to make a change
         </div>
         <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>
           {args.exerciseName}
@@ -2176,9 +2177,9 @@ function RestDayCard({ dayName }) {
       <div style={{
         width: 160, height: 160, borderRadius: '50%', flexShrink: 0,
         background: 'var(--bg3)', border: '1.5px solid var(--border2)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 64,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text2)',
       }}>
-        🌙
+        <Moon size={64} strokeWidth={1.5} />
       </div>
       <div>
         <div style={{ fontSize: 24, fontWeight: 900, fontFamily: 'var(--font-display)', letterSpacing: '0.02em', textTransform: 'uppercase', color: 'var(--text)' }}>
@@ -2233,7 +2234,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
     };
     setExercises(prev => [...prev, newEx]);
     if (onShowToast) {
-      onShowToast(`💪 Added "${lwEx.name}" to today's session!`);
+      onShowToast(`Added "${lwEx.name}" to today's session!`, 'success', Dumbbell);
     }
   }
 
@@ -2258,7 +2259,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
     setExercises(prev => [...prev, newEx]);
     setShowAddModal(false);
     if (onShowToast) {
-      onShowToast(`💪 Added "${exData.name}" to today's session!`);
+      onShowToast(`Added "${exData.name}" to today's session!`, 'success', Dumbbell);
     }
   }
 
@@ -2369,7 +2370,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
       ) : (
         <>
           {isCompleted ? (
-            <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--green)', letterSpacing: '0.08em', textTransform: 'uppercase', background: 'rgba(68,255,136,0.1)', padding: '4px 8px', borderRadius: 4 }}>✓ Done</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 800, color: 'var(--green)', letterSpacing: '0.08em', textTransform: 'uppercase', background: 'rgba(68,255,136,0.1)', padding: '4px 8px', borderRadius: 4 }}><Check size={11} /> Done</span>
           ) : isPast ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               {isRetaking && total > 0 && (
@@ -2470,7 +2471,8 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
                           <ExerciseRow variant="hero" key={heroEx._id} ex={heroEx} index={displayExercises.indexOf(heroEx)} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} dateStr={dateStr} logs={logs} onShowToast={onShowToast} localOnly={heroEx.isLastWeekWorkout} />
                         ) : (
                           <div style={{ padding: '24px 16px', textAlign: 'center', borderRadius: 14, border: '1.5px solid var(--accent)', background: 'var(--bg2)' }}>
-                            <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>🎉 All done</div>
+                            <div style={{ display: 'flex', justifyContent: 'center', color: 'var(--accent)', marginBottom: 6 }}><PartyPopper size={22} /></div>
+                            <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>All done</div>
                             <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 4 }}>Hit Finish Workout below to log it.</div>
                           </div>
                         )}
@@ -2526,7 +2528,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
                   alignItems: 'center',
                   gap: 6
                 }}>
-                  <span style={{ fontSize: 12 }}>↺</span> Last Week's Exercises
+                  <RotateCcw size={13} /> Last Week's Exercises
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {lastWeekLog.exercises.map((lwEx, idx) => {
@@ -2612,8 +2614,8 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
             {(isToday || isRetaking) && !isCompleted && (
               <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', display: 'flex', gap: 8 }}>
                 {checkedCount > 0 ? (
-                  <button className="btn btn-accent" style={{ flex: 1, fontSize: 14, padding: '12px' }} onClick={() => setShowConfirmFinish(true)} disabled={saveLogMutation.isPending}>
-                    {saveLogMutation.isPending ? 'Saving…' : `✓ Finish Workout (${checkedCount} done)`}
+                  <button className="btn btn-accent" style={{ flex: 1, fontSize: 14, padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }} onClick={() => setShowConfirmFinish(true)} disabled={saveLogMutation.isPending}>
+                    {saveLogMutation.isPending ? 'Saving…' : (<><Check size={15} /> Finish Workout ({checkedCount} done)</>)}
                   </button>
                 ) : null}
                 {isRetaking && (
@@ -2774,15 +2776,15 @@ function ConsistencyCard({ logs, activeSplit }) {
     return { streakWeeks, streakDays, thisWeekDone, thisWeekTarget: targetDays, weekDays };
   }, [logs, activeSplit]);
 
-  const streakDisplay = stats.streakWeeks > 0 
-    ? `🔥 ${stats.streakWeeks} WEEK STREAK` 
-    : `🔥 ${stats.streakDays} DAY STREAK`;
+  const streakDisplay = stats.streakWeeks > 0
+    ? `${stats.streakWeeks} WEEK STREAK`
+    : `${stats.streakDays} DAY STREAK`;
 
   return (
     <div style={{ margin: '0 16px 16px', padding: '16px', background: 'var(--bg2)', borderRadius: 12, border: '1px solid var(--border)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--accent)', letterSpacing: '0.05em' }}>
-          {streakDisplay}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, fontWeight: 800, color: 'var(--accent)', letterSpacing: '0.05em' }}>
+          <Flame size={15} /> {streakDisplay}
         </div>
         <div style={{ fontSize: 11, color: 'var(--text2)', fontFamily: 'var(--font-mono)' }}>
           {stats.thisWeekDone} / {stats.thisWeekTarget} workouts
@@ -2939,8 +2941,8 @@ export default function TodayPage() {
   const [viewMode, setViewMode] = useState('pager'); // 'pager' | 'overview'
   const [jumpToIndex, setJumpToIndex] = useState(null);
 
-  function showToast(message, type = 'success') {
-    setToast({ message, type });
+  function showToast(message, type = 'success', Icon) {
+    setToast({ message, type, Icon });
     setTimeout(() => setToast(null), 3500);
   }
   const { data: splits = [], isLoading, error } = useQuery({
@@ -3338,8 +3340,9 @@ Coach:`;
           fontSize: 13, fontWeight: 700, boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
           display: 'flex', alignItems: 'center', gap: 10, animation: 'fadeIn 0.2s ease'
         }}>
+          {toast.Icon && <toast.Icon size={16} style={{ color: 'var(--accent)', flexShrink: 0 }} />}
           {toast.message}
-          <button onClick={() => setToast(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', fontSize: 14 }}>✕</button>
+          <button onClick={() => setToast(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', display: 'flex' }}><X size={14} /></button>
         </div>
       )}
     </div>

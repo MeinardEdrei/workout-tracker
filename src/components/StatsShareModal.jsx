@@ -1,5 +1,6 @@
 import { useState, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { Check, Dumbbell } from 'lucide-react';
 
 const DAYS_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -381,7 +382,7 @@ export default function StatsShareModal({ logs, onClose }) {
                         fontWeight: 900,
                       }}>
                         {done ? (
-                          <span style={{ fontSize: 9 }}>✓</span>
+                          <Check size={10} />
                         ) : (
                           <span style={{ opacity: 0.3 }}>·</span>
                         )}
@@ -436,8 +437,9 @@ export default function StatsShareModal({ logs, onClose }) {
 
             {/* Bottom Footer Section */}
             <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, marginTop: 10 }}>
-              <div>
-                <span style={{ fontSize: 9, fontWeight: 900, letterSpacing: '0.08em', color: background === 'dark' ? activeAccent : '#ffffff', textTransform: 'uppercase', fontFamily: 'var(--font-mono)' }}>💪 ANATOMICALLY CORRECT</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Dumbbell size={11} style={{ color: background === 'dark' ? activeAccent : '#ffffff' }} />
+                <span style={{ fontSize: 9, fontWeight: 900, letterSpacing: '0.08em', color: background === 'dark' ? activeAccent : '#ffffff', textTransform: 'uppercase', fontFamily: 'var(--font-mono)' }}>ANATOMICALLY CORRECT</span>
               </div>
               {topTag && (
                 <div style={{ textAlign: 'right' }}>

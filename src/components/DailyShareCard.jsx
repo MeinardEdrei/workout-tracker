@@ -1,6 +1,7 @@
 // DailyShareCard.jsx
 // Rendered off-screen, captured by html2canvas
 import BodyMap from './BodyMap';
+import { Dumbbell } from 'lucide-react';
 
 export default function DailyShareCard({ log, cardRef }) {
   if (!log) return null;
@@ -173,8 +174,8 @@ export default function DailyShareCard({ log, cardRef }) {
         borderTop: '1px solid #181820',
         background: '#0f0f14',
       }}>
-        <div style={{ fontSize: 11, color: '#525262', fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-          💪 Workout Tracker
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#525262', fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+          <Dumbbell size={13} /> Workout Tracker
         </div>
         <div style={{ fontSize: 10, color: '#3d3d4d', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
           workout-tracker.vercel.app

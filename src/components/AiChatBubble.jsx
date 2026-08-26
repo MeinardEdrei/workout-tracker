@@ -1,4 +1,5 @@
 import { createPortal } from 'react-dom';
+import { Sparkles, KeyRound, RotateCcw } from 'lucide-react';
 
 /* ── Markdown renderer (shared) ─────────────────────────────────────────────── */
 function parseBold(text) {
@@ -113,16 +114,16 @@ export default function AiChatBubble({
       {/* Panel header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 14px', borderBottom: '1px solid rgba(232,255,90,0.1)', background: 'linear-gradient(135deg,rgba(232,255,90,0.06) 0%,transparent 100%)', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 14 }}>✨</span>
+          <Sparkles size={14} style={{ color: 'var(--accent)' }} />
           <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{title}</span>
           {badge && <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', background: 'rgba(255,255,255,0.04)', padding: '2px 5px', borderRadius: 3 }}>{badge}</span>}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button onClick={onToggleSettings} style={{ background: 'none', border: 'none', color: 'var(--text3)', fontSize: 10, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-            🔑 {apiKey ? 'Key set' : 'Setup'}
+          <button onClick={onToggleSettings} style={{ display: 'flex', alignItems: 'center', gap: 3, background: 'none', border: 'none', color: 'var(--text3)', fontSize: 10, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            <KeyRound size={11} /> {apiKey ? 'Key set' : 'Setup'}
           </button>
           {onRestart && (
-            <button onClick={onRestart} disabled={loadingAi} style={{ background: 'none', border: 'none', color: 'var(--text3)', fontSize: 13, cursor: 'pointer', lineHeight: 1 }} title="Restart">↺</button>
+            <button onClick={onRestart} disabled={loadingAi} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', display: 'flex' }} title="Restart"><RotateCcw size={13} /></button>
           )}
           <button onClick={onToggle} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 2 }}>
             <XIcon />
@@ -159,7 +160,7 @@ export default function AiChatBubble({
             {loadingAi ? (
               <><span style={{ display: 'inline-block', width: 12, height: 12, border: '1.5px solid var(--accent)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.6s linear infinite' }} /> Analyzing…</>
             ) : (
-              <><span>✨</span> Get AI Coach Critique &amp; Insights</>
+              <><Sparkles size={14} /> Get AI Coach Critique &amp; Insights</>
             )}
           </button>
         </div>

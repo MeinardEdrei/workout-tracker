@@ -8,6 +8,7 @@ import SplitEditor from './EditPage';
 import BrowseSplitsPage from './BrowseSplitsPage';
 import LeaderboardPage from '../components/LeaderboardPage';
 import { setSplitVisibility, reapplySplit as reapplySplitApi, getRanking } from '../api/index';
+import { X, Trophy, ArrowRight, RotateCcw } from 'lucide-react';
 import AiChatBubble from '../components/AiChatBubble';
 
 const API = import.meta.env.VITE_API_URL || '';
@@ -845,7 +846,7 @@ Coach:`;
           animation: 'fadeIn 0.15s ease',
         }}>
           {toast.message}
-          <button onClick={() => setToast(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', fontSize: 14 }}>✕</button>
+          <button onClick={() => setToast(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', display: 'flex' }}><X size={14} /></button>
         </div>
       )}
 
@@ -874,7 +875,7 @@ Coach:`;
           animation: 'fadeIn 0.15s ease',
         }}>
           <span style={{ flex: 1 }}>Sign in failed. Please try again.</span>
-          <button onClick={() => setSignInFailed(false)} style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, flexShrink: 0 }}>✕</button>
+          <button onClick={() => setSignInFailed(false)} style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', flexShrink: 0 }}><X size={14} /></button>
         </div>
       )}
 
@@ -1055,11 +1056,11 @@ Coach:`;
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: isLoggedIn && ranking.length > 0 ? 12 : 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 14 }}>🏆</span>
+              <Trophy size={14} style={{ color: 'var(--text3)' }} />
               <span style={{ fontSize: 12, fontWeight: 900, fontFamily: 'var(--font-mono)', color: 'var(--text3)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Active Leaderboard</span>
             </div>
-            <span style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              {isLoggedIn ? 'View Standings →' : 'Sign in to join →'}
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, color: 'var(--accent)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              {isLoggedIn ? 'View Standings' : 'Sign in to join'} <ArrowRight size={12} />
             </span>
           </div>
 
@@ -1168,7 +1169,7 @@ Coach:`;
                         </span>
                       )}
                       {split.sourceId && (
-                        <span style={{ color: 'var(--text3)', fontSize: 10 }}>↺ community</span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, color: 'var(--text3)', fontSize: 10 }}><RotateCcw size={9} /> community</span>
                       )}
                     </div>
                   </div>

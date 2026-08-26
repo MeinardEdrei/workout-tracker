@@ -8,6 +8,7 @@ import ExerciseThumbnail from '../components/ExerciseThumbnail';
 import { isSyncExcluded, excludeFromSync } from '../utils/syncPrefs';
 import { createPortal } from 'react-dom';
 import * as api from '../api/index.js';
+import { Check } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
@@ -2154,7 +2155,7 @@ function DayEditor({ day, split, onBack, onDayUpdated }) {
               }}
               onClick={toggleRest}
             >
-              {isRest ? '✓ Rest' : 'Rest'}
+              {isRest ? (<><Check size={12} /> Rest</>) : 'Rest'}
             </button>
           </div>
         </div>

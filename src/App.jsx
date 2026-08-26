@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { X } from 'lucide-react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { useQueryClient } from '@tanstack/react-query';
 import './index.css';
@@ -121,8 +122,8 @@ function AuthErrorToast() {
       </span>
       <button
         onClick={dismissAuthError}
-        style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, flexShrink: 0 }}
-      >✕</button>
+        style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', flexShrink: 0 }}
+      ><X size={14} /></button>
     </div>
   );
 }
@@ -183,7 +184,7 @@ function AuthCorner() {
           animation: 'fadeIn 0.15s ease',
         }}>
           <span style={{ flex: 1 }}>Sign in failed. Please try again.</span>
-          <button onClick={() => setSignInFailed(false)} style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, flexShrink: 0 }}>✕</button>
+          <button onClick={() => setSignInFailed(false)} style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', flexShrink: 0 }}><X size={14} /></button>
         </div>
       )}
 
@@ -384,7 +385,7 @@ function ReloadPrompt() {
           onMouseEnter={(e) => e.currentTarget.style.color = 'var(--text2)'}
           onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text3)'}
         >
-          ✕
+          <X size={16} />
         </button>
       </div>
     </div>

@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getPublicSplits } from '../api/index';
 import { useAuth } from '../context/AuthContext';
 import { useStorage } from '../hooks/useStorage';
+import { X, Check, ArrowLeft, ArrowRight } from 'lucide-react';
 
 function BackIcon() {
   return (
@@ -52,7 +53,7 @@ function Toast({ message, type = 'success', onClose }) {
       animation: 'fadeIn 0.15s ease',
     }}>
       {message}
-      <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', fontSize: 14 }}>✕</button>
+      <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', display: 'flex' }}><X size={14} /></button>
     </div>
   );
 }
@@ -216,7 +217,7 @@ export default function BrowseSplitsPage({ onBack }) {
                       transition: 'all 0.15s', whiteSpace: 'nowrap', flexShrink: 0,
                     }}
                   >
-                    {isCopying ? <><InlineSpinner /> Adding…</> : isAdded ? '✓ Added' : '+ Add'}
+                    {isCopying ? <><InlineSpinner /> Adding…</> : isAdded ? <><Check size={13} /> Added</> : '+ Add'}
                   </button>
                 </div>
 
@@ -285,7 +286,7 @@ export default function BrowseSplitsPage({ onBack }) {
                 onClick={() => setPage((p) => p - 1)}
                 style={{ fontSize: 12 }}
               >
-                ← Prev
+                <ArrowLeft size={12} /> Prev
               </button>
               <span style={{ fontSize: 12, color: 'var(--text3)' }}>Page {page} of {data.pages}</span>
               <button
@@ -294,7 +295,7 @@ export default function BrowseSplitsPage({ onBack }) {
                 onClick={() => setPage((p) => p + 1)}
                 style={{ fontSize: 12 }}
               >
-                Next →
+                Next <ArrowRight size={12} />
               </button>
             </div>
           )}
