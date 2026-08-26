@@ -3,6 +3,7 @@ const router = express.Router();
 const fs = require('fs');
 const path = require('path');
 const { requireAuth } = require('../middleware/auth');
+const { findBestMatch } = require('../utils/matchExercise');
 
 router.use(requireAuth);
 
@@ -72,56 +73,8 @@ router.post('/fetch-image', async (req, res) => {
   }
 
   try {
-    const normalizeName = (str) => {
-      return str.toLowerCase()
-        .replace(/\bdb\b/g, 'dumbbell')
-        .replace(/\bbb\b/g, 'barbell')
-        .replace(/\brdl\b/g, 'romanian deadlift')
-        .replace(/\bohp\b/g, 'overhead press')
-        .replace(/\bpushups?\b/g, 'push up')
-        .replace(/\bpullups?\b/g, 'pull up')
-        .replace(/\bchinups?\b/g, 'chin up')
-        .replace(/\bups\b/g, 'up')
-        .replace(/[\(\)\-\+,]/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-    };
-
-    const query = normalizeName(exerciseName);
     const exercises = getExercises();
-
-    let bestMatch = null;
-    let bestScore = 0;
-
-    for (const e of exercises) {
-      const target = normalizeName(e.name);
-      
-      // 1. Exact match (highest priority)
-      if (target === query) {
-        bestMatch = e;
-        bestScore = 2; // high score to override partials
-        break;
-      }
-
-      // 2. Token match score
-      const queryWords = query.split(' ').filter(w => w.length > 1);
-      if (queryWords.length === 0) continue;
-
-      let matchedWords = 0;
-      for (const qw of queryWords) {
-        if (target.includes(qw)) {
-          matchedWords++;
-        }
-      }
-
-      const score = matchedWords / queryWords.length;
-      
-      // Require at least 60% of the query words to match
-      if (score >= 0.6 && score > bestScore) {
-        bestMatch = e;
-        bestScore = score;
-      }
-    }
+    const { match: bestMatch, score: bestScore } = findBestMatch(exercises, exerciseName);
 
     console.log('[fetch-image] query:', exerciseName, '| match:', bestMatch ? bestMatch.name : 'none', '| score:', bestScore);
 
