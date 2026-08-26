@@ -603,7 +603,8 @@ function CategoryHeader({ type }) {
   );
 }
 
-function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly, isCompleted, dateStr, logs, onShowToast, localOnly }) {
+function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly, isCompleted, dateStr, logs, onShowToast, localOnly, variant = 'compact' }) {
+  const isHero = variant === 'hero';
   const queryClient = useQueryClient();
   const { storage, storageKey } = useStorage();
   const [editingWeight, setEditingWeight] = useState(false);
@@ -849,6 +850,283 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
   }
 
   const repsLabel = (ex.untilFailure || !ex.reps || ex.reps === 0) ? '∞' : ex.reps;
+
+  const weightEditorEl = editingWeight ? (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 5, alignItems: isHero ? 'center' : 'flex-end', flexShrink: 0 }}>
+      <div style={{ display: 'flex', gap: 4 }}>
+        <input
+          type="number" min="0" step="0.5"
+          value={weightVal}
+          onChange={(e) => setWeightVal(e.target.value)}
+          autoFocus
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') weightMutation.mutate({ weight: weightVal, unit: weightUnit });
+            if (e.key === 'Escape') { setEditingWeight(false); setWeightVal(String(ex.weight ?? 0)); }
+          }}
+          style={{
+            width: isHero ? 90 : 62, padding: isHero ? '8px 10px' : '5px 8px', borderRadius: 6,
+            border: '1.5px solid var(--accent)',
+            background: 'var(--bg3)', color: 'var(--text)',
+            fontSize: isHero ? 20 : 14, fontFamily: 'var(--font-mono)', textAlign: 'center', outline: 'none',
+          }}
+        />
+        <select
+          value={weightUnit}
+          onChange={(e) => {
+            const nextUnit = e.target.value;
+            const prevUnit = weightUnit;
+            setWeightUnit(nextUnit);
+            const num = parseFloat(weightVal);
+            if (!isNaN(num) && num > 0) {
+              const converted = convertWeight(num, prevUnit, nextUnit);
+              const rounded = Math.round(converted * 2) / 2;
+              setWeightVal(String(rounded));
+            }
+          }}
+          style={{
+            padding: '5px 4px', borderRadius: 6, border: '1px solid var(--border2)',
+            background: 'var(--bg3)', color: 'var(--text2)', fontSize: 11, outline: 'none',
+          }}
+        >
+          <option value="kg">kg</option>
+          <option value="lbs">lbs</option>
+        </select>
+      </div>
+      <div style={{ display: 'flex', gap: 4 }}>
+        <button
+          onClick={() => weightMutation.mutate({ weight: weightVal, unit: weightUnit })}
+          disabled={weightMutation.isPending}
+          style={{ padding: '3px 12px', borderRadius: 4, border: 'none', background: 'var(--accent)', color: '#0a0a0a', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}
+        >✓</button>
+        <button
+          onClick={() => { setEditingWeight(false); setWeightVal(String(ex.weight ?? 0)); setWeightUnit(ex.weightUnit || 'kg'); }}
+          style={{ padding: '3px 10px', borderRadius: 4, border: '1px solid var(--border2)', background: 'transparent', color: 'var(--text3)', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}
+        >✕</button>
+      </div>
+    </div>
+  ) : (
+    <div
+      onClick={() => !readOnly && setEditingWeight(true)}
+      title={readOnly ? '' : 'Tap to update weight'}
+      style={{
+        display: 'flex', flexDirection: 'column', alignItems: isHero ? 'center' : 'flex-end',
+        cursor: readOnly ? 'default' : 'pointer', flexShrink: 0, minWidth: 44,
+      }}
+    >
+      <div style={{
+        fontSize: isHero ? 48 : 24, fontWeight: 900, fontFamily: 'var(--font-mono)',
+        color: ex.weight > 0 ? 'var(--accent)' : 'var(--text3)',
+        letterSpacing: '-0.03em', lineHeight: 1,
+      }}>
+        {ex.weight > 0 ? ex.weight : '—'}
+      </div>
+      <div style={{ fontSize: isHero ? 13 : 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)', marginTop: isHero ? 4 : 1 }}>
+        {ex.weight > 0 ? ex.weightUnit : (readOnly ? '' : 'tap to set weight')}
+      </div>
+    </div>
+  );
+
+  const actionsRowEl = !readOnly && (
+    <div style={{ display: 'flex', alignItems: 'center', gap: isHero ? 8 : 4, flexWrap: 'wrap', justifyContent: isHero ? 'center' : 'flex-start' }}>
+      <button
+        onClick={() => setShowSwapModal(true)}
+        style={{ color: 'var(--text3)', fontSize: isHero ? 11 : 10, fontFamily: 'var(--font-mono)', cursor: 'pointer', padding: isHero ? '4px 8px' : '2px 5px', borderRadius: 4, border: '1.5px solid var(--border2)', background: 'var(--bg3)', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+      >
+        <SwapIcon /> Swap
+      </button>
+      <button
+        onClick={() => setShowHistoryModal(true)}
+        style={{ color: 'var(--text3)', fontSize: isHero ? 11 : 10, fontFamily: 'var(--font-mono)', cursor: 'pointer', padding: isHero ? '4px 8px' : '2px 5px', borderRadius: 4, border: '1.5px solid var(--border2)', background: 'var(--bg3)', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+        title="View exercise history"
+      >
+        📊 History
+      </button>
+      <button
+        onClick={() => setEditingNotes(v => !v)}
+        style={{ color: ex.notes ? 'var(--accent)' : 'var(--text3)', fontSize: isHero ? 11 : 10, fontFamily: 'var(--font-mono)', cursor: 'pointer', padding: isHero ? '4px 8px' : '2px 5px', borderRadius: 4, border: ex.notes ? '1.5px solid rgba(232,255,90,0.3)' : '1.5px solid var(--border2)', background: ex.notes ? 'rgba(232,255,90,0.06)' : 'var(--bg3)', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+        title="Add or edit notes"
+      >
+        📝 Note
+      </button>
+    </div>
+  );
+
+  const notesEditorEl = editingNotes ? (
+    <div style={{ display: 'flex', gap: 4, width: isHero ? '100%' : undefined }}>
+      <input
+        type="text"
+        placeholder="Add note (e.g. seat 4, slow eccentric)..."
+        value={notesVal}
+        onChange={(e) => setNotesVal(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') notesMutation.mutate(notesVal); }}
+        style={{ flex: 1, padding: '3px 7px', fontSize: 11, borderRadius: 5, border: '1px solid var(--accent)', background: 'var(--bg3)', color: 'var(--text)', outline: 'none' }}
+      />
+      <button onClick={() => notesMutation.mutate(notesVal)} style={{ padding: '2px 8px', borderRadius: 4, background: 'var(--accent)', color: '#0a0a0a', fontWeight: 800, fontSize: 11, border: 'none', cursor: 'pointer' }}>✓</button>
+    </div>
+  ) : ex.notes ? (
+    <div
+      onClick={() => !readOnly && setEditingNotes(true)}
+      style={{ fontSize: 11, color: 'var(--text2)', fontStyle: 'italic', cursor: readOnly ? 'default' : 'pointer', background: 'rgba(255,255,255,0.02)', padding: '3px 6px', borderRadius: 4, border: '1px solid var(--border)' }}
+      title={readOnly ? '' : 'Tap to edit note'}
+    >
+      📝 "{ex.notes}"
+    </div>
+  ) : null;
+
+  const modalsEl = (
+    <>
+      {syncPrompt && (
+        <WeightSyncModal
+          exName={ex.name}
+          oldWeight={syncPrompt.oldWeight} oldUnit={syncPrompt.oldUnit}
+          newWeight={syncPrompt.newWeight} newUnit={syncPrompt.newUnit}
+          oldSets={syncPrompt.oldSets} newSets={syncPrompt.newSets}
+          oldReps={syncPrompt.oldReps} newReps={syncPrompt.newReps}
+          oldUntilFailure={syncPrompt.oldUntilFailure} newUntilFailure={syncPrompt.newUntilFailure}
+          otherDays={syncPrompt.otherDays} otherSplits={syncPrompt.otherSplits}
+          onSync={handleSync}
+          onSkip={() => setSyncPrompt(null)}
+          onExclude={() => { excludeFromSync(ex.name); setSyncPrompt(null); }}
+        />
+      )}
+      {showHistoryModal && (
+        <ExerciseHistoryModal exName={ex.name} logs={logs} onClose={() => setShowHistoryModal(false)} />
+      )}
+      {showSwapModal && (
+        <SwapExerciseModal
+          splitDays={splitDays}
+          currentExName={ex.name}
+          onConfirm={(updatedData) => swapMutation.mutate(updatedData)}
+          onClose={() => setShowSwapModal(false)}
+        />
+      )}
+    </>
+  );
+
+  if (isHero) {
+    return (
+      <div style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 14,
+        padding: '28px 20px', borderRadius: 20, border: '1.5px solid var(--accent)',
+        background: 'var(--bg2)', boxShadow: '0 8px 32px rgba(232,255,90,0.1)',
+        opacity: toggleMutation.isPending ? 0.6 : 1, transition: 'opacity 0.15s',
+        maxWidth: 420, margin: '0 auto', width: '100%', boxSizing: 'border-box',
+      }}>
+        <ExerciseThumbnail imageUrl={ex.imageUrl} name={ex.name} size={160} />
+
+        <div>
+          <div style={{
+            fontSize: 24, fontWeight: 900, fontFamily: 'var(--font-display)',
+            letterSpacing: '0.02em', textTransform: 'uppercase',
+            textDecoration: effectiveChecked ? 'line-through' : 'none',
+            color: effectiveChecked ? 'var(--text3)' : 'var(--text)',
+          }}>
+            {ex.name}
+          </div>
+          {(ex.isLastWeekWorkout || prInfo) && (
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+              {ex.isLastWeekWorkout && (
+                <span style={{ fontSize: 9, fontWeight: 900, letterSpacing: '0.04em', color: 'var(--accent)', background: 'rgba(232,255,90,0.1)', border: '1px solid var(--accent)', padding: '2px 7px', borderRadius: 10, textTransform: 'uppercase' }}>
+                  {ex.isFromOtherDay ? `↺ ${ex.isFromOtherDay}` : '↺ Last Week'}
+                </span>
+              )}
+              {prInfo && (
+                <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.04em', color: 'var(--accent)', background: 'rgba(232,255,90,0.1)', border: '1px solid rgba(232,255,90,0.25)', padding: '2px 7px', borderRadius: 10, textTransform: 'uppercase' }} title={`Previous PR: ${prInfo.prevWeight}${prInfo.prevUnit}`}>
+                  🏆 PR {prInfo.diff ? `(${prInfo.diff})` : ''}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+
+        {weightEditorEl}
+
+        {editingSetsReps ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <input
+              type="number" min="1" max="99" value={setsVal} onChange={(e) => setSetsVal(e.target.value)} autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  if (ex.duration > 0) setsRepsMutation.mutate({ sets: setsVal, duration: durationVal, durationUnit: durationUnitVal });
+                  else setsRepsMutation.mutate({ sets: setsVal, reps: repsVal });
+                }
+                if (e.key === 'Escape') { setEditingSetsReps(false); setSetsVal(String(ex.sets ?? 3)); setRepsVal(String(ex.reps ?? 0)); setDurationVal(String(ex.duration ?? 0)); setDurationUnitVal(ex.durationUnit || 'sec'); }
+              }}
+              style={{ width: 44, padding: '5px 6px', borderRadius: 5, border: '1.5px solid var(--accent)', background: 'var(--bg3)', color: 'var(--text)', fontSize: 14, fontFamily: 'var(--font-mono)', textAlign: 'center', outline: 'none' }}
+            />
+            <span style={{ fontSize: 13, color: 'var(--text3)' }}>×</span>
+            {ex.duration > 0 ? (
+              <>
+                <input
+                  type="number" min="1" max="999" value={durationVal} onChange={(e) => setDurationVal(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') setsRepsMutation.mutate({ sets: setsVal, duration: durationVal, durationUnit: durationUnitVal });
+                    if (e.key === 'Escape') { setEditingSetsReps(false); setSetsVal(String(ex.sets ?? 3)); setDurationVal(String(ex.duration ?? 0)); setDurationUnitVal(ex.durationUnit || 'sec'); }
+                  }}
+                  style={{ width: 50, padding: '5px 6px', borderRadius: 5, border: '1.5px solid var(--accent)', background: 'var(--bg3)', color: 'var(--text)', fontSize: 14, fontFamily: 'var(--font-mono)', textAlign: 'center', outline: 'none' }}
+                />
+                <select value={durationUnitVal} onChange={(e) => setDurationUnitVal(e.target.value)} style={{ padding: '5px 6px', borderRadius: 5, border: '1.5px solid var(--accent)', background: 'var(--bg3)', color: 'var(--text)', fontSize: 13, outline: 'none', cursor: 'pointer' }}>
+                  <option value="sec">sec</option>
+                  <option value="min">min</option>
+                </select>
+              </>
+            ) : (
+              <input
+                type="number" min="0" max="999" value={repsVal} onChange={(e) => setRepsVal(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') setsRepsMutation.mutate({ sets: setsVal, reps: repsVal });
+                  if (e.key === 'Escape') { setEditingSetsReps(false); setSetsVal(String(ex.sets ?? 3)); setRepsVal(String(ex.reps ?? 0)); }
+                }}
+                style={{ width: 44, padding: '5px 6px', borderRadius: 5, border: '1.5px solid var(--accent)', background: 'var(--bg3)', color: 'var(--text)', fontSize: 14, fontFamily: 'var(--font-mono)', textAlign: 'center', outline: 'none' }}
+              />
+            )}
+            <button
+              onClick={() => { if (ex.duration > 0) setsRepsMutation.mutate({ sets: setsVal, duration: durationVal, durationUnit: durationUnitVal }); else setsRepsMutation.mutate({ sets: setsVal, reps: repsVal }); }}
+              disabled={setsRepsMutation.isPending}
+              style={{ padding: '4px 10px', borderRadius: 4, border: 'none', background: 'var(--accent)', color: '#0a0a0a', fontWeight: 900, fontSize: 13, cursor: 'pointer' }}
+            >✓</button>
+            <button
+              onClick={() => { setEditingSetsReps(false); setSetsVal(String(ex.sets ?? 3)); setRepsVal(String(ex.reps ?? 0)); setDurationVal(String(ex.duration ?? 0)); setDurationUnitVal(ex.durationUnit || 'sec'); }}
+              style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border2)', background: 'transparent', color: 'var(--text3)', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
+            >✕</button>
+          </div>
+        ) : (
+          <div
+            onClick={() => !readOnly && setEditingSetsReps(true)}
+            title={readOnly ? '' : 'Tap to edit sets & reps/duration'}
+            style={{ fontSize: 15, color: 'var(--text2)', fontFamily: 'var(--font-mono)', cursor: readOnly ? 'default' : 'pointer' }}
+          >
+            {ex.duration > 0 ? <span>{ex.sets} × {ex.duration}{ex.durationUnit || 'sec'}</span> : <span>{ex.sets} × {repsLabel}</span>}
+          </div>
+        )}
+
+        {actionsRowEl}
+        {notesEditorEl}
+
+        {ex.muscleTargets?.length > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: 4 }}>
+            {ex.muscleTargets.slice(0, 3).map((t) => <MusclePill key={t} target={t} />)}
+          </div>
+        )}
+
+        <button
+          onClick={() => !readOnly && !toggleMutation.isPending && toggleMutation.mutate()}
+          disabled={readOnly || toggleMutation.isPending}
+          style={{
+            marginTop: 4, width: '100%', padding: '16px', borderRadius: 14, border: 'none',
+            background: effectiveChecked ? 'var(--bg3)' : 'var(--accent)',
+            color: effectiveChecked ? 'var(--text2)' : '#0a0a0a',
+            fontWeight: 900, fontSize: 15, textTransform: 'uppercase', letterSpacing: '0.04em',
+            cursor: readOnly ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          }}
+        >
+          {effectiveChecked ? (<><CheckIcon /> Completed</>) : 'Mark Complete'}
+        </button>
+
+        {modalsEl}
+      </div>
+    );
+  }
 
   return (
     <div style={{
@@ -1107,121 +1385,8 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
         )}
       </div>
 
-      {syncPrompt && (
-        <WeightSyncModal
-          exName={ex.name}
-          oldWeight={syncPrompt.oldWeight}
-          oldUnit={syncPrompt.oldUnit}
-          newWeight={syncPrompt.newWeight}
-          newUnit={syncPrompt.newUnit}
-          oldSets={syncPrompt.oldSets}
-          newSets={syncPrompt.newSets}
-          oldReps={syncPrompt.oldReps}
-          newReps={syncPrompt.newReps}
-          oldUntilFailure={syncPrompt.oldUntilFailure}
-          newUntilFailure={syncPrompt.newUntilFailure}
-          otherDays={syncPrompt.otherDays}
-          otherSplits={syncPrompt.otherSplits}
-          onSync={handleSync}
-          onSkip={() => setSyncPrompt(null)}
-          onExclude={() => { excludeFromSync(ex.name); setSyncPrompt(null); }}
-        />
-      )}
-
-      {/* Weight — tappable to edit */}
-      {editingWeight ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'flex-end', flexShrink: 0 }}>
-          <div style={{ display: 'flex', gap: 4 }}>
-            <input
-              type="number" min="0" step="0.5"
-              value={weightVal}
-              onChange={(e) => setWeightVal(e.target.value)}
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') weightMutation.mutate({ weight: weightVal, unit: weightUnit });
-                if (e.key === 'Escape') { setEditingWeight(false); setWeightVal(String(ex.weight ?? 0)); }
-              }}
-              style={{
-                width: 62, padding: '5px 8px', borderRadius: 6,
-                border: '1.5px solid var(--accent)',
-                background: 'var(--bg3)', color: 'var(--text)',
-                fontSize: 14, fontFamily: 'var(--font-mono)', textAlign: 'center', outline: 'none',
-              }}
-            />
-            <select
-              value={weightUnit}
-              onChange={(e) => {
-                const nextUnit = e.target.value;
-                const prevUnit = weightUnit;
-                setWeightUnit(nextUnit);
-                
-                // Convert current input weight value if it's a valid number
-                const num = parseFloat(weightVal);
-                if (!isNaN(num) && num > 0) {
-                  const converted = convertWeight(num, prevUnit, nextUnit);
-                  // Round to 1 decimal place or nearest 0.5 for clean presentation
-                  const rounded = Math.round(converted * 2) / 2;
-                  setWeightVal(String(rounded));
-                }
-              }}
-              style={{
-                padding: '5px 4px', borderRadius: 6, border: '1px solid var(--border2)',
-                background: 'var(--bg3)', color: 'var(--text2)', fontSize: 11, outline: 'none',
-              }}
-            >
-              <option value="kg">kg</option>
-              <option value="lbs">lbs</option>
-            </select>
-          </div>
-          <div style={{ display: 'flex', gap: 4 }}>
-            <button
-              onClick={() => weightMutation.mutate({ weight: weightVal, unit: weightUnit })}
-              disabled={weightMutation.isPending}
-              style={{ padding: '3px 12px', borderRadius: 4, border: 'none', background: 'var(--accent)', color: '#0a0a0a', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}
-            >✓</button>
-            <button
-              onClick={() => { setEditingWeight(false); setWeightVal(String(ex.weight ?? 0)); setWeightUnit(ex.weightUnit || 'kg'); }}
-              style={{ padding: '3px 10px', borderRadius: 4, border: '1px solid var(--border2)', background: 'transparent', color: 'var(--text3)', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}
-            >✕</button>
-          </div>
-        </div>
-      ) : (
-        <div
-          onClick={() => !readOnly && setEditingWeight(true)}
-          title={readOnly ? '' : 'Tap to update weight'}
-          style={{
-            display: 'flex', flexDirection: 'column', alignItems: 'flex-end',
-            cursor: readOnly ? 'default' : 'pointer', flexShrink: 0, minWidth: 44,
-          }}
-        >
-          <div style={{
-            fontSize: 24, fontWeight: 900, fontFamily: 'var(--font-mono)',
-            color: ex.weight > 0 ? 'var(--accent)' : 'var(--text3)',
-            letterSpacing: '-0.03em', lineHeight: 1,
-          }}>
-            {ex.weight > 0 ? ex.weight : '—'}
-          </div>
-          <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)', marginTop: 1 }}>
-            {ex.weight > 0 ? ex.weightUnit : (readOnly ? '' : 'tap')}
-          </div>
-        </div>
-      )}
-
-      {showHistoryModal && (
-        <ExerciseHistoryModal
-          exName={ex.name}
-          logs={logs}
-          onClose={() => setShowHistoryModal(false)}
-        />
-      )}
-      {showSwapModal && (
-        <SwapExerciseModal
-          splitDays={splitDays}
-          currentExName={ex.name}
-          onConfirm={(updatedData) => swapMutation.mutate(updatedData)}
-          onClose={() => setShowSwapModal(false)}
-        />
-      )}
+      {weightEditorEl}
+      {modalsEl}
     </div>
   );
 }
@@ -1999,10 +2164,39 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
   );
 }
 
-function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dateStr, logForDate, logs, onShowToast }) {
+// Same big centered card as the hero exercise, but for rest days — the
+// "picture" slot becomes a rest icon instead of an exercise thumbnail.
+function RestDayCard({ dayName }) {
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 14,
+      padding: '28px 20px', borderRadius: 20, border: '1.5px solid var(--border2)',
+      background: 'var(--bg2)', maxWidth: 420, margin: '0 auto', width: '100%', boxSizing: 'border-box',
+    }}>
+      <div style={{
+        width: 160, height: 160, borderRadius: '50%', flexShrink: 0,
+        background: 'var(--bg3)', border: '1.5px solid var(--border2)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 64,
+      }}>
+        🌙
+      </div>
+      <div>
+        <div style={{ fontSize: 24, fontWeight: 900, fontFamily: 'var(--font-display)', letterSpacing: '0.02em', textTransform: 'uppercase', color: 'var(--text)' }}>
+          Rest Day
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--text3)', marginTop: 8 }}>
+          {dayName} is a scheduled rest day. Recovery is part of the program.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dateStr, logForDate, logs, onShowToast, layout = 'accordion', onOpenInPager }) {
+  const isScreen = layout === 'screen';
   const queryClient = useQueryClient();
   const { storage } = useStorage();
-  const [open, setOpen] = useState(defaultOpen);
+  const [open, setOpen] = useState(defaultOpen || isScreen);
   const [exercises, setExercises] = useState(day.exercises || []);
   const [completedLog, setCompletedLog] = useState(null);
   const [sharing, setSharing] = useState(false);
@@ -2167,12 +2361,61 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
   }
 
 
+  const HeaderTag = isScreen ? 'div' : 'button';
+  const badgeArea = (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+      {day.isRest ? (
+        <span style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Rest</span>
+      ) : (
+        <>
+          {isCompleted ? (
+            <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--green)', letterSpacing: '0.08em', textTransform: 'uppercase', background: 'rgba(68,255,136,0.1)', padding: '4px 8px', borderRadius: 4 }}>✓ Done</span>
+          ) : isPast ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {isRetaking && total > 0 && (
+                <span style={{ fontSize: 16, fontWeight: 900, fontFamily: 'var(--font-mono)', color: checkedCount === total ? 'var(--green)' : checkedCount > 0 ? 'var(--accent)' : 'var(--text3)' }}>
+                  {checkedCount}<span style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 400 }}>/{total}</span>
+                </span>
+              )}
+              {isRetaking ? (
+                <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--accent)', letterSpacing: '0.08em', textTransform: 'uppercase', background: 'rgba(232,255,90,0.1)', border: '1.5px solid var(--accent)', padding: '4px 8px', borderRadius: 4 }}>Retaking</span>
+              ) : (
+                <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', background: 'rgba(255,255,255,0.03)', padding: '4px 8px', borderRadius: 4 }}>Skipped</span>
+              )}
+            </div>
+          ) : total > 0 ? (
+            <span style={{ fontSize: 18, fontWeight: 900, fontFamily: 'var(--font-mono)', color: checkedCount === total ? 'var(--green)' : checkedCount > 0 ? 'var(--accent)' : 'var(--text3)' }}>
+              {checkedCount}<span style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 400 }}>/{total}</span>
+            </span>
+          ) : null}
+          {!isScreen && (
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--text3)" strokeWidth="2" strokeLinecap="round" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: '0.15s' }}>
+              <polyline points="4,6 8,10 12,6" />
+            </svg>
+          )}
+        </>
+      )}
+      {onOpenInPager && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onOpenInPager(); }}
+          title="Open in focus mode"
+          style={{ background: 'var(--bg3)', border: '1px solid var(--border2)', borderRadius: 6, padding: '4px 6px', cursor: 'pointer', color: 'var(--text3)', display: 'flex', alignItems: 'center' }}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+          </svg>
+        </button>
+      )}
+    </div>
+  );
+
   return (
     <>
-      <div style={{ margin: '0 16px 12px', borderRadius: 10, border: `1px solid ${(isToday || isRetaking) ? 'var(--accent)' : 'var(--border)'}`, overflow: 'hidden', background: 'var(--bg2)' }}>
-        <button
-          onClick={() => !day.isRest && setOpen((o) => !o)}
-          style={{ width: '100%', background: isToday ? 'rgba(232,255,90,0.04)' : 'transparent', border: 'none', cursor: day.isRest ? 'default' : 'pointer', padding: '16px 16px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, textAlign: 'left' }}
+      <div style={isScreen ? { minHeight: '65vh', boxSizing: 'border-box', background: 'var(--bg)' } : { margin: '0 16px 12px', borderRadius: 10, border: `1px solid ${(isToday || isRetaking) ? 'var(--accent)' : 'var(--border)'}`, overflow: 'hidden', background: 'var(--bg2)' }}>
+        <HeaderTag
+          onClick={isScreen ? undefined : () => !day.isRest && setOpen((o) => !o)}
+          style={{ width: '100%', background: isToday && !isScreen ? 'rgba(232,255,90,0.04)' : 'transparent', border: 'none', cursor: (day.isRest || isScreen) ? 'default' : 'pointer', padding: isScreen ? '20px 16px 14px' : '16px 16px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, textAlign: 'left' }}
         >
           <div style={{ flex: 1, minWidth: 0 }}>
             {isToday && (
@@ -2183,38 +2426,14 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
             </div>
             {day.tag && <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 5, fontWeight: 500 }}>{day.tag}</div>}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-            {day.isRest ? (
-              <span style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Rest</span>
-            ) : (
-              <>
-                {isCompleted ? (
-                  <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--green)', letterSpacing: '0.08em', textTransform: 'uppercase', background: 'rgba(68,255,136,0.1)', padding: '4px 8px', borderRadius: 4 }}>✓ Done</span>
-                ) : isPast ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    {isRetaking && total > 0 && (
-                      <span style={{ fontSize: 16, fontWeight: 900, fontFamily: 'var(--font-mono)', color: checkedCount === total ? 'var(--green)' : checkedCount > 0 ? 'var(--accent)' : 'var(--text3)' }}>
-                        {checkedCount}<span style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 400 }}>/{total}</span>
-                      </span>
-                    )}
-                    {isRetaking ? (
-                      <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--accent)', letterSpacing: '0.08em', textTransform: 'uppercase', background: 'rgba(232,255,90,0.1)', border: '1.5px solid var(--accent)', padding: '4px 8px', borderRadius: 4 }}>Retaking</span>
-                    ) : (
-                      <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', background: 'rgba(255,255,255,0.03)', padding: '4px 8px', borderRadius: 4 }}>Skipped</span>
-                    )}
-                  </div>
-                ) : total > 0 ? (
-                  <span style={{ fontSize: 18, fontWeight: 900, fontFamily: 'var(--font-mono)', color: checkedCount === total ? 'var(--green)' : checkedCount > 0 ? 'var(--accent)' : 'var(--text3)' }}>
-                    {checkedCount}<span style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 400 }}>/{total}</span>
-                  </span>
-                ) : null}
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--text3)" strokeWidth="2" strokeLinecap="round" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: '0.15s' }}>
-                  <polyline points="4,6 8,10 12,6" />
-                </svg>
-              </>
-            )}
+          {badgeArea}
+        </HeaderTag>
+
+        {isScreen && day.isRest && (
+          <div style={{ padding: '16px' }}>
+            <RestDayCard dayName={day.name} />
           </div>
-        </button>
+        )}
 
         {open && !day.isRest && (
           <div style={{ borderTop: '1px solid var(--border)' }}>
@@ -2222,12 +2441,41 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
               <div className="empty-state" style={{ padding: '20px' }}>No exercises yet</div>
             ) : (
               (() => {
-                const warmups = displayExercises.filter((e) => (e.category || 'workout') === 'warmup');
-                const workouts = displayExercises.filter((e) => (e.category || 'workout') === 'workout');
-                const cooldowns = displayExercises.filter((e) => (e.category || 'workout') === 'cooldown');
+                let warmups = displayExercises.filter((e) => (e.category || 'workout') === 'warmup');
+                let workouts = displayExercises.filter((e) => (e.category || 'workout') === 'workout');
+                let cooldowns = displayExercises.filter((e) => (e.category || 'workout') === 'cooldown');
+
+                // In screen (focus) mode, promote the next unchecked exercise
+                // into a hero card and keep the rest as a compact queue below
+                // — for every day, not just today, so swiping to a past/future
+                // day still shows a consistent enlarged-first-exercise layout
+                // (read-only there, since readOnly already governs editing).
+                const showHero = isScreen && !isCompleted;
+                let heroEx = null;
+                if (showHero) {
+                  const ordered = [...warmups, ...workouts, ...cooldowns];
+                  heroEx = ordered.find((e) => !(isCompleted ? true : (e.lastCheckedDate === TODAY_STR ? e.checked : false))) || null;
+                  if (heroEx) {
+                    warmups = warmups.filter((e) => e !== heroEx);
+                    workouts = workouts.filter((e) => e !== heroEx);
+                    cooldowns = cooldowns.filter((e) => e !== heroEx);
+                  }
+                }
 
                 return (
                   <>
+                    {showHero && (
+                      <div style={{ padding: '16px 16px 4px' }}>
+                        {heroEx ? (
+                          <ExerciseRow variant="hero" key={heroEx._id} ex={heroEx} index={displayExercises.indexOf(heroEx)} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} dateStr={dateStr} logs={logs} onShowToast={onShowToast} localOnly={heroEx.isLastWeekWorkout} />
+                        ) : (
+                          <div style={{ padding: '24px 16px', textAlign: 'center', borderRadius: 14, border: '1.5px solid var(--accent)', background: 'var(--bg2)' }}>
+                            <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>🎉 All done</div>
+                            <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 4 }}>Hit Finish Workout below to log it.</div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                     {warmups.length > 0 && (
                       <div>
                         <CategoryHeader type="warmup" />
@@ -2576,11 +2824,120 @@ function ConsistencyCard({ logs, activeSplit }) {
   );
 }
 
+// Horizontal, swipeable one-day-at-a-time view. Vertical scroll inside each
+// panel moves through that day's exercises; horizontal swipe/tap switches
+// days — kept on separate axes so the two gestures never fight each other.
+function DayPager({ days, todayIndex, getDateForIndex, splitId, splitName, logs, onShowToast, jumpToIndex, onJumpHandled }) {
+  const containerRef = useRef(null);
+  const [activeIndex, setActiveIndex] = useState(todayIndex);
+  const landedRef = useRef(false);
+
+  useEffect(() => {
+    if (landedRef.current) return;
+    const el = containerRef.current;
+    if (el && el.clientWidth > 0) {
+      el.scrollLeft = todayIndex * el.clientWidth;
+      landedRef.current = true;
+    }
+  });
+
+  useEffect(() => {
+    if (jumpToIndex == null) return;
+    const el = containerRef.current;
+    if (el) el.scrollTo({ left: jumpToIndex * el.clientWidth, behavior: 'smooth' });
+    setActiveIndex(jumpToIndex);
+    if (onJumpHandled) onJumpHandled();
+  }, [jumpToIndex]);
+
+  // Keep the pager snapped to the current day when the viewport is resized
+  // (desktop window resize, orientation change) — otherwise scrollLeft stays
+  // pinned to a pixel offset computed for the old width and visually drifts
+  // to a point between two days.
+  useEffect(() => {
+    function handleResize() {
+      const el = containerRef.current;
+      if (!el) return;
+      el.scrollLeft = activeIndex * el.clientWidth;
+    }
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [activeIndex]);
+
+  function scrollToIndex(i) {
+    const el = containerRef.current;
+    if (!el) return;
+    el.scrollTo({ left: i * el.clientWidth, behavior: 'smooth' });
+  }
+
+  function handleScroll() {
+    const el = containerRef.current;
+    if (!el || el.clientWidth === 0) return;
+    const idx = Math.round(el.scrollLeft / el.clientWidth);
+    setActiveIndex((prev) => (prev !== idx ? idx : prev));
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 6, padding: '16px 16px 12px', overflowX: 'auto' }}>
+        {days.map((d, i) => (
+          <button
+            key={d._id}
+            type="button"
+            onClick={() => scrollToIndex(i)}
+            style={{
+              flexShrink: 0, padding: '6px 12px', borderRadius: 8, cursor: 'pointer',
+              fontSize: 11, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase',
+              border: `1.5px solid ${i === activeIndex ? 'var(--accent)' : 'var(--border2)'}`,
+              background: i === activeIndex ? 'rgba(232,255,90,0.1)' : 'var(--bg2)',
+              color: i === activeIndex ? 'var(--accent)' : 'var(--text3)',
+            }}
+          >
+            {i === todayIndex ? 'Today' : d.name.slice(0, 3)}
+          </button>
+        ))}
+      </div>
+      <div
+        ref={containerRef}
+        onScroll={handleScroll}
+        className="day-pager-track"
+        style={{
+          display: 'flex', alignItems: 'flex-start', overflowX: 'auto', scrollSnapType: 'x mandatory',
+          WebkitOverflowScrolling: 'touch',
+        }}
+      >
+        {days.map((day, i) => {
+          const dateStr = getDateForIndex(i);
+          const logForDate = logs.find((l) => l.date === dateStr);
+          return (
+            <div key={day._id} style={{ flex: '0 0 100%', minWidth: '100%', scrollSnapAlign: 'start' }}>
+              <DayCard
+                day={day}
+                splitId={splitId}
+                splitDays={days}
+                splitName={splitName}
+                isToday={i === todayIndex}
+                defaultOpen
+                layout="screen"
+                dateStr={dateStr}
+                logForDate={logForDate}
+                logs={logs}
+                onShowToast={onShowToast}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function TodayPage() {
   const { storage, storageKey } = useStorage();
   const queryClient = useQueryClient();
   const savingDatesRef = useRef(new Set());
   const [toast, setToast] = useState(null);
+  const [viewMode, setViewMode] = useState('pager'); // 'pager' | 'overview'
+  const [jumpToIndex, setJumpToIndex] = useState(null);
 
   function showToast(message, type = 'success') {
     setToast({ message, type });
@@ -2874,42 +3231,75 @@ Coach:`;
           <h1 className="page-title">Today</h1>
           <div className="page-subtitle">{DAY_NAMES[TODAY_DOW]}</div>
         </div>
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: 12, color: 'var(--text2)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>{activeSplit.name}</div>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: 2 }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)', display: 'inline-block' }} />
-            Active
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+          <div style={{ textAlign: 'right', minWidth: 0, overflow: 'hidden' }}>
+            <div style={{ fontSize: 12, color: 'var(--text2)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{activeSplit.name}</div>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: 2 }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)', display: 'inline-block' }} />
+              Active
+            </div>
           </div>
+          <button
+            type="button"
+            onClick={() => setViewMode((m) => (m === 'pager' ? 'overview' : 'pager'))}
+            title={viewMode === 'pager' ? 'Show all days' : 'Back to focus mode'}
+            style={{ background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 8, padding: '7px 9px', cursor: 'pointer', color: 'var(--text2)', display: 'flex', alignItems: 'center', flexShrink: 0 }}
+          >
+            {viewMode === 'pager' ? (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7" />
+              </svg>
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" />
+                <rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" />
+              </svg>
+            )}
+          </button>
         </div>
       </div>
-      
-      <ConsistencyCard logs={logs} activeSplit={activeSplit} />
 
-      <div style={{ paddingTop: 0 }}>
-        {days.length === 0 ? (
-          <div className="empty-state">This split has no days yet</div>
-        ) : (
-          days.map((day, i) => {
-            const dateStr = getDateForIndex(i);
-            const logForDate = logs.find((l) => l.date === dateStr);
-            return (
-              <DayCard
-                key={day._id}
-                day={day}
-                splitId={activeSplit._id}
-                splitDays={days}
-                splitName={activeSplit.name}
-                isToday={i === todayIndex}
-                defaultOpen={i === todayIndex && !day.isRest}
-                dateStr={dateStr}
-                logForDate={logForDate}
-                logs={logs}
-                onShowToast={showToast}
-              />
-            );
-          })
-        )}
-      </div>
+      {days.length === 0 ? (
+        <div className="empty-state">This split has no days yet</div>
+      ) : viewMode === 'pager' ? (
+        <DayPager
+          days={days}
+          todayIndex={todayIndex}
+          getDateForIndex={getDateForIndex}
+          splitId={activeSplit._id}
+          splitName={activeSplit.name}
+          logs={logs}
+          onShowToast={showToast}
+          jumpToIndex={jumpToIndex}
+          onJumpHandled={() => setJumpToIndex(null)}
+        />
+      ) : (
+        <>
+          <ConsistencyCard logs={logs} activeSplit={activeSplit} />
+          <div style={{ paddingTop: 0 }}>
+            {days.map((day, i) => {
+              const dateStr = getDateForIndex(i);
+              const logForDate = logs.find((l) => l.date === dateStr);
+              return (
+                <DayCard
+                  key={day._id}
+                  day={day}
+                  splitId={activeSplit._id}
+                  splitDays={days}
+                  splitName={activeSplit.name}
+                  isToday={i === todayIndex}
+                  defaultOpen={i === todayIndex && !day.isRest}
+                  dateStr={dateStr}
+                  logForDate={logForDate}
+                  logs={logs}
+                  onShowToast={showToast}
+                  onOpenInPager={() => { setJumpToIndex(i); setViewMode('pager'); }}
+                />
+              );
+            })}
+          </div>
+        </>
+      )}
       <AiChatBubble
         title="AI Coach"
         badge={aiApiKey ? 'Search Enabled' : undefined}
