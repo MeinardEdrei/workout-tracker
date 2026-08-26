@@ -378,3 +378,18 @@ html, body, #root {
 .day-pager-track::-webkit-scrollbar {
   display: none;
 }
+
+.day-snap-scroll {
+  scrollbar-width: none;
+}
+.day-snap-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes scrollHintBounce {
+  0%, 100% { transform: translateX(-50%) translateY(0); opacity: 0.55; }
+  50% { transform: translateX(-50%) translateY(5px); opacity: 1; }
+}
+.scroll-hint-bounce {
+  animation: scrollHintBounce 1.6s ease-in-out infinite;
+}

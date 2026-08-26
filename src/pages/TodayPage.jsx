@@ -11,7 +11,7 @@ import ExerciseThumbnail from '../components/ExerciseThumbnail';
 import { isSyncExcluded, excludeFromSync } from '../utils/syncPrefs';
 import { createPortal } from 'react-dom';
 import AiChatBubble from '../components/AiChatBubble';
-import { X, Check, RotateCcw, Trophy, BarChart3, StickyNote, Dumbbell, Zap, Moon, PartyPopper, Flame } from 'lucide-react';
+import { X, Check, RotateCcw, Trophy, BarChart3, StickyNote, Dumbbell, Zap, Moon, PartyPopper, Flame, ChevronDown } from 'lucide-react';
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const TODAY_DOW = new Date().getDay();
@@ -2362,6 +2362,237 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
   }
 
 
+  // Precomputed so the screen-mode body can be split into two scroll-snap
+  // sections (hero, then everything else) below.
+  let warmups = displayExercises.filter((e) => (e.category || 'workout') === 'warmup');
+  let workouts = displayExercises.filter((e) => (e.category || 'workout') === 'workout');
+  let cooldowns = displayExercises.filter((e) => (e.category || 'workout') === 'cooldown');
+
+  const showHero = isScreen && !isCompleted;
+  let heroEx = null;
+  if (showHero) {
+    const ordered = [...warmups, ...workouts, ...cooldowns];
+    heroEx = ordered.find((e) => !(isCompleted ? true : (e.lastCheckedDate === TODAY_STR ? e.checked : false))) || null;
+    if (heroEx) {
+      warmups = warmups.filter((e) => e !== heroEx);
+      workouts = workouts.filter((e) => e !== heroEx);
+      cooldowns = cooldowns.filter((e) => e !== heroEx);
+    }
+  }
+
+  const heroSectionEl = showHero && (
+    <div style={{ padding: '16px 16px 4px' }}>
+      {heroEx ? (
+        <ExerciseRow variant="hero" key={heroEx._id} ex={heroEx} index={displayExercises.indexOf(heroEx)} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} dateStr={dateStr} logs={logs} onShowToast={onShowToast} localOnly={heroEx.isLastWeekWorkout} />
+      ) : (
+        <div style={{ padding: '24px 16px', textAlign: 'center', borderRadius: 14, border: '1.5px solid var(--accent)', background: 'var(--bg2)' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', color: 'var(--accent)', marginBottom: 6 }}><PartyPopper size={22} /></div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>All done</div>
+          <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 4 }}>Hit Finish Workout below to log it.</div>
+        </div>
+      )}
+    </div>
+  );
+
+  const queueGroupsEl = displayExercises.length === 0 ? (
+    <div className="empty-state" style={{ padding: '20px' }}>No exercises yet</div>
+  ) : (
+    <>
+      {warmups.length > 0 && (
+        <div>
+          <CategoryHeader type="warmup" />
+          {warmups.map((ex, i) => (
+            <ExerciseRow key={ex._id || i} ex={ex} index={displayExercises.indexOf(ex)} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} dateStr={dateStr} logs={logs} onShowToast={onShowToast} localOnly={ex.isLastWeekWorkout} />
+          ))}
+        </div>
+      )}
+      {workouts.length > 0 && (
+        <div>
+          <CategoryHeader type="workout" />
+          {workouts.map((ex, i) => (
+            <ExerciseRow key={ex._id || i} ex={ex} index={displayExercises.indexOf(ex)} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} dateStr={dateStr} logs={logs} onShowToast={onShowToast} localOnly={ex.isLastWeekWorkout} />
+          ))}
+        </div>
+      )}
+      {cooldowns.length > 0 && (
+        <div>
+          <CategoryHeader type="cooldown" />
+          {cooldowns.map((ex, i) => (
+            <ExerciseRow key={ex._id || i} ex={ex} index={displayExercises.indexOf(ex)} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} dateStr={dateStr} logs={logs} onShowToast={onShowToast} localOnly={ex.isLastWeekWorkout} />
+          ))}
+        </div>
+      )}
+    </>
+  );
+
+  const restOfDayBodyEl = (
+    <>
+      {(isToday || isRetaking) && !isCompleted && lastWeekLog && lastWeekLog.exercises && lastWeekLog.exercises.length > 0 && (
+        <div style={{
+          padding: '16px',
+          borderTop: '1px solid var(--border)',
+          background: 'rgba(255, 255, 255, 0.01)',
+        }}>
+          <div style={{
+            fontSize: 11,
+            fontWeight: 900,
+            fontFamily: 'var(--font-mono)',
+            color: 'var(--accent)',
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+            marginBottom: 10,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6
+          }}>
+            <RotateCcw size={13} /> Last Week's Exercises
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {lastWeekLog.exercises.map((lwEx, idx) => {
+              const alreadyAdded = exercises.some(e => e.name.toLowerCase() === lwEx.name.toLowerCase());
+              const rLabel = (lwEx.untilFailure || !lwEx.reps || lwEx.reps === 0) ? 'Failure' : lwEx.reps;
+
+              return (
+                <div key={idx} style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '8px 12px',
+                  borderRadius: 8,
+                  background: 'var(--bg3)',
+                  border: '1px solid var(--border2)',
+                }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', textTransform: 'uppercase', fontFamily: 'var(--font-display)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {lwEx.name}
+                    </div>
+                    <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
+                      {lwEx.sets}×{rLabel} {lwEx.weight > 0 ? `@ ${lwEx.weight}${lwEx.weightUnit}` : ''}
+                    </div>
+                  </div>
+                  <button
+                    className="btn"
+                    disabled={alreadyAdded}
+                    onClick={() => handleAddLastWeekExercise(lwEx)}
+                    style={{
+                      padding: '4px 10px',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      borderRadius: 6,
+                      background: alreadyAdded ? 'rgba(255,255,255,0.05)' : 'var(--accent)',
+                      color: alreadyAdded ? 'var(--text3)' : '#0a0a0a',
+                      border: 'none',
+                      cursor: alreadyAdded ? 'default' : 'pointer',
+                    }}
+                  >
+                    {alreadyAdded ? 'Added' : '+ Add'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {(isToday || isRetaking) && !isCompleted && (
+        <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end' }}>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => setShowAddModal(true)}
+            style={{
+              fontSize: 12,
+              fontWeight: 700,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '6px 12px',
+              borderRadius: 6,
+              background: 'rgba(255, 255, 255, 0.02)',
+              border: '1px solid var(--border)',
+              cursor: 'pointer',
+              color: 'var(--text2)',
+            }}
+          >
+            <span style={{ fontSize: 14, fontWeight: 900, color: 'var(--accent)' }}>+</span> Add Exercise
+          </button>
+        </div>
+      )}
+
+      {showAddModal && (
+        <AddExerciseFromOtherDaysModal
+          splitDays={splitDays}
+          logs={logs}
+          onConfirm={handleConfirmAddExercise}
+          onClose={() => setShowAddModal(false)}
+        />
+      )}
+
+      {(isToday || isRetaking) && !isCompleted && (
+        <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', display: 'flex', gap: 8 }}>
+          {checkedCount > 0 ? (
+            <button className="btn btn-accent" style={{ flex: 1, fontSize: 14, padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }} onClick={() => setShowConfirmFinish(true)} disabled={saveLogMutation.isPending}>
+              {saveLogMutation.isPending ? 'Saving…' : (<><Check size={15} /> Finish Workout ({checkedCount} done)</>)}
+            </button>
+          ) : null}
+          {isRetaking && (
+            <button className="btn btn-ghost" style={{ flex: checkedCount > 0 ? 0.4 : 1, fontSize: 14, padding: '12px' }} onClick={() => setIsRetaking(false)}>
+              Cancel
+            </button>
+          )}
+        </div>
+      )}
+
+      {isCompleted && (
+        <div style={{
+          padding: '14px 16px',
+          borderTop: '1px solid var(--border)',
+          background: 'rgba(68,255,136,0.03)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 4,
+          marginTop: 12
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--green)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Workout Logged
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text2)', textAlign: 'center' }}>
+            This workout is locked. To modify it, delete its log in the Stats tab.
+          </div>
+        </div>
+      )}
+
+      {isPast && !isCompleted && !isRetaking && (
+        <div style={{
+          padding: '16px',
+          borderTop: '1px solid var(--border)',
+          background: 'rgba(255,255,255,0.01)',
+          textAlign: 'center',
+          fontSize: 12,
+          color: 'var(--text3)',
+          marginTop: 12,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 12
+        }}>
+          <div>This day has passed. Exercises are in view-only mode.</div>
+          <button
+            className="btn btn-accent"
+            style={{ padding: '8px 16px', fontSize: 12, fontWeight: 700 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsRetaking(true);
+            }}
+          >
+            Retake Workout
+          </button>
+        </div>
+      )}
+    </>
+  );
+
   const HeaderTag = isScreen ? 'div' : 'button';
   const badgeArea = (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
@@ -2413,7 +2644,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
 
   return (
     <>
-      <div style={isScreen ? { minHeight: '65vh', boxSizing: 'border-box', background: 'var(--bg)' } : { margin: '0 16px 12px', borderRadius: 10, border: `1px solid ${(isToday || isRetaking) ? 'var(--accent)' : 'var(--border)'}`, overflow: 'hidden', background: 'var(--bg2)' }}>
+      <div style={isScreen ? { height: '100%', display: 'flex', flexDirection: 'column', boxSizing: 'border-box', background: 'var(--bg2)', border: '1px solid var(--border)' } : { margin: '0 16px 12px', borderRadius: 10, border: `1px solid ${(isToday || isRetaking) ? 'var(--accent)' : 'var(--border)'}`, overflow: 'hidden', background: 'var(--bg2)' }}>
         <HeaderTag
           onClick={isScreen ? undefined : () => !day.isRest && setOpen((o) => !o)}
           style={{ width: '100%', background: isToday && !isScreen ? 'rgba(232,255,90,0.04)' : 'transparent', border: 'none', cursor: (day.isRest || isScreen) ? 'default' : 'pointer', padding: isScreen ? '20px 16px 14px' : '16px 16px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, textAlign: 'left' }}
@@ -2431,249 +2662,36 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
         </HeaderTag>
 
         {isScreen && day.isRest && (
-          <div style={{ padding: '16px' }}>
+          <div className="day-snap-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <RestDayCard dayName={day.name} />
           </div>
         )}
 
         {open && !day.isRest && (
-          <div style={{ borderTop: '1px solid var(--border)' }}>
-            {displayExercises.length === 0 ? (
-              <div className="empty-state" style={{ padding: '20px' }}>No exercises yet</div>
-            ) : (
-              (() => {
-                let warmups = displayExercises.filter((e) => (e.category || 'workout') === 'warmup');
-                let workouts = displayExercises.filter((e) => (e.category || 'workout') === 'workout');
-                let cooldowns = displayExercises.filter((e) => (e.category || 'workout') === 'cooldown');
-
-                // In screen (focus) mode, promote the next unchecked exercise
-                // into a hero card and keep the rest as a compact queue below
-                // — for every day, not just today, so swiping to a past/future
-                // day still shows a consistent enlarged-first-exercise layout
-                // (read-only there, since readOnly already governs editing).
-                const showHero = isScreen && !isCompleted;
-                let heroEx = null;
-                if (showHero) {
-                  const ordered = [...warmups, ...workouts, ...cooldowns];
-                  heroEx = ordered.find((e) => !(isCompleted ? true : (e.lastCheckedDate === TODAY_STR ? e.checked : false))) || null;
-                  if (heroEx) {
-                    warmups = warmups.filter((e) => e !== heroEx);
-                    workouts = workouts.filter((e) => e !== heroEx);
-                    cooldowns = cooldowns.filter((e) => e !== heroEx);
-                  }
-                }
-
-                return (
-                  <>
-                    {showHero && (
-                      <div style={{ padding: '16px 16px 4px' }}>
-                        {heroEx ? (
-                          <ExerciseRow variant="hero" key={heroEx._id} ex={heroEx} index={displayExercises.indexOf(heroEx)} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} dateStr={dateStr} logs={logs} onShowToast={onShowToast} localOnly={heroEx.isLastWeekWorkout} />
-                        ) : (
-                          <div style={{ padding: '24px 16px', textAlign: 'center', borderRadius: 14, border: '1.5px solid var(--accent)', background: 'var(--bg2)' }}>
-                            <div style={{ display: 'flex', justifyContent: 'center', color: 'var(--accent)', marginBottom: 6 }}><PartyPopper size={22} /></div>
-                            <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>All done</div>
-                            <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 4 }}>Hit Finish Workout below to log it.</div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    {warmups.length > 0 && (
-                      <div>
-                        <CategoryHeader type="warmup" />
-                        {warmups.map((ex, i) => (
-                          <ExerciseRow key={ex._id || i} ex={ex} index={displayExercises.indexOf(ex)} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} dateStr={dateStr} logs={logs} onShowToast={onShowToast} localOnly={ex.isLastWeekWorkout} />
-                        ))}
-                      </div>
-                    )}
-
-                    {workouts.length > 0 && (
-                      <div>
-                        <CategoryHeader type="workout" />
-                        {workouts.map((ex, i) => (
-                          <ExerciseRow key={ex._id || i} ex={ex} index={displayExercises.indexOf(ex)} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} dateStr={dateStr} logs={logs} onShowToast={onShowToast} localOnly={ex.isLastWeekWorkout} />
-                        ))}
-                      </div>
-                    )}
-
-                    {cooldowns.length > 0 && (
-                      <div>
-                        <CategoryHeader type="cooldown" />
-                        {cooldowns.map((ex, i) => (
-                          <ExerciseRow key={ex._id || i} ex={ex} index={displayExercises.indexOf(ex)} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} dateStr={dateStr} logs={logs} onShowToast={onShowToast} localOnly={ex.isLastWeekWorkout} />
-                        ))}
-                      </div>
-                    )}
-                  </>
-                );
-              })()
-            )}
-
-            {/* Last Week's Exercises Preview Section */}
-            {(isToday || isRetaking) && !isCompleted && lastWeekLog && lastWeekLog.exercises && lastWeekLog.exercises.length > 0 && (
-              <div style={{
-                padding: '16px',
-                borderTop: '1px solid var(--border)',
-                background: 'rgba(255, 255, 255, 0.01)',
-              }}>
-                <div style={{
-                  fontSize: 11,
-                  fontWeight: 900,
-                  fontFamily: 'var(--font-mono)',
-                  color: 'var(--accent)',
-                  letterSpacing: '0.08em',
-                  textTransform: 'uppercase',
-                  marginBottom: 10,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6
-                }}>
-                  <RotateCcw size={13} /> Last Week's Exercises
+          isScreen ? (
+            <div className="day-snap-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', scrollSnapType: 'y mandatory' }}>
+              {heroSectionEl && (
+                <div style={{ position: 'relative', scrollSnapAlign: 'start', minHeight: 'calc(100dvh - 150px)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                  {heroSectionEl}
+                  {displayExercises.length > 1 && (
+                    <div className="scroll-hint-bounce" style={{ position: 'absolute', left: '50%', bottom: 10, transform: 'translateX(-50%)', color: 'var(--text3)', pointerEvents: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+                      <ChevronDown size={16} />
+                      <ChevronDown size={16} style={{ marginTop: -10, opacity: 0.5 }} />
+                    </div>
+                  )}
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {lastWeekLog.exercises.map((lwEx, idx) => {
-                    const alreadyAdded = exercises.some(e => e.name.toLowerCase() === lwEx.name.toLowerCase());
-                    const rLabel = (lwEx.untilFailure || !lwEx.reps || lwEx.reps === 0) ? 'Failure' : lwEx.reps;
-                    
-                    return (
-                      <div key={idx} style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '8px 12px',
-                        borderRadius: 8,
-                        background: 'var(--bg3)',
-                        border: '1px solid var(--border2)',
-                      }}>
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', textTransform: 'uppercase', fontFamily: 'var(--font-display)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {lwEx.name}
-                          </div>
-                          <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
-                            {lwEx.sets}×{rLabel} {lwEx.weight > 0 ? `@ ${lwEx.weight}${lwEx.weightUnit}` : ''}
-                          </div>
-                        </div>
-                        <button
-                          className="btn"
-                          disabled={alreadyAdded}
-                          onClick={() => handleAddLastWeekExercise(lwEx)}
-                          style={{
-                            padding: '4px 10px',
-                            fontSize: 11,
-                            fontWeight: 700,
-                            borderRadius: 6,
-                            background: alreadyAdded ? 'rgba(255,255,255,0.05)' : 'var(--accent)',
-                            color: alreadyAdded ? 'var(--text3)' : '#0a0a0a',
-                            border: 'none',
-                            cursor: alreadyAdded ? 'default' : 'pointer',
-                          }}
-                        >
-                          {alreadyAdded ? 'Added' : '+ Add'}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
+              )}
+              <div style={{ scrollSnapAlign: 'start', borderTop: '1px solid var(--border)' }}>
+                {queueGroupsEl}
+                {restOfDayBodyEl}
               </div>
-            )}
-
-            {(isToday || isRetaking) && !isCompleted && (
-              <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end' }}>
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={() => setShowAddModal(true)}
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 700,
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    padding: '6px 12px',
-                    borderRadius: 6,
-                    background: 'rgba(255, 255, 255, 0.02)',
-                    border: '1px solid var(--border)',
-                    cursor: 'pointer',
-                    color: 'var(--text2)',
-                  }}
-                >
-                  <span style={{ fontSize: 14, fontWeight: 900, color: 'var(--accent)' }}>+</span> Add Exercise
-                </button>
-              </div>
-            )}
-
-            {showAddModal && (
-              <AddExerciseFromOtherDaysModal
-                splitDays={splitDays}
-                logs={logs}
-                onConfirm={handleConfirmAddExercise}
-                onClose={() => setShowAddModal(false)}
-              />
-            )}
-
-            {(isToday || isRetaking) && !isCompleted && (
-              <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', display: 'flex', gap: 8 }}>
-                {checkedCount > 0 ? (
-                  <button className="btn btn-accent" style={{ flex: 1, fontSize: 14, padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }} onClick={() => setShowConfirmFinish(true)} disabled={saveLogMutation.isPending}>
-                    {saveLogMutation.isPending ? 'Saving…' : (<><Check size={15} /> Finish Workout ({checkedCount} done)</>)}
-                  </button>
-                ) : null}
-                {isRetaking && (
-                  <button className="btn btn-ghost" style={{ flex: checkedCount > 0 ? 0.4 : 1, fontSize: 14, padding: '12px' }} onClick={() => setIsRetaking(false)}>
-                    Cancel
-                  </button>
-                )}
-              </div>
-            )}
-            
-            {isCompleted && (
-              <div style={{ 
-                padding: '14px 16px', 
-                borderTop: '1px solid var(--border)', 
-                background: 'rgba(68,255,136,0.03)',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 4,
-                marginTop: 12
-              }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--green)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  Workout Logged
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--text2)', textAlign: 'center' }}>
-                  This workout is locked. To modify it, delete its log in the Stats tab.
-                </div>
-              </div>
-            )}
-            
-            {isPast && !isCompleted && !isRetaking && (
-              <div style={{ 
-                padding: '16px', 
-                borderTop: '1px solid var(--border)', 
-                background: 'rgba(255,255,255,0.01)',
-                textAlign: 'center',
-                fontSize: 12,
-                color: 'var(--text3)',
-                marginTop: 12,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 12
-              }}>
-                <div>This day has passed. Exercises are in view-only mode.</div>
-                <button 
-                  className="btn btn-accent" 
-                  style={{ padding: '8px 16px', fontSize: 12, fontWeight: 700 }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsRetaking(true);
-                  }}
-                >
-                  Retake Workout
-                </button>
-              </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div style={{ borderTop: '1px solid var(--border)' }}>
+              {queueGroupsEl}
+              {restOfDayBodyEl}
+            </div>
+          )
         )}
       </div>
 
@@ -2830,105 +2848,64 @@ function ConsistencyCard({ logs, activeSplit }) {
 // panel moves through that day's exercises; horizontal swipe/tap switches
 // days — kept on separate axes so the two gestures never fight each other.
 function DayPager({ days, todayIndex, getDateForIndex, splitId, splitName, logs, onShowToast, jumpToIndex, onJumpHandled }) {
-  const containerRef = useRef(null);
-  const [activeIndex, setActiveIndex] = useState(todayIndex);
+  const dayRefs = useRef({});
   const landedRef = useRef(false);
 
+  // Land on today instantly (no visible slide) once the panel has a size.
   useEffect(() => {
     if (landedRef.current) return;
-    const el = containerRef.current;
-    if (el && el.clientWidth > 0) {
-      el.scrollLeft = todayIndex * el.clientWidth;
+    const el = dayRefs.current[todayIndex];
+    if (el) {
+      el.scrollIntoView({ inline: 'center', block: 'nearest' });
       landedRef.current = true;
     }
   });
 
+  // Jump here (e.g. tapped from Overview mode) — this one animates.
   useEffect(() => {
     if (jumpToIndex == null) return;
-    const el = containerRef.current;
-    if (el) el.scrollTo({ left: jumpToIndex * el.clientWidth, behavior: 'smooth' });
-    setActiveIndex(jumpToIndex);
+    const el = dayRefs.current[jumpToIndex];
+    if (el) el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
     if (onJumpHandled) onJumpHandled();
   }, [jumpToIndex]);
 
-  // Keep the pager snapped to the current day when the viewport is resized
-  // (desktop window resize, orientation change) — otherwise scrollLeft stays
-  // pinned to a pixel offset computed for the old width and visually drifts
-  // to a point between two days.
-  useEffect(() => {
-    function handleResize() {
-      const el = containerRef.current;
-      if (!el) return;
-      el.scrollLeft = activeIndex * el.clientWidth;
-    }
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [activeIndex]);
-
-  function scrollToIndex(i) {
-    const el = containerRef.current;
-    if (!el) return;
-    el.scrollTo({ left: i * el.clientWidth, behavior: 'smooth' });
-  }
-
-  function handleScroll() {
-    const el = containerRef.current;
-    if (!el || el.clientWidth === 0) return;
-    const idx = Math.round(el.scrollLeft / el.clientWidth);
-    setActiveIndex((prev) => (prev !== idx ? idx : prev));
-  }
-
   return (
-    <div>
-      <div style={{ display: 'flex', gap: 6, padding: '16px 16px 12px', overflowX: 'auto' }}>
-        {days.map((d, i) => (
-          <button
-            key={d._id}
-            type="button"
-            onClick={() => scrollToIndex(i)}
+    <div
+      className="day-pager-track"
+      style={{
+        display: 'flex', alignItems: 'flex-start', gap: 14,
+        overflowX: 'auto', scrollSnapType: 'x mandatory',
+        padding: '16px 9vw', WebkitOverflowScrolling: 'touch',
+      }}
+    >
+      {days.map((day, i) => {
+        const dateStr = getDateForIndex(i);
+        const logForDate = logs.find((l) => l.date === dateStr);
+        return (
+          <div
+            key={day._id}
+            ref={(el) => { dayRefs.current[i] = el; }}
             style={{
-              flexShrink: 0, padding: '6px 12px', borderRadius: 8, cursor: 'pointer',
-              fontSize: 11, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase',
-              border: `1.5px solid ${i === activeIndex ? 'var(--accent)' : 'var(--border2)'}`,
-              background: i === activeIndex ? 'rgba(232,255,90,0.1)' : 'var(--bg2)',
-              color: i === activeIndex ? 'var(--accent)' : 'var(--text3)',
+              flex: '0 0 82vw', scrollSnapAlign: 'center', height: 'calc(100dvh - 150px)',
+              overflow: 'hidden', borderRadius: 20, boxShadow: '0 12px 36px rgba(0,0,0,0.45)',
             }}
           >
-            {i === todayIndex ? 'Today' : d.name.slice(0, 3)}
-          </button>
-        ))}
-      </div>
-      <div
-        ref={containerRef}
-        onScroll={handleScroll}
-        className="day-pager-track"
-        style={{
-          display: 'flex', alignItems: 'flex-start', overflowX: 'auto', scrollSnapType: 'x mandatory',
-          WebkitOverflowScrolling: 'touch',
-        }}
-      >
-        {days.map((day, i) => {
-          const dateStr = getDateForIndex(i);
-          const logForDate = logs.find((l) => l.date === dateStr);
-          return (
-            <div key={day._id} style={{ flex: '0 0 100%', minWidth: '100%', scrollSnapAlign: 'start' }}>
-              <DayCard
-                day={day}
-                splitId={splitId}
-                splitDays={days}
-                splitName={splitName}
-                isToday={i === todayIndex}
-                defaultOpen
-                layout="screen"
-                dateStr={dateStr}
-                logForDate={logForDate}
-                logs={logs}
-                onShowToast={onShowToast}
-              />
-            </div>
-          );
-        })}
-      </div>
+            <DayCard
+              day={day}
+              splitId={splitId}
+              splitDays={days}
+              splitName={splitName}
+              isToday={i === todayIndex}
+              defaultOpen
+              layout="screen"
+              dateStr={dateStr}
+              logForDate={logForDate}
+              logs={logs}
+              onShowToast={onShowToast}
+            />
+          </div>
+        );
+      })}
     </div>
   );
 }
