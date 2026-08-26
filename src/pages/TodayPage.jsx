@@ -915,7 +915,7 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
       }}
     >
       <div style={{
-        fontSize: isHero ? 48 : 24, fontWeight: 900, fontFamily: 'var(--font-mono)',
+        fontSize: isHero ? 'clamp(26px, 6vh, 48px)' : 24, fontWeight: 900, fontFamily: 'var(--font-mono)',
         color: ex.weight > 0 ? 'var(--accent)' : 'var(--text3)',
         letterSpacing: '-0.03em', lineHeight: 1,
       }}>
@@ -1007,17 +1007,19 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
   if (isHero) {
     return (
       <div style={{
-        display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 14,
-        padding: '28px 20px', borderRadius: 20, border: '1.5px solid var(--accent)',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center',
+        gap: 'clamp(8px, 2vh, 14px)',
+        padding: 'clamp(14px, 3.2vh, 28px) 18px', borderRadius: 20, border: '1.5px solid var(--accent)',
         background: 'var(--bg2)', boxShadow: '0 8px 32px rgba(232,255,90,0.1)',
         opacity: toggleMutation.isPending ? 0.6 : 1, transition: 'opacity 0.15s',
-        maxWidth: 420, margin: '0 auto', width: '100%', boxSizing: 'border-box',
+        maxWidth: 420, margin: '0 auto', width: '100%', maxHeight: '100%', boxSizing: 'border-box',
+        overflowY: 'auto',
       }}>
-        <ExerciseThumbnail imageUrl={ex.imageUrl} name={ex.name} size={160} />
+        <ExerciseThumbnail imageUrl={ex.imageUrl} name={ex.name} size="clamp(88px, 18vh, 160px)" />
 
         <div>
           <div style={{
-            fontSize: 24, fontWeight: 900, fontFamily: 'var(--font-display)',
+            fontSize: 'clamp(17px, 4vh, 24px)', fontWeight: 900, fontFamily: 'var(--font-display)',
             letterSpacing: '0.02em', textTransform: 'uppercase',
             textDecoration: effectiveChecked ? 'line-through' : 'none',
             color: effectiveChecked ? 'var(--text3)' : 'var(--text)',
@@ -1114,7 +1116,7 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
           onClick={() => !readOnly && !toggleMutation.isPending && toggleMutation.mutate()}
           disabled={readOnly || toggleMutation.isPending}
           style={{
-            marginTop: 4, width: '100%', padding: '16px', borderRadius: 14, border: 'none',
+            marginTop: 4, width: '100%', padding: 'clamp(10px, 2vh, 16px)', borderRadius: 14, border: 'none',
             background: effectiveChecked ? 'var(--bg3)' : 'var(--accent)',
             color: effectiveChecked ? 'var(--text2)' : '#0a0a0a',
             fontWeight: 900, fontSize: 15, textTransform: 'uppercase', letterSpacing: '0.04em',
