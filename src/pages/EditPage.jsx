@@ -2291,6 +2291,8 @@ function SplitEditorInner({ split, onBack, onSplitUpdated }) {
   const [modal, setModal] = useState(null);
   const [deleteToast, setDeleteToast] = useState(null);
   const [swappingDay, setSwappingDay] = useState(null);
+  const [copyingDay, setCopyingDay] = useState(null);
+  const [pendingCopy, setPendingCopy] = useState(null);
 
   const swapDaysMutation = useMutation({
     mutationFn: (targetDayId) => storage.swapDays(split._id, swappingDay._id, targetDayId),
@@ -2301,6 +2303,26 @@ function SplitEditorInner({ split, onBack, onSplitUpdated }) {
       setSwappingDay(null);
     },
   });
+
+  const copyDayMutation = useMutation({
+    mutationFn: ({ sourceDayId, targetDayId }) => storage.copyDayTo(split._id, sourceDayId, targetDayId),
+    onSuccess: (updated) => {
+      setDays([...(updated.days || [])].sort((a, b) => (a.dayOrder ?? 8) - (b.dayOrder ?? 8)));
+      onSplitUpdated(updated);
+      queryClient.invalidateQueries({ queryKey: ['splits'] });
+      setCopyingDay(null);
+      setPendingCopy(null);
+    },
+  });
+
+  function handlePickCopyTarget(targetDayId) {
+    const targetDay = days.find((d) => d._id === targetDayId);
+    if (targetDay && (targetDay.exercises || []).length > 0) {
+      setPendingCopy({ sourceDay: copyingDay, targetDay });
+    } else {
+      copyDayMutation.mutate({ sourceDayId: copyingDay._id, targetDayId });
+    }
+  }
 
   useEffect(() => {
     setDays([...(split.days || [])].sort((a, b) => (a.dayOrder ?? 8) - (b.dayOrder ?? 8)));
@@ -2376,6 +2398,17 @@ function SplitEditorInner({ split, onBack, onSplitUpdated }) {
                 </div>
               </div>
               {day.isRest && <span className="tag">Rest</span>}
+              {days.length > 1 && !day.isRest && (
+                <button
+                  className="btn-icon"
+                  title="Copy exercises to another day"
+                  onClick={(e) => { e.stopPropagation(); setCopyingDay(day); }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                  </svg>
+                </button>
+              )}
               {days.length > 1 && (
                 <button
                   className="btn-icon"
@@ -2431,6 +2464,22 @@ function SplitEditorInner({ split, onBack, onSplitUpdated }) {
           excludeDayId={swappingDay._id}
           onConfirm={(targetDayId) => swapDaysMutation.mutate(targetDayId)}
           onClose={() => setSwappingDay(null)}
+        />
+      )}
+      {copyingDay && !pendingCopy && (
+        <DayPickerModal
+          title={`Copy "${copyingDay.name}" to...`}
+          days={days}
+          excludeDayId={copyingDay._id}
+          onConfirm={handlePickCopyTarget}
+          onClose={() => setCopyingDay(null)}
+        />
+      )}
+      {pendingCopy && (
+        <ConfirmModal
+          message={`"${pendingCopy.targetDay.name}" already has ${pendingCopy.targetDay.exercises.length} exercise${pendingCopy.targetDay.exercises.length === 1 ? '' : 's'}. Replace them with "${pendingCopy.sourceDay.name}"'s exercises?`}
+          onConfirm={() => copyDayMutation.mutate({ sourceDayId: pendingCopy.sourceDay._id, targetDayId: pendingCopy.targetDay._id })}
+          onClose={() => setPendingCopy(null)}
         />
       )}
     </div>

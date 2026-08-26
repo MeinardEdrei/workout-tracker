@@ -661,6 +661,30 @@ router.post('/:id/days/:dayId/swap-with', async (req, res) => {
   }
 });
 
+// Copies a day's exercises into another day, replacing that day's current
+// exercises. Unlike swap-with, the source day is left untouched.
+router.post('/:id/days/:dayId/copy-to', async (req, res) => {
+  try {
+    const split = await Split.findOne({ _id: req.params.id, userId: req.userId });
+    if (!split) return res.status(404).json({ error: 'Split not found' });
+    const sourceDay = split.days.id(req.params.dayId);
+    const targetDay = split.days.id(req.body.targetDayId);
+    if (!sourceDay || !targetDay) return res.status(404).json({ error: 'Day not found' });
+    if (sourceDay._id.equals(targetDay._id)) return res.status(400).json({ error: 'Cannot copy a day into itself' });
+
+    await snapshotVersion(split);
+    targetDay.exercises = sourceDay.toObject().exercises.map(({ _id, ...e }) => ({
+      ...e,
+      checked: false,
+      lastCheckedDate: '',
+    }));
+    await split.save();
+    res.json(sortExercises(split));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── EXERCISES ────────────────────────────────────────────────────────────────
 
 router.get('/:id/days/:dayId/exercises', async (req, res) => {

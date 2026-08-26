@@ -459,6 +459,19 @@ export async function swapDays(splitId, dayId, targetDayId) {
   return localRes;
 }
 
+export async function copyDayTo(splitId, dayId, targetDayId) {
+  const userId = getUserId();
+  if (navigator.onLine && isQueueEmpty()) {
+    const res = await apiStorage.copyDayTo(splitId, dayId, targetDayId);
+    await updateLocalCacheFromSever();
+    return res;
+  }
+  guestStorage.setStoragePrefix(`wt_offline_${userId}`);
+  const localRes = await guestStorage.copyDayTo(splitId, dayId, targetDayId);
+  addToQueue({ action: 'copyDayTo', args: [splitId, dayId, targetDayId] });
+  return localRes;
+}
+
 // Exercises
 export async function getExercises(splitId, dayId) {
   const userId = getUserId();

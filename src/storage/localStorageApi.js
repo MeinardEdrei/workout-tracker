@@ -396,6 +396,25 @@ export function swapDays(splitId, dayId, targetDayId) {
   return Promise.resolve({ ...split });
 }
 
+export function copyDayTo(splitId, dayId, targetDayId) {
+  const splits = readSplits();
+  const split = splits.find((s) => s._id === splitId);
+  if (!split) return Promise.reject(new Error('Split not found'));
+  const sourceDay = split.days.find((d) => d._id === dayId);
+  const targetDay = split.days.find((d) => d._id === targetDayId);
+  if (!sourceDay || !targetDay) return Promise.reject(new Error('Day not found'));
+  if (sourceDay._id === targetDay._id) return Promise.reject(new Error('Cannot copy a day into itself'));
+  snapshotVersion(split);
+  targetDay.exercises = (sourceDay.exercises || []).map((e) => ({
+    ...e,
+    _id: uid(),
+    checked: false,
+    lastCheckedDate: '',
+  }));
+  writeSplits(splits);
+  return Promise.resolve({ ...split });
+}
+
 // ─── Exercises ────────────────────────────────────────────────────────────────
 
 export function getExercises(splitId, dayId) {

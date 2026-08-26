@@ -66,6 +66,8 @@ export const updateDay = (splitId, dayId, data) => req('PUT', `/api/splits/${spl
 export const deleteDay = (splitId, dayId) => req('DELETE', `/api/splits/${splitId}/days/${dayId}`);
 export const swapDays = (splitId, dayId, targetDayId) =>
   req('POST', `/api/splits/${splitId}/days/${dayId}/swap-with`, { targetDayId });
+export const copyDayTo = (splitId, dayId, targetDayId) =>
+  req('POST', `/api/splits/${splitId}/days/${dayId}/copy-to`, { targetDayId });
 
 // ─── Exercises ────────────────────────────────────────────────────────────────
 export const getExercises = (splitId, dayId) =>
