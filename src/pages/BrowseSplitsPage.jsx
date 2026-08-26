@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getPublicSplits, copyPublicSplit } from '../api/index';
+import { getPublicSplits } from '../api/index';
 import { useAuth } from '../context/AuthContext';
+import { useStorage } from '../hooks/useStorage';
 
 function BackIcon() {
   return (
@@ -59,6 +60,7 @@ function Toast({ message, type = 'success', onClose }) {
 export default function BrowseSplitsPage({ onBack }) {
   const queryClient = useQueryClient();
   const { isLoggedIn } = useAuth();
+  const { storage, storageKey } = useStorage();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [expandedIds, setExpandedIds] = useState([]);
@@ -72,10 +74,10 @@ export default function BrowseSplitsPage({ onBack }) {
   });
 
   const copyMutation = useMutation({
-    mutationFn: copyPublicSplit,
+    mutationFn: (id) => storage.copyPublicSplit(id),
     onSuccess: (newSplit, id) => {
       setAddedIds((prev) => new Set([...prev, id]));
-      queryClient.invalidateQueries({ queryKey: ['splits'] });
+      queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
       showToast('Split added to your programs!');
     },
     onError: (err) => showToast(err.message || 'Failed to add split', 'error'),

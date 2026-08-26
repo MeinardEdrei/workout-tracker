@@ -265,7 +265,15 @@ export async function setSplitVisibility(id, isPublic) {
 }
 
 export const getPublicSplits = (page = 1) => apiStorage.getPublicSplits(page);
-export const copyPublicSplit = (id) => apiStorage.copyPublicSplit(id);
+
+export async function copyPublicSplit(id) {
+  if (!navigator.onLine) {
+    throw new Error('You need to be online to add a split from the community.');
+  }
+  const res = await apiStorage.copyPublicSplit(id);
+  await updateLocalCacheFromSever();
+  return res;
+}
 
 export async function reapplySplit(id) {
   const userId = getUserId();
