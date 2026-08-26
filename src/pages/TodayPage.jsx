@@ -2886,7 +2886,7 @@ function DayPager({ days, todayIndex, getDateForIndex, splitId, splitName, logs,
             key={day._id}
             ref={(el) => { dayRefs.current[i] = el; }}
             style={{
-              flex: '0 0 82%', scrollSnapAlign: 'center', height: 'calc(100dvh - 160px)',
+              flex: '0 0 100%', scrollSnapAlign: 'center', height: 'calc(100dvh - 160px)',
               overflow: 'hidden', borderRadius: 20, boxShadow: '0 18px 48px rgba(0,0,0,0.6), 0 4px 14px rgba(0,0,0,0.4)',
             }}
           >
