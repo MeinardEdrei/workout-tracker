@@ -1,21 +1,27 @@
 const express = require('express');
 const router = express.Router();
+const fs = require('fs');
+const path = require('path');
 const { requireAuth } = require('../middleware/auth');
 
 router.use(requireAuth);
 
 // POST /api/exercises/fetch-image
-// Proxies ExerciseDB to find an image for a given exercise name.
+// Looks up an image for a given exercise name from the bundled exercise
+// library (see scripts/sync-exercise-library.js), falling back to wger.de.
 // Returns { success, imageUrl } — does NOT persist; caller saves via PUT exercise.
-const FREE_EXERCISE_DB = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/dist/exercises.json';
-const FREE_EXERCISE_IMAGES = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises';
+const EXERCISE_IMAGES_BASE = '/exercise-images';
+const MANIFEST_PATH = path.join(__dirname, '../data/exerciseManifest.json');
 
 let _exerciseCache = null;
-async function getExercises() {
+function getExercises() {
   if (_exerciseCache) return _exerciseCache;
-  const res = await fetch(FREE_EXERCISE_DB);
-  if (!res.ok) throw new Error('Failed to fetch exercise db');
-  _exerciseCache = await res.json();
+  try {
+    _exerciseCache = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'));
+  } catch (err) {
+    console.error('[exercises] failed to load bundled manifest, run `npm run sync-exercises`:', err.message);
+    _exerciseCache = [];
+  }
   return _exerciseCache;
 }
 
@@ -23,24 +29,14 @@ function mapDatabaseMuscle(muscle) {
   if (!muscle) return '';
   const m = muscle.toLowerCase().trim();
   switch (m) {
-    case 'abdominals': return 'Abs';
-    case 'hamstrings': return 'Hamstrings';
-    case 'calves': return 'Calves';
-    case 'shoulders': return 'Shoulders';
-    case 'adductors': return 'Adductors';
-    case 'abductors': return 'Abductors';
-    case 'glutes': return 'Glutes';
-    case 'quadriceps': return 'Quads';
-    case 'biceps': return 'Biceps';
-    case 'forearms': return 'Forearms';
-    case 'triceps': return 'Triceps';
-    case 'chest': return 'Chest';
-    case 'lower back': return 'Lower Back';
-    case 'traps': return 'Traps';
-    case 'middle back': return 'Upper Back';
-    case 'lats': return 'Lats';
-    case 'neck': return 'Neck';
-    default: 
+    case 'back': return 'Upper Back';
+    case 'grip': return 'Forearms';
+    case 'groin': return 'Adductors';
+    case 'hips': return 'Hip Flexors';
+    case 'legs': return 'Quads';
+    case 'mobility': return 'Full Body';
+    case 'posterior chain': return 'Glutes';
+    default:
       return muscle.charAt(0).toUpperCase() + muscle.slice(1);
   }
 }
@@ -50,16 +46,16 @@ router.get('/suggest', async (req, res) => {
   const q = (req.query.q || '').toLowerCase().trim();
   if (!q || q.length < 2) return res.json([]);
   try {
-    const exercises = await getExercises();
+    const exercises = getExercises();
     const matches = exercises
       .filter(e => e.name.toLowerCase().includes(q))
       .slice(0, 8)
       .map(e => {
-        const imageUrl = e.images && e.images.length ? `${FREE_EXERCISE_IMAGES}/${e.images[0]}` : null;
-        const muscleTargets = [
-          ...(e.primaryMuscles || []).map(mapDatabaseMuscle),
+        const imageUrl = e.image ? `${EXERCISE_IMAGES_BASE}/${e.image}` : null;
+        const muscleTargets = [...new Set([
+          mapDatabaseMuscle(e.primaryMuscle),
           ...(e.secondaryMuscles || []).map(mapDatabaseMuscle)
-        ];
+        ])].filter(Boolean);
         return { name: e.name, imageUrl, muscleTargets };
       });
     return res.json(matches);
@@ -92,7 +88,7 @@ router.post('/fetch-image', async (req, res) => {
     };
 
     const query = normalizeName(exerciseName);
-    const exercises = await getExercises();
+    const exercises = getExercises();
 
     let bestMatch = null;
     let bestScore = 0;
@@ -129,8 +125,8 @@ router.post('/fetch-image', async (req, res) => {
 
     console.log('[fetch-image] query:', exerciseName, '| match:', bestMatch ? bestMatch.name : 'none', '| score:', bestScore);
 
-    if (bestMatch && bestMatch.images && bestMatch.images.length > 0) {
-      const imageUrl = `${FREE_EXERCISE_IMAGES}/${bestMatch.images[0]}`;
+    if (bestMatch && bestMatch.image) {
+      const imageUrl = `${EXERCISE_IMAGES_BASE}/${bestMatch.image}`;
       return res.json({ success: true, imageUrl });
     }
 

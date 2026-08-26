@@ -37,11 +37,24 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,jpg,jpeg,gif,webp,woff2}'],
+        globIgnores: ['exercise-images/**'],
         navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [
           {
             urlPattern: /\/api\/auth\//,
             handler: 'NetworkOnly',
+          },
+          {
+            urlPattern: /\/exercise-images\//,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'exercise-images',
+              expiration: {
+                maxEntries: 302,
+                maxAgeSeconds: 60 * 60 * 24 * 365,
+              },
+              cacheableResponse: { statuses: [0, 200] }
+            }
           },
           {
             urlPattern: /\/api\/(?!auth)/,
