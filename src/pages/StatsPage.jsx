@@ -6,7 +6,7 @@ import { createPortal } from 'react-dom';
 import { capitalizeWords, formatRelativeDate } from '../utils/textFormat';
 import { normKey, findDuplicatePairs } from '../utils/matchExercise';
 import BodyMuscleMap, { resolveExerciseMuscles } from '../components/BodyMuscleMap';
-import { X, TrendingUp, TrendingDown, ArrowRight, RotateCcw, BarChart3, FolderOpen, Download, Tag } from 'lucide-react';
+import { X, TrendingUp, TrendingDown, ArrowRight, RotateCcw, BarChart3, FolderOpen, Download, Tag, Pencil, Check } from 'lucide-react';
 
 function convertWeight(weight, fromUnit, toUnit) {
   if (fromUnit === toUnit) return weight;
@@ -933,6 +933,9 @@ function ManageExercisesModal({ logs, storage, storageKey, queryClient, onClose 
   const [survivor, setSurvivor] = useState(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
+  const [selectedNames, setSelectedNames] = useState([]); // manual merge picks, max 2
+  const [renamingName, setRenamingName] = useState(null);
+  const [renameValue, setRenameValue] = useState('');
 
   const exerciseStats = useMemo(() => {
     const map = new Map(); // normKey -> { name, logCount, lastLoggedDate }
@@ -964,13 +967,49 @@ function ManageExercisesModal({ logs, storage, storageKey, queryClient, onClose 
     return exerciseStats.find((e) => normKey(e.name) === normKey(name));
   }
 
-  function openMerge(pair) {
-    const a = statFor(pair.a);
-    const b = statFor(pair.b);
+  function openMerge(nameA, nameB) {
+    const a = statFor(nameA);
+    const b = statFor(nameB);
     if (!a || !b) return;
     setMergeTarget({ a, b });
     setSurvivor((b.logCount > a.logCount) ? b.name : a.name);
     setMsg(null);
+    setSelectedNames([]);
+  }
+
+  function toggleSelect(name) {
+    setSelectedNames((prev) => {
+      if (prev.includes(name)) return prev.filter((n) => n !== name);
+      if (prev.length >= 2) return prev;
+      return [...prev, name];
+    });
+  }
+
+  function startRename(stat) {
+    setRenamingName(stat.name);
+    setRenameValue(stat.name);
+    setMsg(null);
+  }
+
+  async function confirmRename() {
+    const oldName = renamingName;
+    const newName = renameValue.trim();
+    if (!oldName || !newName || newName.toLowerCase() === oldName.toLowerCase()) {
+      setRenamingName(null);
+      return;
+    }
+    setBusy(true);
+    try {
+      await storage.renameHistory(oldName, newName, 'all');
+      queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
+      queryClient.invalidateQueries({ queryKey: ['logs', storageKey] });
+      setMsg({ text: `Renamed "${oldName}" to "${newName}".`, type: 'success' });
+      setRenamingName(null);
+    } catch (err) {
+      setMsg({ text: err.message || 'Rename failed', type: 'error' });
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function confirmMerge() {
@@ -1050,7 +1089,7 @@ function ManageExercisesModal({ logs, storage, storageKey, queryClient, onClose 
                       <span style={{ fontSize: 12, color: 'var(--text)', minWidth: 0 }}>
                         "{pair.a}" and "{pair.b}"
                       </span>
-                      <button className="btn btn-accent" style={{ fontSize: 11, padding: '5px 10px', flexShrink: 0 }} onClick={() => openMerge(pair)}>
+                      <button className="btn btn-accent" style={{ fontSize: 11, padding: '5px 10px', flexShrink: 0 }} onClick={() => openMerge(pair.a, pair.b)}>
                         Merge
                       </button>
                     </div>
@@ -1059,20 +1098,81 @@ function ManageExercisesModal({ logs, storage, storageKey, queryClient, onClose 
               </div>
             )}
 
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
-              All exercises ({exerciseStats.length})
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                All exercises ({exerciseStats.length})
+              </div>
+              {selectedNames.length > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 11, color: 'var(--text3)' }}>{selectedNames.length}/2 selected</span>
+                  {selectedNames.length === 2 && (
+                    <button className="btn btn-accent" style={{ fontSize: 11, padding: '4px 9px' }} onClick={() => openMerge(selectedNames[0], selectedNames[1])}>
+                      Merge Selected
+                    </button>
+                  )}
+                  <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 9px' }} onClick={() => setSelectedNames([])}>
+                    Clear
+                  </button>
+                </div>
+              )}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 8 }}>
+              Tap two exercises to select them for a manual merge, or use the pencil to rename one.
             </div>
             <div style={{ maxHeight: 320, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
               {exerciseStats.length === 0 ? (
                 <div style={{ fontSize: 12, color: 'var(--text3)', fontStyle: 'italic' }}>No logged exercises yet.</div>
-              ) : exerciseStats.map((s) => (
-                <div key={s.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 10px', borderRadius: 6, background: 'var(--bg3)' }}>
-                  <span style={{ fontSize: 12, color: 'var(--text)' }}>{s.name}</span>
-                  <span style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>
-                    {s.logCount} log{s.logCount === 1 ? '' : 's'}
-                  </span>
-                </div>
-              ))}
+              ) : exerciseStats.map((s) => {
+                const isSelected = selectedNames.includes(s.name);
+                const isRenaming = renamingName === s.name;
+                return (
+                  <div
+                    key={s.name}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 6,
+                      background: isSelected ? 'rgba(232,255,90,0.08)' : 'var(--bg3)',
+                      border: `1px solid ${isSelected ? 'var(--accent)' : 'transparent'}`,
+                    }}
+                  >
+                    {isRenaming ? (
+                      <>
+                        <input
+                          type="text"
+                          value={renameValue}
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') confirmRename(); if (e.key === 'Escape') setRenamingName(null); }}
+                          autoFocus
+                          style={{ flex: 1, minWidth: 0, fontSize: 12, padding: '4px 7px', borderRadius: 5, border: '1px solid var(--accent)', background: 'var(--bg2)', color: 'var(--text)', outline: 'none' }}
+                        />
+                        <button onClick={confirmRename} disabled={busy} title="Save" style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', display: 'flex', flexShrink: 0 }}><Check size={14} /></button>
+                        <button onClick={() => setRenamingName(null)} disabled={busy} title="Cancel" style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', display: 'flex', flexShrink: 0 }}><X size={14} /></button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => toggleSelect(s.name)}
+                          title={isSelected ? 'Deselect' : 'Select for merge'}
+                          style={{
+                            width: 16, height: 16, borderRadius: 4, flexShrink: 0, padding: 0, cursor: 'pointer',
+                            border: `1.5px solid ${isSelected ? 'var(--accent)' : 'var(--border2)'}`,
+                            background: isSelected ? 'var(--accent)' : 'transparent',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          }}
+                        >
+                          {isSelected && <Check size={11} color="#0a0a0a" />}
+                        </button>
+                        <span style={{ fontSize: 12, color: 'var(--text)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
+                        <span style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
+                          {s.logCount} log{s.logCount === 1 ? '' : 's'}
+                        </span>
+                        <button onClick={() => startRename(s)} title="Rename" style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', display: 'flex', flexShrink: 0 }}>
+                          <Pencil size={13} />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </>
         )}
