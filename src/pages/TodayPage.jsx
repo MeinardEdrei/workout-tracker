@@ -11,7 +11,7 @@ import ExerciseThumbnail from '../components/ExerciseThumbnail';
 import { isSyncExcluded, excludeFromSync } from '../utils/syncPrefs';
 import { createPortal } from 'react-dom';
 import AiChatBubble from '../components/AiChatBubble';
-import { X, Check, RotateCcw, Trophy, BarChart3, StickyNote, Dumbbell, Zap, Moon, PartyPopper, Flame, ChevronDown } from 'lucide-react';
+import { X, Check, RotateCcw, Trophy, BarChart3, StickyNote, Dumbbell, Zap, Moon, PartyPopper, Flame, ChevronDown, CalendarDays } from 'lucide-react';
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const TODAY_DOW = new Date().getDay();
@@ -3262,12 +3262,23 @@ Coach:`;
             </span>
           </div>
         )}
-        <button
-          type="button"
-          onClick={() => setViewMode((m) => (m === 'pager' ? 'overview' : 'pager'))}
-          title={viewMode === 'pager' ? 'Show all days' : 'Back to focus mode'}
-          style={{ background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 8, padding: '7px 9px', cursor: 'pointer', color: 'var(--text2)', display: 'flex', alignItems: 'center', flexShrink: 0 }}
-        >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          {viewMode === 'pager' && activeDayIndex != null && activeDayIndex !== todayIndex && (
+            <button
+              type="button"
+              onClick={() => setJumpToIndex(todayIndex)}
+              title="Back to today"
+              style={{ background: 'var(--bg2)', border: '1px solid var(--accent)', borderRadius: 8, padding: '6px 10px', cursor: 'pointer', color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.03em' }}
+            >
+              <CalendarDays size={13} /> Today
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setViewMode((m) => (m === 'pager' ? 'overview' : 'pager'))}
+            title={viewMode === 'pager' ? 'Show all days' : 'Back to focus mode'}
+            style={{ background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 8, padding: '7px 9px', cursor: 'pointer', color: 'var(--text2)', display: 'flex', alignItems: 'center', flexShrink: 0 }}
+          >
           {viewMode === 'pager' ? (
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7" />
@@ -3278,7 +3289,8 @@ Coach:`;
               <rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" />
             </svg>
           )}
-        </button>
+          </button>
+        </div>
       </div>
 
       {days.length === 0 ? (
