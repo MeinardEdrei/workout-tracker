@@ -2644,7 +2644,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
 
   return (
     <>
-      <div style={isScreen ? { height: '100%', display: 'flex', flexDirection: 'column', boxSizing: 'border-box', background: 'var(--bg2)', border: '1px solid var(--border)' } : { margin: '0 16px 12px', borderRadius: 10, border: `1px solid ${(isToday || isRetaking) ? 'var(--accent)' : 'var(--border)'}`, overflow: 'hidden', background: 'var(--bg2)' }}>
+      <div style={isScreen ? { height: '100%', display: 'flex', flexDirection: 'column', boxSizing: 'border-box', background: 'var(--bg2)', border: '1.5px solid rgba(255,255,255,0.14)', borderRadius: 20 } : { margin: '0 16px 12px', borderRadius: 10, border: `1px solid ${(isToday || isRetaking) ? 'var(--accent)' : 'var(--border)'}`, overflow: 'hidden', background: 'var(--bg2)' }}>
         <HeaderTag
           onClick={isScreen ? undefined : () => !day.isRest && setOpen((o) => !o)}
           style={{ width: '100%', background: isToday && !isScreen ? 'rgba(232,255,90,0.04)' : 'transparent', border: 'none', cursor: (day.isRest || isScreen) ? 'default' : 'pointer', padding: isScreen ? '20px 16px 14px' : '16px 16px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, textAlign: 'left' }}
@@ -2671,7 +2671,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
           isScreen ? (
             <div className="day-snap-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', scrollSnapType: 'y mandatory' }}>
               {heroSectionEl && (
-                <div style={{ position: 'relative', scrollSnapAlign: 'start', minHeight: 'calc(100dvh - 150px)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                <div style={{ position: 'relative', scrollSnapAlign: 'start', minHeight: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                   {heroSectionEl}
                   {displayExercises.length > 1 && (
                     <div className="scroll-hint-bounce" style={{ position: 'absolute', left: '50%', bottom: 10, transform: 'translateX(-50%)', color: 'var(--text3)', pointerEvents: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
@@ -2875,7 +2875,7 @@ function DayPager({ days, todayIndex, getDateForIndex, splitId, splitName, logs,
       style={{
         display: 'flex', alignItems: 'flex-start', gap: 14,
         overflowX: 'auto', scrollSnapType: 'x mandatory',
-        padding: '16px 9vw', WebkitOverflowScrolling: 'touch',
+        padding: '16px 9%', WebkitOverflowScrolling: 'touch',
       }}
     >
       {days.map((day, i) => {
@@ -2886,8 +2886,8 @@ function DayPager({ days, todayIndex, getDateForIndex, splitId, splitName, logs,
             key={day._id}
             ref={(el) => { dayRefs.current[i] = el; }}
             style={{
-              flex: '0 0 82vw', scrollSnapAlign: 'center', height: 'calc(100dvh - 150px)',
-              overflow: 'hidden', borderRadius: 20, boxShadow: '0 12px 36px rgba(0,0,0,0.45)',
+              flex: '0 0 82%', scrollSnapAlign: 'center', height: 'calc(100dvh - 160px)',
+              overflow: 'hidden', borderRadius: 20, boxShadow: '0 18px 48px rgba(0,0,0,0.6), 0 4px 14px rgba(0,0,0,0.4)',
             }}
           >
             <DayCard
@@ -3205,37 +3205,30 @@ Coach:`;
 
   return (
     <div>
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Today</h1>
-          <div className="page-subtitle">{DAY_NAMES[TODAY_DOW]}</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 60px 10px 16px', height: 48, boxSizing: 'border-box' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)', flexShrink: 0 }} />
+          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {activeSplit.name}
+          </span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-          <div style={{ textAlign: 'right', minWidth: 0, overflow: 'hidden' }}>
-            <div style={{ fontSize: 12, color: 'var(--text2)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{activeSplit.name}</div>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: 2 }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)', display: 'inline-block' }} />
-              Active
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => setViewMode((m) => (m === 'pager' ? 'overview' : 'pager'))}
-            title={viewMode === 'pager' ? 'Show all days' : 'Back to focus mode'}
-            style={{ background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 8, padding: '7px 9px', cursor: 'pointer', color: 'var(--text2)', display: 'flex', alignItems: 'center', flexShrink: 0 }}
-          >
-            {viewMode === 'pager' ? (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7" />
-              </svg>
-            ) : (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" />
-                <rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" />
-              </svg>
-            )}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => setViewMode((m) => (m === 'pager' ? 'overview' : 'pager'))}
+          title={viewMode === 'pager' ? 'Show all days' : 'Back to focus mode'}
+          style={{ background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 8, padding: '7px 9px', cursor: 'pointer', color: 'var(--text2)', display: 'flex', alignItems: 'center', flexShrink: 0 }}
+        >
+          {viewMode === 'pager' ? (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7" />
+            </svg>
+          ) : (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" />
+              <rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" />
+            </svg>
+          )}
+        </button>
       </div>
 
       {days.length === 0 ? (
