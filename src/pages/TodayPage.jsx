@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useStorage } from '../hooks/useStorage';
 import * as api from '../api/index.js';
-import { capitalizeWords } from '../utils/textFormat';
+import { capitalizeWords, formatLastUsed } from '../utils/textFormat';
 import DailyShareCard from '../components/DailyShareCard';
 import BodyMap from '../components/BodyMap';
 import { MusclePill } from '../components/MusclePill';
@@ -1423,6 +1423,7 @@ function AddExerciseFromOtherDaysModal({ splitDays, logs, onConfirm, onClose }) 
             category: ex.category || 'workout',
             duration: ex.duration ?? 0,
             durationUnit: ex.durationUnit || 'sec',
+            date: log.date || '',
             isCustom: true
           });
         }
@@ -1653,14 +1654,32 @@ function AddExerciseFromOtherDaysModal({ splitDays, logs, onConfirm, onClose }) 
                         e.preventDefault();
                         handleSelectSuggestion(s);
                       }}
-                      style={{ 
+                      style={{
                         display: 'flex', width: '100%', alignItems: 'center', gap: 10,
-                        textAlign: 'left', padding: '8px 12px', fontSize: 13, 
-                        background: 'none', border: 'none', color: 'var(--text)', 
-                        cursor: 'pointer', borderBottom: '1px solid var(--border)' 
+                        textAlign: 'left', padding: '8px 12px', fontSize: 13,
+                        background: 'none', border: 'none', color: 'var(--text)',
+                        cursor: 'pointer', borderBottom: '1px solid var(--border)'
                       }}
                     >
-                      <span>{s.name}</span>
+                      <ExerciseThumbnail imageUrl={s.imageUrl} name={s.name} size={28} />
+                      <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <span style={{ textTransform: 'uppercase', fontSize: 12, fontWeight: 700 }}>{s.name}</span>
+                        {s.isCustom && formatLastUsed(s) && (
+                          <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text3)' }}>
+                            Last: {formatLastUsed(s)}
+                          </span>
+                        )}
+                      </span>
+                      {s.isCustom && (
+                        <span style={{
+                          fontSize: 8, fontWeight: 800, color: 'var(--accent)',
+                          background: 'rgba(232,255,90,0.08)', border: '1px solid rgba(232,255,90,0.2)',
+                          padding: '2px 6px', borderRadius: 4, textTransform: 'uppercase', letterSpacing: '0.04em',
+                          flexShrink: 0
+                        }}>
+                          History
+                        </span>
+                      )}
                     </button>
                   ))}
                 </div>
@@ -1738,6 +1757,7 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
             weight: ex.weight || 0,
             weightUnit: ex.weightUnit || 'kg',
             untilFailure: ex.untilFailure || false,
+            date: log.date || '',
             isCustom: true
           });
         }
@@ -1889,14 +1909,22 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
                     onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
                   >
                     <ExerciseThumbnail imageUrl={s.imageUrl} name={s.name} size={28} />
-                    <span style={{ flex: 1, textTransform: 'uppercase', fontSize: 12, fontWeight: 700 }}>{s.name}</span>
+                    <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <span style={{ textTransform: 'uppercase', fontSize: 12, fontWeight: 700 }}>{s.name}</span>
+                      {s.isCustom && formatLastUsed(s) && (
+                        <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text3)' }}>
+                          Last: {formatLastUsed(s)}
+                        </span>
+                      )}
+                    </span>
                     {s.isCustom && (
-                      <span style={{ 
-                        fontSize: 8, fontWeight: 800, color: 'var(--accent)', 
+                      <span style={{
+                        fontSize: 8, fontWeight: 800, color: 'var(--accent)',
                         background: 'rgba(232,255,90,0.08)', border: '1px solid rgba(232,255,90,0.2)',
-                        padding: '2px 6px', borderRadius: 4, textTransform: 'uppercase', letterSpacing: '0.04em'
+                        padding: '2px 6px', borderRadius: 4, textTransform: 'uppercase', letterSpacing: '0.04em',
+                        flexShrink: 0
                       }}>
-                        Your History
+                        History
                       </span>
                     )}
                   </button>
