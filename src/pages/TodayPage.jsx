@@ -2418,6 +2418,17 @@ function ConsistencyCard({ logs, activeSplit }) {
   const stats = useMemo(() => {
     if (!activeSplit) return { streakWeeks: 0, streakDays: 0, thisWeekDone: 0, thisWeekTarget: 0, weekDays: [] };
     const targetDays = (activeSplit.days || []).filter(d => !d.isRest).length || 1;
+
+    const sortedSplitDays = [...(activeSplit.days || [])].sort((a, b) => (a.dayOrder ?? 8) - (b.dayOrder ?? 8));
+    const allRest = sortedSplitDays.length === 0 || sortedSplitDays.every(d => d.isRest);
+    function isScheduledRestDay(dateObj) {
+      if (allRest) return false;
+      const dayNameMatch = DAY_NAMES[dateObj.getDay()].toLowerCase();
+      let idx = sortedSplitDays.findIndex(d => d.name.toLowerCase().startsWith(dayNameMatch));
+      if (idx === -1) idx = dateObj.getDay() % sortedSplitDays.length;
+      return !!sortedSplitDays[idx].isRest;
+    }
+
     const now = new Date();
     const dayOfWeek = now.getDay();
     const diffToMon = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
@@ -2476,8 +2487,12 @@ function ConsistencyCard({ logs, activeSplit }) {
     }
     dDay.setDate(dDay.getDate() - 1);
     checkDayStr = dDay.toISOString().slice(0, 10);
-    while (logsByDate.has(checkDayStr)) {
-      streakDays++;
+    for (let guard = 0; guard < 3650; guard++) {
+      if (logsByDate.has(checkDayStr)) {
+        streakDays++;
+      } else if (!isScheduledRestDay(dDay)) {
+        break;
+      }
       dDay.setDate(dDay.getDate() - 1);
       checkDayStr = dDay.toISOString().slice(0, 10);
     }
