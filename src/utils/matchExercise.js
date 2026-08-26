@@ -59,6 +59,15 @@ export function findBestMatch(exercises, name) {
 // duplicates (e.g. "DB Curl" / "Dumbbell Curl") for the merge-review UI.
 // Skips pairs that are already normKey-identical — those already aggregate
 // as the same exercise, nothing to suggest merging.
+//
+// Uses a symmetric (Jaccard) word-overlap score rather than findBestMatch's
+// one-directional ratio — that one divides by the *query's* word count only,
+// so a short name like "Squat" scores a perfect match against "Front Squat"
+// or "Bulgarian Split Squat" (1/1 of its own words found), flooding real
+// exercise lists with false positives for any common shared word (Press,
+// Curl, Row, Raise...). Requiring overlap relative to the *combined* word
+// set means both names have to be substantially the same, not just one a
+// subset of the other.
 export function findDuplicatePairs(names) {
   const list = [...new Set(names.map((n) => (n || '').trim()).filter(Boolean))];
   const pairs = [];
@@ -67,7 +76,20 @@ export function findDuplicatePairs(names) {
       const a = list[i];
       const b = list[j];
       if (normKey(a) === normKey(b)) continue;
-      const { score } = findBestMatch([{ name: b }], a);
+      const normA = normalizeName(a);
+      const normB = normalizeName(b);
+      let score;
+      if (normA === normB) {
+        score = 2;
+      } else {
+        const wordsA = new Set(normA.split(' ').filter((w) => w.length > 1));
+        const wordsB = new Set(normB.split(' ').filter((w) => w.length > 1));
+        const union = new Set([...wordsA, ...wordsB]);
+        if (union.size === 0) continue;
+        let intersectionCount = 0;
+        wordsA.forEach((w) => { if (wordsB.has(w)) intersectionCount++; });
+        score = intersectionCount / union.size;
+      }
       if (score >= 0.6) pairs.push({ a, b, score });
     }
   }

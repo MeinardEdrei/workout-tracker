@@ -1076,7 +1076,7 @@ function ManageExercisesModal({ logs, storage, storageKey, queryClient, onClose 
                 <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
                   Possible duplicates
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 180, overflowY: 'auto' }}>
                   {duplicatePairs.map((pair) => (
                     <div
                       key={`${pair.a}::${pair.b}`}
@@ -1237,13 +1237,6 @@ export default function StatsPage() {
           <button
             className="btn btn-ghost"
             style={{ fontSize: 11, padding: '5px 10px', gap: 5 }}
-            onClick={() => setShowManageExercises(true)}
-          >
-            <Tag size={13} /> Exercises
-          </button>
-          <button
-            className="btn btn-ghost"
-            style={{ fontSize: 11, padding: '5px 10px', gap: 5 }}
             onClick={() => setShowBackupModal(true)}
           >
             <FolderOpen size={13} /> Backups
@@ -1260,20 +1253,20 @@ export default function StatsPage() {
           {/* ── This Week ── */}
           <SectionLabel>This Week</SectionLabel>
           <div style={{ borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg2)', padding: '16px', marginBottom: 24 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+              <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text3)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 4 }}>Sessions</div>
-                <div style={{ fontSize: 52, fontWeight: 900, fontFamily: 'var(--font-display)', color: 'var(--accent)', lineHeight: 1, letterSpacing: '-0.01em' }}>{weekLogs.length}</div>
+                <div style={{ fontSize: 'clamp(34px, 12vw, 52px)', fontWeight: 900, fontFamily: 'var(--font-display)', color: 'var(--accent)', lineHeight: 1, letterSpacing: '-0.01em' }}>{weekLogs.length}</div>
                 <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>this week</div>
               </div>
-              <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-end' }}>
+              <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-end', minWidth: 0 }}>
                 <button className="btn" style={{ background: 'transparent', border: '1px solid var(--border2)', color: 'var(--text2)', fontSize: 12, gap: 6 }} onClick={() => setShowShareModal(true)}>
                   <ShareIcon /> Share
                 </button>
                 {totalVolume > 0 && (
                   <div>
                     <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text3)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2, textAlign: 'right' }}>Volume</div>
-                    <div style={{ fontSize: 24, fontWeight: 900, fontFamily: 'var(--font-mono)', color: 'var(--text)', letterSpacing: '-0.02em' }}>
+                    <div style={{ fontSize: 'clamp(18px, 6vw, 24px)', fontWeight: 900, fontFamily: 'var(--font-mono)', color: 'var(--text)', letterSpacing: '-0.02em' }}>
                       {volLabel}<span style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 400, marginLeft: 3 }}>{weekVolUnit !== 'mixed' ? weekVolUnit : ''}</span>
                     </div>
                   </div>
@@ -1293,6 +1286,23 @@ export default function StatsPage() {
               <ActivityTracker logs={logs} />
             </>
           )}
+
+          {/* ── Manage Exercises ── */}
+          <SectionLabel>Exercises</SectionLabel>
+          <div style={{ borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg2)', padding: '16px', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{ width: 44, height: 44, borderRadius: 10, background: 'rgba(232,255,90,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', flexShrink: 0 }}>
+              <Tag size={20} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)', textTransform: 'uppercase', letterSpacing: '0.02em' }}>Manage Exercises</div>
+              <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 3, lineHeight: 1.4 }}>
+                Rename an exercise, or merge duplicates like "DB Curl" and "Dumbbell Curl" so their history stays connected.
+              </div>
+            </div>
+            <button className="btn btn-accent" style={{ fontSize: 12, padding: '8px 14px', flexShrink: 0 }} onClick={() => setShowManageExercises(true)}>
+              Open
+            </button>
+          </div>
 
           {/* ── Progression ── */}
           {progressionData.length > 0 && (
