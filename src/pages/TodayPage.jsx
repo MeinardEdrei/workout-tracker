@@ -1112,19 +1112,27 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
           </div>
         )}
 
-        <button
-          onClick={() => !readOnly && !toggleMutation.isPending && toggleMutation.mutate()}
-          disabled={readOnly || toggleMutation.isPending}
-          style={{
-            marginTop: 4, width: '100%', padding: 'clamp(10px, 2vh, 16px)', borderRadius: 14, border: 'none',
-            background: effectiveChecked ? 'var(--bg3)' : 'var(--accent)',
-            color: effectiveChecked ? 'var(--text2)' : '#0a0a0a',
-            fontWeight: 900, fontSize: 15, textTransform: 'uppercase', letterSpacing: '0.04em',
-            cursor: readOnly ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-          }}
-        >
-          {effectiveChecked ? (<><CheckIcon /> Completed</>) : 'Mark Complete'}
-        </button>
+        {readOnly ? (
+          effectiveChecked && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, color: 'var(--green)', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              <Check size={14} /> Completed
+            </div>
+          )
+        ) : (
+          <button
+            onClick={() => !toggleMutation.isPending && toggleMutation.mutate()}
+            disabled={toggleMutation.isPending}
+            style={{
+              marginTop: 4, width: '100%', padding: 'clamp(10px, 2vh, 16px)', borderRadius: 14, border: 'none',
+              background: effectiveChecked ? 'var(--bg3)' : 'var(--accent)',
+              color: effectiveChecked ? 'var(--text2)' : '#0a0a0a',
+              fontWeight: 900, fontSize: 15, textTransform: 'uppercase', letterSpacing: '0.04em',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            }}
+          >
+            {effectiveChecked ? (<><CheckIcon /> Completed</>) : 'Mark Complete'}
+          </button>
+        )}
 
         {modalsEl}
       </div>
@@ -2647,21 +2655,23 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
   return (
     <>
       <div style={isScreen ? { height: '100%', display: 'flex', flexDirection: 'column', boxSizing: 'border-box', background: 'var(--bg2)', border: '1.5px solid rgba(255,255,255,0.14)', borderRadius: 20 } : { margin: '0 16px 12px', borderRadius: 10, border: `1px solid ${(isToday || isRetaking) ? 'var(--accent)' : 'var(--border)'}`, overflow: 'hidden', background: 'var(--bg2)' }}>
-        <HeaderTag
-          onClick={isScreen ? undefined : () => !day.isRest && setOpen((o) => !o)}
-          style={{ width: '100%', background: isToday && !isScreen ? 'rgba(232,255,90,0.04)' : 'transparent', border: 'none', cursor: (day.isRest || isScreen) ? 'default' : 'pointer', padding: isScreen ? '20px 16px 14px' : '16px 16px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, textAlign: 'left' }}
-        >
-          <div style={{ flex: 1, minWidth: 0 }}>
-            {isToday && (
-              <div style={{ fontSize: 8, fontWeight: 900, letterSpacing: '0.18em', background: 'var(--accent)', color: '#0a0a0a', padding: '2px 6px', borderRadius: 2, textTransform: 'uppercase', display: 'inline-block', marginBottom: 6 }}>TODAY</div>
-            )}
-            <div style={{ fontSize: 28, fontWeight: 900, fontFamily: 'var(--font-display)', letterSpacing: '0.02em', textTransform: 'uppercase', lineHeight: 1, color: (isToday || isRetaking) ? 'var(--accent)' : day.isRest ? 'var(--text3)' : 'var(--text)' }}>
-              {day.name}
+        {!isScreen && (
+          <HeaderTag
+            onClick={() => !day.isRest && setOpen((o) => !o)}
+            style={{ width: '100%', background: isToday ? 'rgba(232,255,90,0.04)' : 'transparent', border: 'none', cursor: day.isRest ? 'default' : 'pointer', padding: '16px 16px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, textAlign: 'left' }}
+          >
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {isToday && (
+                <div style={{ fontSize: 8, fontWeight: 900, letterSpacing: '0.18em', background: 'var(--accent)', color: '#0a0a0a', padding: '2px 6px', borderRadius: 2, textTransform: 'uppercase', display: 'inline-block', marginBottom: 6 }}>TODAY</div>
+              )}
+              <div style={{ fontSize: 28, fontWeight: 900, fontFamily: 'var(--font-display)', letterSpacing: '0.02em', textTransform: 'uppercase', lineHeight: 1, color: (isToday || isRetaking) ? 'var(--accent)' : day.isRest ? 'var(--text3)' : 'var(--text)' }}>
+                {day.name}
+              </div>
+              {day.tag && <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 5, fontWeight: 500 }}>{day.tag}</div>}
             </div>
-            {day.tag && <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 5, fontWeight: 500 }}>{day.tag}</div>}
-          </div>
-          {badgeArea}
-        </HeaderTag>
+            {badgeArea}
+          </HeaderTag>
+        )}
 
         {isScreen && day.isRest && (
           <div className="day-snap-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
@@ -2849,8 +2859,9 @@ function ConsistencyCard({ logs, activeSplit }) {
 // Horizontal, swipeable one-day-at-a-time view. Vertical scroll inside each
 // panel moves through that day's exercises; horizontal swipe/tap switches
 // days — kept on separate axes so the two gestures never fight each other.
-function DayPager({ days, todayIndex, getDateForIndex, splitId, splitName, logs, onShowToast, jumpToIndex, onJumpHandled }) {
+function DayPager({ days, todayIndex, getDateForIndex, splitId, splitName, logs, onShowToast, jumpToIndex, onJumpHandled, onActiveDayChange }) {
   const dayRefs = useRef({});
+  const trackRef = useRef(null);
   const landedRef = useRef(false);
 
   // Land on today instantly (no visible slide) once the panel has a size.
@@ -2871,8 +2882,32 @@ function DayPager({ days, todayIndex, getDateForIndex, splitId, splitName, logs,
     if (onJumpHandled) onJumpHandled();
   }, [jumpToIndex]);
 
+  // Track which day card is most centered, so the top bar can show its name.
+  useEffect(() => {
+    if (!onActiveDayChange || !trackRef.current) return;
+    const ratios = new Map();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const idx = Number(entry.target.dataset.dayIndex);
+          ratios.set(idx, entry.isIntersecting ? entry.intersectionRatio : 0);
+        });
+        let bestIdx = todayIndex;
+        let bestRatio = -1;
+        ratios.forEach((ratio, idx) => {
+          if (ratio > bestRatio) { bestRatio = ratio; bestIdx = idx; }
+        });
+        onActiveDayChange(bestIdx);
+      },
+      { root: trackRef.current, threshold: [0, 0.25, 0.5, 0.75, 1] }
+    );
+    Object.values(dayRefs.current).forEach((el) => el && observer.observe(el));
+    return () => observer.disconnect();
+  }, [days.length]);
+
   return (
     <div
+      ref={trackRef}
       className="day-pager-track"
       style={{
         display: 'flex', alignItems: 'flex-start', gap: 14,
@@ -2887,6 +2922,7 @@ function DayPager({ days, todayIndex, getDateForIndex, splitId, splitName, logs,
           <div
             key={day._id}
             ref={(el) => { dayRefs.current[i] = el; }}
+            data-day-index={i}
             style={{
               flex: '0 0 100%', scrollSnapAlign: 'center', height: 'calc(100dvh - 160px)',
               overflow: 'hidden', borderRadius: 20, boxShadow: '0 18px 48px rgba(0,0,0,0.6), 0 4px 14px rgba(0,0,0,0.4)',
@@ -2919,6 +2955,7 @@ export default function TodayPage() {
   const [toast, setToast] = useState(null);
   const [viewMode, setViewMode] = useState('pager'); // 'pager' | 'overview'
   const [jumpToIndex, setJumpToIndex] = useState(null);
+  const [activeDayIndex, setActiveDayIndex] = useState(null);
 
   function showToast(message, type = 'success', Icon) {
     setToast({ message, type, Icon });
@@ -3208,12 +3245,23 @@ Coach:`;
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 60px 10px 16px', height: 48, boxSizing: 'border-box' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-          <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)', flexShrink: 0 }} />
-          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {activeSplit.name}
-          </span>
-        </div>
+        {viewMode === 'pager' && activeDayIndex != null && days[activeDayIndex] ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+            {activeDayIndex === todayIndex && (
+              <span style={{ fontSize: 8, fontWeight: 900, letterSpacing: '0.1em', background: 'var(--accent)', color: '#0a0a0a', padding: '2px 5px', borderRadius: 3, textTransform: 'uppercase', flexShrink: 0 }}>Today</span>
+            )}
+            <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--text)', textTransform: 'uppercase', letterSpacing: '0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {days[activeDayIndex].name}
+            </span>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)', flexShrink: 0 }} />
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {activeSplit.name}
+            </span>
+          </div>
+        )}
         <button
           type="button"
           onClick={() => setViewMode((m) => (m === 'pager' ? 'overview' : 'pager'))}
@@ -3246,6 +3294,7 @@ Coach:`;
           onShowToast={showToast}
           jumpToIndex={jumpToIndex}
           onJumpHandled={() => setJumpToIndex(null)}
+          onActiveDayChange={setActiveDayIndex}
         />
       ) : (
         <>
