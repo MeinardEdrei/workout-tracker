@@ -270,6 +270,66 @@ export function applySync(fields, targets) {
   return Promise.resolve({ message: 'Synced' });
 }
 
+// ─── Exercise History Rename / Merge ───────────────────────────────────────────
+
+export function getHistoryUsage(name) {
+  if (!name) return Promise.resolve({ logCount: 0, occurrences: 0 });
+  const targetKey = name.trim().toLowerCase();
+  let logCount = 0;
+  let occurrences = 0;
+  readLogs().forEach((log) => {
+    const matches = (log.exercises || []).filter((e) => e.name && e.name.trim().toLowerCase() === targetKey).length;
+    if (matches > 0) {
+      logCount++;
+      occurrences += matches;
+    }
+  });
+  return Promise.resolve({ logCount, occurrences });
+}
+
+export function renameHistory(oldName, newName, scope) {
+  const targetKey = oldName.trim().toLowerCase();
+
+  let logsChanged = 0;
+  let exercisesChanged = 0;
+  const logs = readLogs();
+  logs.forEach((log) => {
+    let touched = false;
+    (log.exercises || []).forEach((ex) => {
+      if (ex.name && ex.name.trim().toLowerCase() === targetKey) {
+        ex.name = newName;
+        exercisesChanged++;
+        touched = true;
+      }
+    });
+    if (touched) logsChanged++;
+  });
+  writeLogs(logs);
+
+  let splitsChanged = 0;
+  if (scope === 'all') {
+    const splits = readSplits();
+    splits.forEach((split) => {
+      let touched = false;
+      (split.days || []).forEach((d) => {
+        (d.exercises || []).forEach((ex) => {
+          if (ex.name && ex.name.trim().toLowerCase() === targetKey) {
+            ex.name = newName;
+            touched = true;
+          }
+        });
+      });
+      if (touched) {
+        snapshotVersion(split);
+        splitsChanged++;
+      }
+    });
+    writeSplits(splits);
+  }
+
+  return Promise.resolve({ logsChanged, exercisesChanged, splitsChanged });
+}
+
 // ─── Days ─────────────────────────────────────────────────────────────────────
 
 export function getDays(splitId) {

@@ -1,4 +1,9 @@
-function normalizeName(str) {
+// Client-side copy of api/_lib/utils/matchExercise.js — kept in sync by hand.
+// Used for the reactive "looks like a duplicate" warning and the Manage
+// Exercises review screen, both of which need to run against data already
+// loaded in memory (no network round-trip).
+
+export function normalizeName(str) {
   return str.toLowerCase()
     .replace(/\bdb\b/g, 'dumbbell')
     .replace(/\bbb\b/g, 'barbell')
@@ -13,10 +18,14 @@ function normalizeName(str) {
     .trim();
 }
 
+export function normKey(name) {
+  return (name || '').trim().toLowerCase();
+}
+
 // Finds the best match for `name` among `exercises` (each with a `.name`).
 // Returns { match, score } — score 2 for an exact match, else a 0-1 token
 // overlap ratio (only returned when >= 0.6).
-function findBestMatch(exercises, name) {
+export function findBestMatch(exercises, name) {
   const query = normalizeName(name);
   let bestMatch = null;
   let bestScore = 0;
@@ -46,17 +55,11 @@ function findBestMatch(exercises, name) {
   return { match: bestMatch, score: bestScore };
 }
 
-// Trim + lowercase — the single source of truth for "exact match" semantics
-// used by the rename-cascade/merge endpoints (see api/_lib/routes/splits.js).
-function normKey(name) {
-  return (name || '').trim().toLowerCase();
-}
-
 // Pairwise scan over a flat list of exercise names, flagging likely
 // duplicates (e.g. "DB Curl" / "Dumbbell Curl") for the merge-review UI.
 // Skips pairs that are already normKey-identical — those already aggregate
 // as the same exercise, nothing to suggest merging.
-function findDuplicatePairs(names) {
+export function findDuplicatePairs(names) {
   const list = [...new Set(names.map((n) => (n || '').trim()).filter(Boolean))];
   const pairs = [];
   for (let i = 0; i < list.length; i++) {
@@ -70,5 +73,3 @@ function findDuplicatePairs(names) {
   }
   return pairs.sort((x, y) => y.score - x.score);
 }
-
-module.exports = { normalizeName, findBestMatch, normKey, findDuplicatePairs };

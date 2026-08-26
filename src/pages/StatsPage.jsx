@@ -3,7 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useStorage } from '../hooks/useStorage';
 import StatsShareModal from '../components/StatsShareModal';
 import { createPortal } from 'react-dom';
-import { capitalizeWords } from '../utils/textFormat';
+import { capitalizeWords, formatRelativeDate } from '../utils/textFormat';
+import { normKey, findDuplicatePairs } from '../utils/matchExercise';
 import BodyMuscleMap, { resolveExerciseMuscles } from '../components/BodyMuscleMap';
 
 function convertWeight(weight, fromUnit, toUnit) {
@@ -926,11 +927,183 @@ function BackupModal({ logs, splits, storage, queryClient, onClose }) {
   );
 }
 
+function ManageExercisesModal({ logs, storage, storageKey, queryClient, onClose }) {
+  const [mergeTarget, setMergeTarget] = useState(null); // { a: stat, b: stat }
+  const [survivor, setSurvivor] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  const exerciseStats = useMemo(() => {
+    const map = new Map(); // normKey -> { name, logCount, lastLoggedDate }
+    (logs || []).forEach((log) => {
+      (log.exercises || []).forEach((ex) => {
+        if (!ex.name) return;
+        const key = normKey(ex.name);
+        const existing = map.get(key);
+        if (existing) {
+          existing.logCount++;
+          if (!existing.lastLoggedDate || (log.date || '') > existing.lastLoggedDate) {
+            existing.lastLoggedDate = log.date || '';
+            existing.name = ex.name.trim();
+          }
+        } else {
+          map.set(key, { name: ex.name.trim(), logCount: 1, lastLoggedDate: log.date || '' });
+        }
+      });
+    });
+    return [...map.values()].sort((a, b) => b.logCount - a.logCount);
+  }, [logs]);
+
+  const duplicatePairs = useMemo(
+    () => findDuplicatePairs(exerciseStats.map((e) => e.name)),
+    [exerciseStats]
+  );
+
+  function statFor(name) {
+    return exerciseStats.find((e) => normKey(e.name) === normKey(name));
+  }
+
+  function openMerge(pair) {
+    const a = statFor(pair.a);
+    const b = statFor(pair.b);
+    if (!a || !b) return;
+    setMergeTarget({ a, b });
+    setSurvivor((b.logCount > a.logCount) ? b.name : a.name);
+    setMsg(null);
+  }
+
+  async function confirmMerge() {
+    if (!mergeTarget || !survivor) return;
+    const losing = survivor === mergeTarget.a.name ? mergeTarget.b.name : mergeTarget.a.name;
+    setBusy(true);
+    try {
+      await storage.renameHistory(losing, survivor, 'all');
+      queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
+      queryClient.invalidateQueries({ queryKey: ['logs', storageKey] });
+      setMsg({ text: `Merged "${losing}" into "${survivor}".`, type: 'success' });
+      setMergeTarget(null);
+    } catch (err) {
+      setMsg({ text: err.message || 'Merge failed', type: 'error' });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return createPortal(
+    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 460 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div className="modal-title" style={{ fontSize: 18, margin: 0 }}>Manage Exercises</div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text3)', fontSize: 16, cursor: 'pointer' }}>✕</button>
+        </div>
+
+        {mergeTarget ? (
+          <div>
+            <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 12 }}>
+              These look like the same exercise. Pick which name should keep the combined history:
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+              {[mergeTarget.a, mergeTarget.b].map((s) => (
+                <button
+                  key={s.name}
+                  onClick={() => setSurvivor(s.name)}
+                  style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    padding: '10px 12px', borderRadius: 8, textAlign: 'left', cursor: 'pointer',
+                    background: survivor === s.name ? 'rgba(232,255,90,0.08)' : 'var(--bg3)',
+                    border: `1px solid ${survivor === s.name ? 'var(--accent)' : 'var(--border2)'}`,
+                  }}
+                >
+                  <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--text)' }}>{s.name}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text3)' }}>
+                    {s.logCount} log{s.logCount === 1 ? '' : 's'}
+                    {s.lastLoggedDate ? ` · ${formatRelativeDate(s.lastLoggedDate)}` : ''}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <div className="modal-actions">
+              <button className="btn btn-ghost" onClick={() => setMergeTarget(null)} disabled={busy}>Cancel</button>
+              <button className="btn btn-accent" onClick={confirmMerge} disabled={busy}>
+                {busy ? 'Merging…' : 'Merge'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {duplicatePairs.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                  Possible duplicates
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {duplicatePairs.map((pair) => (
+                    <div
+                      key={`${pair.a}::${pair.b}`}
+                      style={{
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8,
+                        padding: '10px 12px', borderRadius: 8, background: 'rgba(232,255,90,0.06)',
+                        border: '1px solid rgba(232,255,90,0.2)',
+                      }}
+                    >
+                      <span style={{ fontSize: 12, color: 'var(--text)', minWidth: 0 }}>
+                        "{pair.a}" and "{pair.b}"
+                      </span>
+                      <button className="btn btn-accent" style={{ fontSize: 11, padding: '5px 10px', flexShrink: 0 }} onClick={() => openMerge(pair)}>
+                        Merge
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+              All exercises ({exerciseStats.length})
+            </div>
+            <div style={{ maxHeight: 320, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {exerciseStats.length === 0 ? (
+                <div style={{ fontSize: 12, color: 'var(--text3)', fontStyle: 'italic' }}>No logged exercises yet.</div>
+              ) : exerciseStats.map((s) => (
+                <div key={s.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 10px', borderRadius: 6, background: 'var(--bg3)' }}>
+                  <span style={{ fontSize: 12, color: 'var(--text)' }}>{s.name}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>
+                    {s.logCount} log{s.logCount === 1 ? '' : 's'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {msg && (
+          <div style={{
+            fontSize: 12, fontWeight: 600, padding: '8px 12px', borderRadius: 6, marginTop: 12,
+            background: msg.type === 'error' ? 'rgba(255,68,68,0.12)' : 'rgba(232,255,90,0.12)',
+            color: msg.type === 'error' ? 'var(--red)' : 'var(--accent)',
+            border: `1px solid ${msg.type === 'error' ? 'rgba(255,68,68,0.3)' : 'rgba(232,255,90,0.3)'}`,
+          }}>
+            {msg.text}
+          </div>
+        )}
+
+        {!mergeTarget && (
+          <div className="modal-actions">
+            <button className="btn btn-ghost" onClick={onClose}>Close</button>
+          </div>
+        )}
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 export default function StatsPage() {
   const queryClient = useQueryClient();
   const { storage, storageKey } = useStorage();
   const [showShareModal, setShowShareModal] = useState(false);
   const [showBackupModal, setShowBackupModal] = useState(false);
+  const [showManageExercises, setShowManageExercises] = useState(false);
   const [confirm, setConfirm] = useState(null);
   const [progressionSearch, setProgressionSearch] = useState('');
 
@@ -960,6 +1133,13 @@ export default function StatsPage() {
           <div className="page-subtitle">{logs.length} total workouts</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button
+            className="btn btn-ghost"
+            style={{ fontSize: 11, padding: '5px 10px', gap: 5 }}
+            onClick={() => setShowManageExercises(true)}
+          >
+            🏷️ Exercises
+          </button>
           <button
             className="btn btn-ghost"
             style={{ fontSize: 11, padding: '5px 10px', gap: 5 }}
@@ -1065,6 +1245,16 @@ export default function StatsPage() {
           storage={storage}
           queryClient={queryClient}
           onClose={() => setShowBackupModal(false)}
+        />
+      )}
+
+      {showManageExercises && (
+        <ManageExercisesModal
+          logs={logs}
+          storage={storage}
+          storageKey={storageKey}
+          queryClient={queryClient}
+          onClose={() => setShowManageExercises(false)}
         />
       )}
 

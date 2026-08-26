@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useStorage } from '../hooks/useStorage';
 import { MusclePill, MUSCLE_COLORS, MUSCLE_GROUPS } from '../components/MusclePill';
 import { capitalizeWords, formatLastUsed } from '../utils/textFormat';
+import { findBestMatch } from '../utils/matchExercise';
 import ExerciseThumbnail from '../components/ExerciseThumbnail';
 import { isSyncExcluded, excludeFromSync } from '../utils/syncPrefs';
 import { createPortal } from 'react-dom';
@@ -211,6 +212,24 @@ function ConfirmModal({ message, onConfirm, onClose }) {
         <div className="modal-actions">
           <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
           <button className="btn btn-danger" onClick={onConfirm}>Delete</button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+function RenameHistoryModal({ oldName, newName, logCount, onRename, onSkip }) {
+  return createPortal(
+    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onSkip()}>
+      <div className="modal">
+        <div className="modal-title">Update past history?</div>
+        <div style={{ color: 'var(--text2)', fontSize: 14, marginBottom: 4 }}>
+          You have {logCount} past log{logCount === 1 ? '' : 's'} for "{oldName}". Rename {logCount === 1 ? 'it' : 'them'} to "{newName}" too, so your progress history stays connected?
+        </div>
+        <div className="modal-actions">
+          <button className="btn btn-ghost" onClick={onSkip}>Keep as "{oldName}"</button>
+          <button className="btn btn-accent" onClick={onRename}>Rename History</button>
         </div>
       </div>
     </div>,
@@ -657,6 +676,20 @@ function AddExerciseModal({ splitDays, onConfirm, onClose }) {
     setSuggestions([]);
   }
 
+  // Catches near-duplicates that the substring-based `suggestions` dropdown
+  // above wouldn't surface (e.g. "DB Curl" vs "Dumbbell Curl" — no shared
+  // substring, but the same exercise once abbreviations are expanded).
+  const duplicateWarning = useMemo(() => {
+    const q = form.name.trim();
+    if (q.length < 3) return null;
+    const qLower = q.toLowerCase();
+    const { match, score } = findBestMatch(pastExercises, q);
+    if (!match || score < 0.6) return null;
+    const matchLower = match.name.toLowerCase();
+    if (matchLower.includes(qLower) || qLower.includes(matchLower)) return null;
+    return match;
+  }, [form.name, pastExercises]);
+
   function toggleTarget(target) {
     set('muscleTargets',
       form.muscleTargets.includes(target)
@@ -760,6 +793,18 @@ function AddExerciseModal({ splitDays, onConfirm, onClose }) {
                     )}
                   </button>
                 ))}
+              </div>
+            )}
+            {suggestions.length === 0 && duplicateWarning && (
+              <div style={{ fontSize: 11, color: 'var(--accent)', marginTop: 6 }}>
+                Looks like "{duplicateWarning.name}" you already have —{' '}
+                <button
+                  type="button"
+                  onMouseDown={(e) => { e.preventDefault(); handleSelectSuggestion(duplicateWarning); }}
+                  style={{ background: 'none', border: 'none', color: 'var(--accent)', textDecoration: 'underline', cursor: 'pointer', padding: 0, font: 'inherit' }}
+                >
+                  use it instead
+                </button>
               </div>
             )}
           </div>
@@ -1607,6 +1652,7 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
   const [currentImageUrl, setCurrentImageUrl] = useState(ex.imageUrl || '');
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [syncPrompt, setSyncPrompt] = useState(null);
+  const [renamePrompt, setRenamePrompt] = useState(null);
   const [showSwapModal, setShowSwapModal] = useState(false);
   const [showMoveModal, setShowMoveModal] = useState(false);
 
@@ -1646,6 +1692,10 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
   }, []);
 
   async function handleSave(updatedForm) {
+    const oldName = ex.name;
+    const newName = (updatedForm.name || '').trim();
+    const nameChanged = newName.length > 0 && oldName.trim().toLowerCase() !== newName.toLowerCase();
+
     const oldWeight = ex.weight ?? 0;
     const newWeight = +updatedForm.weight;
     const oldUnit = ex.weightUnit || 'kg';
@@ -1723,9 +1773,31 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
           });
         }
       }
+
+      if (nameChanged) {
+        try {
+          const usage = await storage.getHistoryUsage(oldName);
+          if (usage.logCount > 0) {
+            setRenamePrompt({ oldName, newName, logCount: usage.logCount });
+          }
+        } catch (err) {
+          console.error(err);
+        }
+      }
     } catch (err) {
       console.error(err);
     }
+  }
+
+  async function handleRenameHistory() {
+    if (!renamePrompt) return;
+    try {
+      await storage.renameHistory(renamePrompt.oldName, renamePrompt.newName, 'logsOnly');
+      queryClient.invalidateQueries({ queryKey: ['logs', storageKey] });
+    } catch (err) {
+      console.error(err);
+    }
+    setRenamePrompt(null);
   }
 
   async function handleSync() {
@@ -1843,6 +1915,15 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
           currentExName={ex.name}
           onConfirm={(updatedData) => swapMutation.mutate(updatedData)}
           onClose={() => setShowSwapModal(false)}
+        />
+      )}
+      {renamePrompt && (
+        <RenameHistoryModal
+          oldName={renamePrompt.oldName}
+          newName={renamePrompt.newName}
+          logCount={renamePrompt.logCount}
+          onRename={handleRenameHistory}
+          onSkip={() => setRenamePrompt(null)}
         />
       )}
       {deleteConfirm && (

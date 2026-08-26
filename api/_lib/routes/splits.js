@@ -5,6 +5,7 @@ const SplitVersion = require('../models/SplitVersion');
 const WorkoutLog = require('../models/WorkoutLog');
 const User = require('../models/User');
 const { requireAuth } = require('../middleware/auth');
+const { normKey } = require('../utils/matchExercise');
 
 router.use(requireAuth);
 
@@ -265,6 +266,85 @@ router.post('/sync-apply', async (req, res) => {
       await split.save();
     }
     res.json({ message: 'Synced' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── EXERCISE HISTORY RENAME / MERGE ──────────────────────────────────────────
+// A rename cascades to WorkoutLog entries (and optionally other Split days)
+// that share the old exercise name, so progression history stays attached.
+// A "merge" of two near-duplicate names (e.g. "DB Curl" / "Dumbbell Curl")
+// is just this same rename applied with scope 'all'.
+
+router.get('/history-usage', async (req, res) => {
+  try {
+    const { name } = req.query;
+    if (!name) return res.status(400).json({ error: 'name is required' });
+    const targetKey = normKey(name);
+    const logs = await WorkoutLog.find({ userId: req.userId });
+    let logCount = 0;
+    let occurrences = 0;
+    logs.forEach((log) => {
+      const matches = (log.exercises || []).filter((e) => normKey(e.name) === targetKey).length;
+      if (matches > 0) {
+        logCount++;
+        occurrences += matches;
+      }
+    });
+    res.json({ logCount, occurrences });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/rename-cascade', async (req, res) => {
+  try {
+    const { oldName, newName, scope } = req.body;
+    if (!oldName || !newName) return res.status(400).json({ error: 'oldName and newName are required' });
+    if (!['logsOnly', 'all'].includes(scope)) return res.status(400).json({ error: 'scope must be logsOnly or all' });
+    const targetKey = normKey(oldName);
+
+    let logsChanged = 0;
+    let exercisesChanged = 0;
+    const logs = await WorkoutLog.find({ userId: req.userId });
+    for (const log of logs) {
+      let touched = false;
+      (log.exercises || []).forEach((ex) => {
+        if (normKey(ex.name) === targetKey) {
+          ex.name = newName;
+          exercisesChanged++;
+          touched = true;
+        }
+      });
+      if (touched) {
+        await log.save();
+        logsChanged++;
+      }
+    }
+
+    let splitsChanged = 0;
+    if (scope === 'all') {
+      const splits = await Split.find({ userId: req.userId });
+      for (const split of splits) {
+        let touched = false;
+        split.days.forEach((d) => {
+          d.exercises.forEach((ex) => {
+            if (normKey(ex.name) === targetKey) {
+              ex.name = newName;
+              touched = true;
+            }
+          });
+        });
+        if (touched) {
+          await snapshotVersion(split);
+          await split.save();
+          splitsChanged++;
+        }
+      }
+    }
+
+    res.json({ logsChanged, exercisesChanged, splitsChanged });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

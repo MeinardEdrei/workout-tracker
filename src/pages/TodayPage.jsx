@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useStorage } from '../hooks/useStorage';
 import * as api from '../api/index.js';
 import { capitalizeWords, formatLastUsed } from '../utils/textFormat';
+import { findBestMatch } from '../utils/matchExercise';
 import DailyShareCard from '../components/DailyShareCard';
 import BodyMap from '../components/BodyMap';
 import { MusclePill } from '../components/MusclePill';
@@ -1503,6 +1504,19 @@ function AddExerciseFromOtherDaysModal({ splitDays, logs, onConfirm, onClose }) 
     setSuggestions([]);
   }
 
+  // Catches near-duplicates that the substring-based `suggestions` dropdown
+  // wouldn't surface (e.g. "DB Curl" vs "Dumbbell Curl").
+  const duplicateWarning = useMemo(() => {
+    const q = form.name.trim();
+    if (q.length < 3) return null;
+    const qLower = q.toLowerCase();
+    const { match, score } = findBestMatch(pastExercises, q);
+    if (!match || score < 0.6) return null;
+    const matchLower = match.name.toLowerCase();
+    if (matchLower.includes(qLower) || qLower.includes(matchLower)) return null;
+    return match;
+  }, [form.name, pastExercises]);
+
   function submit(e) {
     e.preventDefault();
     if (!form.name.trim()) return;
@@ -1682,6 +1696,18 @@ function AddExerciseFromOtherDaysModal({ splitDays, logs, onConfirm, onClose }) 
                       )}
                     </button>
                   ))}
+                </div>
+              )}
+              {suggestions.length === 0 && duplicateWarning && (
+                <div style={{ fontSize: 11, color: 'var(--accent)', marginTop: 6 }}>
+                  Looks like "{duplicateWarning.name}" you already have —{' '}
+                  <button
+                    type="button"
+                    onMouseDown={(e) => { e.preventDefault(); handleSelectSuggestion(duplicateWarning); }}
+                    style={{ background: 'none', border: 'none', color: 'var(--accent)', textDecoration: 'underline', cursor: 'pointer', padding: 0, font: 'inherit' }}
+                  >
+                    use it instead
+                  </button>
                 </div>
               )}
             </div>

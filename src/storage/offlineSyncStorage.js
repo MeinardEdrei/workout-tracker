@@ -367,6 +367,32 @@ export async function applySync(fields, targets) {
   return localRes;
 }
 
+export async function getHistoryUsage(name) {
+  const userId = getUserId();
+  if (navigator.onLine) {
+    try {
+      return await apiStorage.getHistoryUsage(name);
+    } catch (e) {
+      // Fallback
+    }
+  }
+  guestStorage.setStoragePrefix(`wt_offline_${userId}`);
+  return guestStorage.getHistoryUsage(name);
+}
+
+export async function renameHistory(oldName, newName, scope) {
+  const userId = getUserId();
+  if (navigator.onLine && isQueueEmpty()) {
+    const res = await apiStorage.renameHistory(oldName, newName, scope);
+    await updateLocalCacheFromSever();
+    return res;
+  }
+  guestStorage.setStoragePrefix(`wt_offline_${userId}`);
+  const localRes = await guestStorage.renameHistory(oldName, newName, scope);
+  addToQueue({ action: 'renameHistory', args: [oldName, newName, scope] });
+  return localRes;
+}
+
 // Days
 export async function getDays(splitId) {
   const userId = getUserId();
