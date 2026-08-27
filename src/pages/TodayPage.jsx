@@ -2216,6 +2216,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
   const shareCardRef = useRef(null);
   const [showConfirmFinish, setShowConfirmFinish] = useState(false);
   const [isRetaking, setIsRetaking] = useState(false);
+  const [isAdvancing, setIsAdvancing] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
 
   const getPastDateStr = (baseDate, daysOffset) => {
@@ -2317,7 +2318,8 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
 
   const isCompleted = !!logForDate;
   const isPast = dateStr < TODAY_STR;
-  const readOnly = (!isRetaking && !isToday) || isCompleted;
+  const isFuture = dateStr > TODAY_STR;
+  const readOnly = (!isRetaking && !isAdvancing && !isToday) || isCompleted;
 
   const displayExercises = isCompleted
     ? logForDate.exercises.map(logEx => {
@@ -2345,6 +2347,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
     mutationFn: (logData) => storage.saveLog(logData),
     onSuccess: (saved) => {
       setIsRetaking(false);
+      setIsAdvancing(false);
       setCompletedLog(saved);
       queryClient.invalidateQueries({ queryKey: ['logs'] });
     },
@@ -2439,7 +2442,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
 
   const restOfDayBodyEl = (
     <>
-      {(isToday || isRetaking) && !isCompleted && lastWeekLog && lastWeekLog.exercises && lastWeekLog.exercises.length > 0 && (
+      {(isToday || isRetaking || isAdvancing) && !isCompleted && lastWeekLog && lastWeekLog.exercises && lastWeekLog.exercises.length > 0 && (
         <div style={{
           padding: '16px',
           borderTop: '1px solid var(--border)',
@@ -2506,7 +2509,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
         </div>
       )}
 
-      {(isToday || isRetaking) && !isCompleted && (
+      {(isToday || isRetaking || isAdvancing) && !isCompleted && (
         <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end' }}>
           <button
             type="button"
@@ -2540,15 +2543,15 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
         />
       )}
 
-      {(isToday || isRetaking) && !isCompleted && (
+      {(isToday || isRetaking || isAdvancing) && !isCompleted && (
         <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', display: 'flex', gap: 8 }}>
           {checkedCount > 0 ? (
             <button className="btn btn-accent" style={{ flex: 1, fontSize: 14, padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }} onClick={() => setShowConfirmFinish(true)} disabled={saveLogMutation.isPending}>
               {saveLogMutation.isPending ? 'Saving…' : (<><Check size={15} /> Finish Workout ({checkedCount} done)</>)}
             </button>
           ) : null}
-          {isRetaking && (
-            <button className="btn btn-ghost" style={{ flex: checkedCount > 0 ? 0.4 : 1, fontSize: 14, padding: '12px' }} onClick={() => setIsRetaking(false)}>
+          {(isRetaking || isAdvancing) && (
+            <button className="btn btn-ghost" style={{ flex: checkedCount > 0 ? 0.4 : 1, fontSize: 14, padding: '12px' }} onClick={() => { setIsRetaking(false); setIsAdvancing(false); }}>
               Cancel
             </button>
           )}
@@ -2575,30 +2578,55 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
         </div>
       )}
 
+    </>
+  );
+
+  // Shown above the exercise list (not buried below it) so the unlock action
+  // is visible immediately, without scrolling past a full read-only list.
+  const unlockBannerEl = (
+    <>
       {isPast && !isCompleted && !isRetaking && (
         <div style={{
-          padding: '16px',
-          borderTop: '1px solid var(--border)',
-          background: 'rgba(255,255,255,0.01)',
-          textAlign: 'center',
-          fontSize: 12,
-          color: 'var(--text3)',
-          marginTop: 12,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: 12
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+          padding: '10px 16px',
+          background: 'rgba(255,255,255,0.02)',
+          borderBottom: '1px solid var(--border)',
+          borderTopLeftRadius: isScreen ? 20 : 0,
+          borderTopRightRadius: isScreen ? 20 : 0,
         }}>
-          <div>This day has passed. Exercises are in view-only mode.</div>
+          <span style={{ fontSize: 11, color: 'var(--text3)' }}>Day has passed — view only</span>
           <button
             className="btn btn-accent"
-            style={{ padding: '8px 16px', fontSize: 12, fontWeight: 700 }}
+            style={{ padding: '6px 12px', fontSize: 11, fontWeight: 700, flexShrink: 0 }}
             onClick={(e) => {
               e.stopPropagation();
               setIsRetaking(true);
             }}
           >
-            Retake Workout
+            Retake
+          </button>
+        </div>
+      )}
+
+      {isFuture && !isCompleted && !isAdvancing && !day.isRest && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+          padding: '10px 16px',
+          background: 'rgba(255,255,255,0.02)',
+          borderBottom: '1px solid var(--border)',
+          borderTopLeftRadius: isScreen ? 20 : 0,
+          borderTopRightRadius: isScreen ? 20 : 0,
+        }}>
+          <span style={{ fontSize: 11, color: 'var(--text3)' }}>Upcoming day — view only</span>
+          <button
+            className="btn btn-accent"
+            style={{ padding: '6px 12px', fontSize: 11, fontWeight: 700, flexShrink: 0 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsAdvancing(true);
+            }}
+          >
+            Do Early
           </button>
         </div>
       )}
@@ -2626,6 +2654,15 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
               ) : (
                 <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', background: 'rgba(255,255,255,0.03)', padding: '4px 8px', borderRadius: 4 }}>Skipped</span>
               )}
+            </div>
+          ) : isAdvancing ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {total > 0 && (
+                <span style={{ fontSize: 16, fontWeight: 900, fontFamily: 'var(--font-mono)', color: checkedCount === total ? 'var(--green)' : checkedCount > 0 ? 'var(--accent)' : 'var(--text3)' }}>
+                  {checkedCount}<span style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 400 }}>/{total}</span>
+                </span>
+              )}
+              <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--accent)', letterSpacing: '0.08em', textTransform: 'uppercase', background: 'rgba(232,255,90,0.1)', border: '1.5px solid var(--accent)', padding: '4px 8px', borderRadius: 4 }}>Advancing</span>
             </div>
           ) : total > 0 ? (
             <span style={{ fontSize: 18, fontWeight: 900, fontFamily: 'var(--font-mono)', color: checkedCount === total ? 'var(--green)' : checkedCount > 0 ? 'var(--accent)' : 'var(--text3)' }}>
@@ -2656,7 +2693,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
 
   return (
     <>
-      <div style={isScreen ? { height: '100%', display: 'flex', flexDirection: 'column', boxSizing: 'border-box', background: 'var(--bg2)', border: '1.5px solid rgba(255,255,255,0.14)', borderRadius: 20 } : { margin: '0 16px 12px', borderRadius: 10, border: `1px solid ${(isToday || isRetaking) ? 'var(--accent)' : 'var(--border)'}`, overflow: 'hidden', background: 'var(--bg2)' }}>
+      <div style={isScreen ? { height: '100%', display: 'flex', flexDirection: 'column', boxSizing: 'border-box', background: 'var(--bg2)', border: '1.5px solid rgba(255,255,255,0.14)', borderRadius: 20 } : { margin: '0 16px 12px', borderRadius: 10, border: `1px solid ${(isToday || isRetaking || isAdvancing) ? 'var(--accent)' : 'var(--border)'}`, overflow: 'hidden', background: 'var(--bg2)' }}>
         {!isScreen && (
           <HeaderTag
             onClick={() => !day.isRest && setOpen((o) => !o)}
@@ -2666,7 +2703,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
               {isToday && (
                 <div style={{ fontSize: 8, fontWeight: 900, letterSpacing: '0.18em', background: 'var(--accent)', color: '#0a0a0a', padding: '2px 6px', borderRadius: 2, textTransform: 'uppercase', display: 'inline-block', marginBottom: 6 }}>TODAY</div>
               )}
-              <div style={{ fontSize: 28, fontWeight: 900, fontFamily: 'var(--font-display)', letterSpacing: '0.02em', textTransform: 'uppercase', lineHeight: 1, color: (isToday || isRetaking) ? 'var(--accent)' : day.isRest ? 'var(--text3)' : 'var(--text)' }}>
+              <div style={{ fontSize: 28, fontWeight: 900, fontFamily: 'var(--font-display)', letterSpacing: '0.02em', textTransform: 'uppercase', lineHeight: 1, color: (isToday || isRetaking || isAdvancing) ? 'var(--accent)' : day.isRest ? 'var(--text3)' : 'var(--text)' }}>
                 {day.name}
               </div>
               {day.tag && <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 5, fontWeight: 500 }}>{day.tag}</div>}
@@ -2680,6 +2717,8 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
             <RestDayCard dayName={day.name} implicit={day.isImplicitRest} />
           </div>
         )}
+
+        {open && !day.isRest && unlockBannerEl}
 
         {open && !day.isRest && (
           isScreen ? (
