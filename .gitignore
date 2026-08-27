@@ -1,6 +1,7 @@
 node_modules/
 .env
 dist/
+dev-dist/
 .vercel/
 *.log
 .vercel
