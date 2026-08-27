@@ -688,11 +688,20 @@ export default function SplitsPage() {
   const [showAiChat, setShowAiChat] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [menuOpenId, setMenuOpenId] = useState(null);
-  const [menuAnchor, setMenuAnchor] = useState({ top: 0, right: 0 });
+  const [menuAnchor, setMenuAnchor] = useState({ top: 0, right: 0, maxHeight: 400 });
 
   function openMenu(e, splitId) {
     const rect = e.currentTarget.getBoundingClientRect();
-    setMenuAnchor({ top: rect.bottom + 6, right: window.innerWidth - rect.right });
+    const margin = 12;
+    const spaceBelow = window.innerHeight - rect.bottom - margin;
+    const spaceAbove = rect.top - margin;
+    const openUpward = spaceBelow < 320 && spaceAbove > spaceBelow;
+    setMenuAnchor({
+      top: openUpward ? undefined : rect.bottom + 6,
+      bottom: openUpward ? window.innerHeight - rect.top + 6 : undefined,
+      right: window.innerWidth - rect.right,
+      maxHeight: Math.max(160, (openUpward ? spaceAbove : spaceBelow) - 6),
+    });
     setMenuOpenId(splitId);
   }
   const [signingIn, setSigningIn] = useState(false);
@@ -1522,11 +1531,11 @@ Coach:`;
           <>
             <div style={{ position: 'fixed', inset: 0, zIndex: 199 }} onClick={() => setMenuOpenId(null)} />
             <div style={{
-              position: 'fixed', top: menuAnchor.top, right: menuAnchor.right, zIndex: 200,
+              position: 'fixed', top: menuAnchor.top, bottom: menuAnchor.bottom, right: menuAnchor.right, zIndex: 200,
               background: 'var(--bg2)', border: '1px solid var(--border)',
-              borderRadius: 12, overflow: 'hidden',
+              borderRadius: 12, overflowY: 'auto', overflowX: 'hidden',
               boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-              minWidth: 210,
+              minWidth: 210, maxHeight: menuAnchor.maxHeight,
               animation: 'fadeIn 0.12s ease',
             }}>
               {/* ── Manage ── */}
