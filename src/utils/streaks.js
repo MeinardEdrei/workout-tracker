@@ -10,12 +10,20 @@ export function computeStreak(logs, activeSplit) {
 
   const sortedSplitDays = [...(activeSplit.days || [])].sort((a, b) => (a.dayOrder ?? 8) - (b.dayOrder ?? 8));
   const allRest = sortedSplitDays.length === 0 || sortedSplitDays.every((d) => d.isRest);
+  // Splits using real weekday names ("Monday", "Tuesday"...) can trust a
+  // missing weekday means rest. Cycle-based splits (custom names like
+  // "Day A"/"Day B", unrelated to calendar weekday) can't be matched by
+  // name at all, so they fall back to the original sequential/modulo
+  // placement — the only way to tell if a cycle day was scheduled.
+  const hasWeekdayAnchor = sortedSplitDays.some((d) => DAY_NAMES.some((wd) => d.name.trim().toLowerCase() === wd.toLowerCase()));
   function isScheduledRestDay(dateObj) {
     if (allRest) return false;
     const dayNameMatch = DAY_NAMES[dateObj.getDay()].toLowerCase();
-    let idx = sortedSplitDays.findIndex((d) => d.name.toLowerCase().startsWith(dayNameMatch));
-    if (idx === -1) idx = dateObj.getDay() % sortedSplitDays.length;
-    return !!sortedSplitDays[idx].isRest;
+    const idx = sortedSplitDays.findIndex((d) => d.name.toLowerCase().startsWith(dayNameMatch));
+    if (idx !== -1) return !!sortedSplitDays[idx].isRest;
+    if (hasWeekdayAnchor) return true; // no day scheduled for this weekday — treat as rest
+    const modIdx = dateObj.getDay() % sortedSplitDays.length; // cycle-based split — original behavior
+    return !!sortedSplitDays[modIdx].isRest;
   }
 
   const now = new Date();

@@ -15,6 +15,7 @@ import AiChatBubble from '../components/AiChatBubble';
 import { X, Check, RotateCcw, Trophy, BarChart3, StickyNote, Dumbbell, Zap, Moon, PartyPopper, Flame, ChevronDown, CalendarDays } from 'lucide-react';
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const MON_FIRST_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const TODAY_DOW = new Date().getDay();
 const TODAY_STR = new Date().toISOString().slice(0, 10);
 
@@ -2178,7 +2179,7 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
 
 // Same big centered card as the hero exercise, but for rest days — the
 // "picture" slot becomes a rest icon instead of an exercise thumbnail.
-function RestDayCard({ dayName }) {
+function RestDayCard({ dayName, implicit }) {
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 14,
@@ -2197,7 +2198,7 @@ function RestDayCard({ dayName }) {
           Rest Day
         </div>
         <div style={{ fontSize: 13, color: 'var(--text3)', marginTop: 8 }}>
-          {dayName} is a scheduled rest day. Recovery is part of the program.
+          {implicit ? 'No workout scheduled for today. Rest and recover.' : `${dayName} is a scheduled rest day. Recovery is part of the program.`}
         </div>
       </div>
     </div>
@@ -2676,7 +2677,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
 
         {isScreen && day.isRest && (
           <div className="day-snap-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-            <RestDayCard dayName={day.name} />
+            <RestDayCard dayName={day.name} implicit={day.isImplicitRest} />
           </div>
         )}
 
@@ -2918,14 +2919,55 @@ export default function TodayPage() {
 
   const activeSplit = splits.find((s) => s.isActive) || splits[0] || null;
   const days = activeSplit ? [...(activeSplit.days || [])].sort((a, b) => (a.dayOrder ?? 8) - (b.dayOrder ?? 8)) : [];
-  const dayNameMatch = DAY_NAMES[TODAY_DOW].toLowerCase();
-  let todayIndex = days.findIndex((d) => d.name.toLowerCase().startsWith(dayNameMatch));
-  if (todayIndex === -1) todayIndex = TODAY_DOW % days.length;
+
+  // Splits that use at least one real weekday name (vs. a pure custom/cycle
+  // split like "Day A"/"Day B") get a full Mon-Sun week built out, filling
+  // any weekday with no matching day with an implicit rest card — instead of
+  // silently borrowing another day's exercises via a modulo guess.
+  const hasWeekdayAnchor = days.some((d) => MON_FIRST_NAMES.some((wd) => d.name.trim().toLowerCase() === wd.toLowerCase()));
+
+  let displayDays = days;
+  let todayIndex;
+  if (hasWeekdayAnchor) {
+    const restCatchAll = days.find((d) => d.name.trim().toLowerCase() === 'rest');
+    const usedReal = new Set();
+    const weekdaySlots = MON_FIRST_NAMES.map((wd, i) => {
+      const real = days.find((d) => !usedReal.has(d) && d.name.toLowerCase().startsWith(wd.toLowerCase()));
+      if (real) { usedReal.add(real); return real; }
+      if (restCatchAll) return { ...restCatchAll, _id: `${restCatchAll._id}-${wd}`, isImplicitRest: true };
+      return { _id: `implicit-rest-${wd}`, name: wd, tag: '', isRest: true, isImplicitRest: true, dayOrder: i, exercises: [] };
+    });
+    const extras = days.filter((d) => d !== restCatchAll && !usedReal.has(d));
+    displayDays = [...weekdaySlots, ...extras];
+    // weekdaySlots is built in Monday..Sunday order, so index i IS weekday i.
+    todayIndex = TODAY_DOW === 0 ? 6 : TODAY_DOW - 1;
+  } else {
+    todayIndex = days.length > 0 ? TODAY_DOW % days.length : 0;
+  }
 
   function getDateForIndex(index) {
     const d = new Date();
     d.setDate(d.getDate() + (index - todayIndex));
     return d.toISOString().slice(0, 10);
+  }
+
+  // For the auto-completion effect below, which iterates the real (sparse)
+  // `days` array by its own position — a different coordinate space than
+  // `displayDays`/`todayIndex` once weekday-anchored slots are built. An
+  // anchored real day's date is derived from its own weekday directly
+  // (accurate); non-anchored/cycle days fall back to the original
+  // sequential approximation within the real array.
+  function getDateForRealDay(day, indexInRealArray) {
+    if (hasWeekdayAnchor) {
+      const wd = MON_FIRST_NAMES.findIndex((name) => day.name.toLowerCase().startsWith(name.toLowerCase()));
+      if (wd !== -1) {
+        const d = new Date();
+        const todayWd = TODAY_DOW === 0 ? 6 : TODAY_DOW - 1;
+        d.setDate(d.getDate() + (wd - todayWd));
+        return d.toISOString().slice(0, 10);
+      }
+    }
+    return getDateForIndex(indexInRealArray);
   }
 
   useEffect(() => {
@@ -2934,7 +2976,7 @@ export default function TodayPage() {
     let logsInvalidated = false;
     days.forEach((day, i) => {
       if (day.isRest) return;
-      const dateStr = getDateForIndex(i);
+      const dateStr = getDateForRealDay(day, i);
       if (dateStr >= TODAY_STR) return; // Only past days
 
       const logForDate = logs.find((l) => l.date === dateStr);
@@ -2978,7 +3020,7 @@ export default function TodayPage() {
   }, [splits, logs, isLoading, activeSplit, days, queryClient, storage]);
 
   // ── AI Coach state (lifted from DayCard) ─────────────────────────────────
-  const todayDay = days[todayIndex] || null;
+  const todayDay = displayDays[todayIndex] || null;
   const todayDateStr = todayDay ? (() => { const d = new Date(); return d.toISOString().slice(0, 10); })() : null;
   const todayLog = todayDay ? logs.find((l) => l.date === todayDateStr) : null;
   const aiCacheKey = todayLog ? todayLog._id : (todayDay ? todayDay._id : 'none');
@@ -3190,13 +3232,13 @@ Coach:`;
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 60px 10px 16px', height: 48, boxSizing: 'border-box' }}>
-        {viewMode === 'pager' && activeDayIndex != null && days[activeDayIndex] ? (
+        {viewMode === 'pager' && activeDayIndex != null && displayDays[activeDayIndex] ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
             {activeDayIndex === todayIndex && (
               <span style={{ fontSize: 8, fontWeight: 900, letterSpacing: '0.1em', background: 'var(--accent)', color: '#0a0a0a', padding: '2px 5px', borderRadius: 3, textTransform: 'uppercase', flexShrink: 0 }}>Today</span>
             )}
             <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--text)', textTransform: 'uppercase', letterSpacing: '0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {days[activeDayIndex].name}
+              {displayDays[activeDayIndex].name}
             </span>
           </div>
         ) : (
@@ -3242,7 +3284,7 @@ Coach:`;
         <div className="empty-state">This split has no days yet</div>
       ) : viewMode === 'pager' ? (
         <DayPager
-          days={days}
+          days={displayDays}
           todayIndex={todayIndex}
           getDateForIndex={getDateForIndex}
           splitId={activeSplit._id}
@@ -3257,7 +3299,7 @@ Coach:`;
         <>
           <ConsistencyCard logs={logs} activeSplit={activeSplit} />
           <div style={{ paddingTop: 0 }}>
-            {days.map((day, i) => {
+            {displayDays.map((day, i) => {
               const dateStr = getDateForIndex(i);
               const logForDate = logs.find((l) => l.date === dateStr);
               return (

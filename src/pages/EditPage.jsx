@@ -2381,6 +2381,17 @@ function SplitEditorInner({ split, onBack, onSplitUpdated }) {
         <div className="empty-state">No days yet. Tap Add Day.</div>
       ) : (
         <div style={{ padding: '12px 16px 0' }}>
+          {(() => {
+            const hasWeekdayAnchor = days.some((d) => STANDARD_DAYS.slice(0, 7).some((wd) => d.name.trim().toLowerCase() === wd.toLowerCase()));
+            if (!hasWeekdayAnchor) return null;
+            const missing = STANDARD_DAYS.slice(0, 7).filter((wd) => !days.some((d) => d.name.toLowerCase().startsWith(wd.toLowerCase())));
+            if (missing.length === 0) return null;
+            return (
+              <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 12, lineHeight: 1.4 }}>
+                {missing.length} day{missing.length === 1 ? '' : 's'} have no workout scheduled (auto-rest): {missing.map((wd) => wd.slice(0, 3)).join(', ')}
+              </div>
+            );
+          })()}
           {days.map((day) => (
             <div
               key={day._id}

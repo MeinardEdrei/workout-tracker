@@ -126,6 +126,150 @@ function SplitModal({ title, initial = '', onConfirm, onClose }) {
   );
 }
 
+const SPLIT_STYLES = [
+  { key: 'full-body', label: 'Full Body', minDays: 1, maxDays: 3, pattern: ['Full Body'] },
+  { key: 'upper-lower', label: 'Upper/Lower', minDays: 2, maxDays: 4, pattern: ['Upper', 'Lower'] },
+  { key: 'push-pull-legs', label: 'Push/Pull/Legs', minDays: 3, maxDays: 6, pattern: ['Push', 'Pull', 'Legs'] },
+  { key: 'bro-split', label: 'Bro Split', minDays: 5, maxDays: 5, pattern: ['Chest', 'Back', 'Legs', 'Shoulders', 'Arms'] },
+];
+
+const WEEKDAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+// Maps (days per week, style) -> an ordered list of day skeletons, spreading
+// rest days as evenly as a simple rounding placement allows across the week.
+// Each day is named after its actual weekday (not the style label) — dayOrder
+// is derived purely from the literal name server/local-side (DAY_ORDER_MAP),
+// so only "Monday".."Sunday" get correctly weekday-anchored ordering; the
+// style label (e.g. "Push") goes in `tag` instead, exactly like a day a user
+// builds by hand via AddDayModal (weekday pill + focus tag).
+function generateDaySkeleton(daysPerWeek, styleKey) {
+  const style = SPLIT_STYLES.find((s) => s.key === styleKey);
+  if (!style) return [];
+  const restCount = 7 - daysPerWeek;
+
+  const restIndices = new Set();
+  for (let r = 0; r < restCount; r++) {
+    restIndices.add(Math.round((r + 0.5) * 7 / restCount));
+  }
+  for (let i = 0; i < 7 && restIndices.size < restCount; i++) {
+    if (!restIndices.has(i)) restIndices.add(i);
+  }
+
+  let trainIdx = 0;
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    if (restIndices.has(i)) {
+      days.push({ name: WEEKDAY_NAMES[i], tag: '', isRest: true });
+    } else {
+      days.push({ name: WEEKDAY_NAMES[i], tag: style.pattern[trainIdx % style.pattern.length], isRest: false });
+      trainIdx++;
+    }
+  }
+  return days;
+}
+
+function NewSplitModal({ onConfirm, onClose, onBrowse }) {
+  const [name, setName] = useState('');
+  const [daysPerWeek, setDaysPerWeek] = useState(null); // null = not chosen, 0 = "I'll set up days myself"
+  const [style, setStyle] = useState(null);
+
+  const availableStyles = daysPerWeek
+    ? SPLIT_STYLES.filter((s) => daysPerWeek >= s.minDays && daysPerWeek <= s.maxDays)
+    : [];
+
+  function pickDaysPerWeek(n) {
+    setDaysPerWeek(n);
+    setStyle(null);
+  }
+
+  function submit(e) {
+    e.preventDefault();
+    if (!name.trim()) return;
+    const skeleton = daysPerWeek && style ? generateDaySkeleton(daysPerWeek, style) : [];
+    onConfirm(name.trim(), skeleton);
+  }
+
+  return (
+    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal">
+        <div className="modal-title">New Split</div>
+        <form onSubmit={submit}>
+          <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Split name…" autoFocus />
+
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '14px 0 8px' }}>
+            Training days per week
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {[1, 2, 3, 4, 5, 6, 7].map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => pickDaysPerWeek(n)}
+                style={{
+                  width: 36, height: 36, borderRadius: 8, fontSize: 13, fontWeight: 700,
+                  border: `1px solid ${daysPerWeek === n ? 'var(--accent)' : 'var(--border2)'}`,
+                  background: daysPerWeek === n ? 'rgba(232,255,90,0.12)' : 'transparent',
+                  color: daysPerWeek === n ? 'var(--accent)' : 'var(--text2)', cursor: 'pointer',
+                }}
+              >
+                {n}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => pickDaysPerWeek(0)}
+              style={{
+                padding: '0 12px', height: 36, borderRadius: 8, fontSize: 12, fontWeight: 700,
+                border: `1px solid ${daysPerWeek === 0 ? 'var(--accent)' : 'var(--border2)'}`,
+                background: daysPerWeek === 0 ? 'rgba(232,255,90,0.12)' : 'transparent',
+                color: daysPerWeek === 0 ? 'var(--accent)' : 'var(--text2)', cursor: 'pointer',
+              }}
+            >
+              I'll set up days myself
+            </button>
+          </div>
+
+          {!!daysPerWeek && (
+            <>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '14px 0 8px' }}>
+                Split style
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {availableStyles.map((s) => (
+                  <button
+                    key={s.key}
+                    type="button"
+                    onClick={() => setStyle(s.key)}
+                    style={{
+                      padding: '7px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                      border: `1px solid ${style === s.key ? 'var(--accent)' : 'var(--border2)'}`,
+                      background: style === s.key ? 'rgba(232,255,90,0.12)' : 'transparent',
+                      color: style === s.key ? 'var(--accent)' : 'var(--text2)', cursor: 'pointer',
+                    }}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          <div style={{ marginTop: 16, textAlign: 'center' }}>
+            <button type="button" className="btn btn-ghost" style={{ fontSize: 12 }} onClick={onBrowse}>
+              Or browse a ready-made split
+            </button>
+          </div>
+
+          <div className="modal-actions">
+            <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
+            <button type="submit" className="btn btn-accent">Create</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function ConfirmModal({ message, onConfirm, onClose }) {
   return (
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -802,7 +946,14 @@ Coach:`;
     try { await activateMutation.mutateAsync(split._id); }
     finally { setActionLoading(null); }
   }
-  async function handleCreate(name) { setModal(null); await createMutation.mutateAsync(name); }
+  async function handleCreate(name, daySkeleton = []) {
+    setModal(null);
+    const split = await createMutation.mutateAsync(name);
+    for (const day of daySkeleton) {
+      await storage.createDay(split._id, day);
+    }
+    if (daySkeleton.length > 0) invalidate();
+  }
   async function handleRename(name) { const id = modal.split._id; setModal(null); await renameMutation.mutateAsync({ id, name }); }
   async function handleDelete() { const id = modal.split._id; setModal(null); await deleteMutation.mutateAsync(id); }
 
@@ -1327,9 +1478,25 @@ Coach:`;
         onToggle={() => setShowAiChat((v) => !v)}
       />
 
-      {modal?.type === 'add' && <SplitModal title="New Split" onConfirm={handleCreate} onClose={() => setModal(null)} />}
+      {modal?.type === 'add' && (
+        <NewSplitModal
+          onConfirm={handleCreate}
+          onClose={() => setModal(null)}
+          onBrowse={() => { setModal(null); isLoggedIn ? setBrowsing(true) : handleSignIn(); }}
+        />
+      )}
       {modal?.type === 'rename' && <SplitModal title="Rename Split" initial={modal.split.name} onConfirm={handleRename} onClose={() => setModal(null)} />}
-      {modal?.type === 'delete' && <ConfirmModal message={`Delete "${modal.split.name}"? This cannot be undone.`} onConfirm={handleDelete} onClose={() => setModal(null)} />}
+      {modal?.type === 'delete' && (() => {
+        const dayCount = modal.split.days?.length || 0;
+        const exerciseCount = (modal.split.days || []).reduce((sum, d) => sum + (d.exercises?.length || 0), 0);
+        return (
+          <ConfirmModal
+            message={`Delete "${modal.split.name}"? This will permanently remove ${dayCount} day${dayCount === 1 ? '' : 's'} and ${exerciseCount} exercise${exerciseCount === 1 ? '' : 's'}. This cannot be undone.`}
+            onConfirm={handleDelete}
+            onClose={() => setModal(null)}
+          />
+        );
+      })()}
       {shareModal && <SplitShareModal split={shareModal} onClose={() => setShareModal(null)} />}
       {historyModal && (
         <SplitHistoryModal
