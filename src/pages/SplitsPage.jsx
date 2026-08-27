@@ -339,19 +339,26 @@ function diffSplitDays(fromDays = [], toDays = []) {
   return { added, removed, changed, addedDays, removedDays };
 }
 
-function VersionDiff({ diff }) {
+function VersionDiff({
+  diff,
+  emptyLabel = 'No differences from the current split.',
+  dayAddedLabel = 'Day added since',
+  dayRemovedLabel = 'Day removed since',
+  addedLabel = 'Added since',
+  removedLabel = 'Removed since',
+}) {
   const { added, removed, changed, addedDays, removedDays } = diff;
   const nothingChanged = !added.length && !removed.length && !changed.length && !addedDays.length && !removedDays.length;
   return (
     <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 8, background: 'var(--bg3)', fontSize: 12 }}>
-      {nothingChanged && <div style={{ color: 'var(--text3)' }}>No differences from the current split.</div>}
-      {addedDays.map((n) => <div key={`ad-${n}`} style={{ color: 'var(--green)' }}>+ Day added since: {n}</div>)}
-      {removedDays.map((n) => <div key={`rd-${n}`} style={{ color: '#f87171' }}>− Day removed since: {n}</div>)}
+      {nothingChanged && <div style={{ color: 'var(--text3)' }}>{emptyLabel}</div>}
+      {addedDays.map((n) => <div key={`ad-${n}`} style={{ color: 'var(--green)' }}>+ {dayAddedLabel}: {n}</div>)}
+      {removedDays.map((n) => <div key={`rd-${n}`} style={{ color: 'var(--red)' }}>− {dayRemovedLabel}: {n}</div>)}
       {added.map(({ ex, dayName }) => (
-        <div key={`a-${ex.name}`} style={{ color: 'var(--green)' }}>+ Added since: {ex.name} ({dayName})</div>
+        <div key={`a-${ex.name}`} style={{ color: 'var(--green)' }}>+ {addedLabel}: {ex.name} ({dayName})</div>
       ))}
       {removed.map(({ ex, dayName }) => (
-        <div key={`r-${ex.name}`} style={{ color: '#f87171' }}>− Removed since: {ex.name} ({dayName})</div>
+        <div key={`r-${ex.name}`} style={{ color: 'var(--red)' }}>− {removedLabel}: {ex.name} ({dayName})</div>
       ))}
       {changed.map((c) => (
         <div key={`c-${c.name}`} style={{ color: 'var(--text2)', marginTop: 2 }}>
@@ -368,60 +375,54 @@ function VersionDiff({ diff }) {
 }
 
 function SplitCompareModal({ splits, initialLeftId, onClose }) {
+  const activeSplit = splits.find((s) => s.isActive);
+  const defaultRight = (activeSplit && activeSplit._id !== initialLeftId)
+    ? activeSplit._id
+    : splits.find((s) => s._id !== initialLeftId)?._id || splits[1]?._id;
+
   const [leftId, setLeftId] = useState(initialLeftId || splits[0]?._id);
-  const [rightId, setRightId] = useState(splits.find((s) => s._id !== initialLeftId)?._id || splits[1]?._id);
+  const [rightId, setRightId] = useState(defaultRight);
 
   const left = splits.find((s) => s._id === leftId);
   const right = splits.find((s) => s._id === rightId);
-  const dayNames = left && right
-    ? [...new Set([...(left.days || []).map((d) => d.name), ...(right.days || []).map((d) => d.name)])]
-    : [];
+  const diff = left && right ? diffSplitDays(left.days, right.days) : null;
 
-  function renderDay(split, name) {
-    const day = (split?.days || []).find((d) => d.name === name);
-    if (!day) return <div style={{ fontSize: 12, color: 'var(--text3)', fontStyle: 'italic' }}>No matching day</div>;
-    if (!(day.exercises || []).length) return <div style={{ fontSize: 12, color: 'var(--text3)' }}>{day.isRest ? 'Rest day' : 'No exercises'}</div>;
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {day.exercises.map((e) => (
-          <div key={e._id || e.name} style={{ fontSize: 12, color: 'var(--text2)' }}>
-            {e.name} <span style={{ color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>
-              {e.sets}×{e.untilFailure || !e.reps ? 'F' : e.reps}{e.weight > 0 ? ` · ${e.weight}${e.weightUnit}` : ''}
-            </span>
-          </div>
-        ))}
-      </div>
-    );
+  function summaryLine(split) {
+    const dayCount = split.days?.length || 0;
+    const exerciseCount = (split.days || []).reduce((sum, d) => sum + (d.exercises?.length || 0), 0);
+    return `${split.name} — ${dayCount} day${dayCount === 1 ? '' : 's'} · ${exerciseCount} exercise${exerciseCount === 1 ? '' : 's'}`;
   }
 
   return (
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth: 640 }}>
+      <div className="modal" style={{ maxWidth: 500 }}>
         <div className="modal-title" style={{ fontSize: 16 }}>Compare Splits</div>
         <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
           <select value={leftId || ''} onChange={(e) => setLeftId(e.target.value)} style={{ flex: 1, padding: '8px 10px', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--border2)', color: 'var(--text)', fontSize: 13 }}>
-            {splits.map((s) => <option key={s._id} value={s._id}>{s.name}</option>)}
+            {splits.filter((s) => s._id !== rightId).map((s) => <option key={s._id} value={s._id}>{s.name}</option>)}
           </select>
           <select value={rightId || ''} onChange={(e) => setRightId(e.target.value)} style={{ flex: 1, padding: '8px 10px', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--border2)', color: 'var(--text)', fontSize: 13 }}>
-            {splits.map((s) => <option key={s._id} value={s._id}>{s.name}</option>)}
+            {splits.filter((s) => s._id !== leftId).map((s) => <option key={s._id} value={s._id}>{s.name}</option>)}
           </select>
         </div>
-        {left && right && left._id === right._id && (
-          <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 10 }}>Pick two different splits to compare.</div>
+        {left && right && (
+          <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 12, lineHeight: 1.6 }}>
+            <div>{summaryLine(left)}</div>
+            <div>{summaryLine(right)}</div>
+          </div>
         )}
-        <div style={{ maxHeight: 420, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {dayNames.map((name) => (
-            <div key={name} style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text3)', padding: '8px 12px', background: 'var(--bg3)' }}>
-                {name}
-              </div>
-              <div style={{ display: 'flex', gap: 0 }}>
-                <div style={{ flex: 1, padding: 10, borderRight: '1px solid var(--border)' }}>{renderDay(left, name)}</div>
-                <div style={{ flex: 1, padding: 10 }}>{renderDay(right, name)}</div>
-              </div>
-            </div>
-          ))}
-        </div>
+        {diff && (
+          <div style={{ maxHeight: 420, overflowY: 'auto' }}>
+            <VersionDiff
+              diff={diff}
+              emptyLabel="No differences between these splits."
+              dayAddedLabel={`Only in "${right.name}"`}
+              dayRemovedLabel={`Only in "${left.name}"`}
+              addedLabel={`Only in "${right.name}"`}
+              removedLabel={`Only in "${left.name}"`}
+            />
+          </div>
+        )}
         <div className="modal-actions">
           <button className="btn btn-ghost" onClick={onClose}>Close</button>
         </div>
