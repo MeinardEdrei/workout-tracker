@@ -8,7 +8,7 @@ import SplitEditor from './EditPage';
 import BrowseSplitsPage from './BrowseSplitsPage';
 import LeaderboardPage from '../components/LeaderboardPage';
 import { setSplitVisibility, reapplySplit as reapplySplitApi, getRanking } from '../api/index';
-import { X, Trophy, ArrowRight, RotateCcw } from 'lucide-react';
+import { X, Trophy, ArrowRight, RotateCcw, Upload } from 'lucide-react';
 import AiChatBubble from '../components/AiChatBubble';
 
 const API = import.meta.env.VITE_API_URL || '';
@@ -611,7 +611,8 @@ export default function SplitsPage() {
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['splits'] });
 
-  const [expandedSplitIds, setExpandedSplitIds] = useState([]);
+  const [expandedSplitId, setExpandedSplitId] = useState(null);
+  const [expandedDayIds, setExpandedDayIds] = useState(new Set());
   const [chatHistory, setChatHistory] = useState(() => {
     const saved = localStorage.getItem('ai_splits_chat_history');
     if (saved) return JSON.parse(saved);
@@ -631,11 +632,16 @@ export default function SplitsPage() {
   }, [chatHistory, loadingAi]);
 
   function toggleExpandSplit(splitId) {
-    setExpandedSplitIds((prev) => 
-      prev.includes(splitId) 
-        ? prev.filter(id => id !== splitId) 
-        : [...prev, splitId]
-    );
+    setExpandedSplitId((prev) => (prev === splitId ? null : splitId));
+  }
+
+  function toggleExpandDay(dayId) {
+    setExpandedDayIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(dayId)) next.delete(dayId);
+      else next.add(dayId);
+      return next;
+    });
   }
 
   async function handleSendAdvisorReply(textToSend) {
@@ -1003,25 +1009,22 @@ Coach:`;
             title="Browse community splits"
           >
             <ShopIcon />
-            <span style={{ display: 'var(--browse-label-display, inline)' }}>Browse</span>
+            <span>Browse</span>
           </button>
 
           {/* Import a split exported as JSON */}
           <button
             onClick={() => importInputRef.current?.click()}
             style={{
-              display: 'inline-flex', alignItems: 'center', gap: 5,
-              padding: '6px 10px', borderRadius: 6,
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              padding: '6px 8px', borderRadius: 6,
               background: 'transparent', border: '1px solid var(--border2)',
               color: 'var(--text2)', cursor: 'pointer',
-              fontSize: 11, fontWeight: 600, letterSpacing: '0.04em',
-              fontFamily: 'var(--font-display)', textTransform: 'uppercase',
-              transition: 'all 0.15s', whiteSpace: 'nowrap',
               WebkitTapHighlightColor: 'transparent',
             }}
             title="Import a split from a JSON file"
           >
-            Import
+            <Upload size={13} />
           </button>
           <input
             ref={importInputRef}
@@ -1115,7 +1118,7 @@ Coach:`;
       ) : (
         <div style={{ padding: '16px 16px 0' }}>
           {splits.map((split) => {
-            const isExpanded = expandedSplitIds.includes(split._id);
+            const isExpanded = expandedSplitId === split._id;
             const sortedDays = [...(split.days || [])].sort((a, b) => (a.dayOrder ?? 8) - (b.dayOrder ?? 8));
             return (
               <div
@@ -1237,7 +1240,7 @@ Coach:`;
                             
                             {!day.isRest && (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                {(day.exercises || []).map((ex, idx) => {
+                                {(expandedDayIds.has(day._id) ? (day.exercises || []) : (day.exercises || []).slice(0, 6)).map((ex, idx) => {
                                   let prefix = "";
                                   let nameStyle = { color: 'var(--text)' };
                                   if (ex.category === 'warmup') {
@@ -1248,11 +1251,11 @@ Coach:`;
                                     nameStyle.color = 'var(--blue)';
                                   }
                                   return (
-                                    <div 
+                                    <div
                                       key={ex._id || idx}
-                                      style={{ 
-                                        display: 'flex', 
-                                        justifyContent: 'space-between', 
+                                      style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
                                         alignItems: 'center',
                                         fontSize: 13,
                                         color: 'var(--text2)',
@@ -1268,6 +1271,15 @@ Coach:`;
                                 })}
                                 {(day.exercises || []).length === 0 && (
                                   <div style={{ color: 'var(--text3)', fontSize: 12, fontStyle: 'italic' }}>No exercises in this day</div>
+                                )}
+                                {!expandedDayIds.has(day._id) && (day.exercises || []).length > 6 && (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); toggleExpandDay(day._id); }}
+                                    className="btn btn-ghost"
+                                    style={{ fontSize: 11, padding: '4px 0', marginTop: 2, alignSelf: 'flex-start' }}
+                                  >
+                                    Show {(day.exercises || []).length - 6} more
+                                  </button>
                                 )}
                               </div>
                             )}
@@ -1350,15 +1362,19 @@ Coach:`;
               minWidth: 210,
               animation: 'fadeIn 0.12s ease',
             }}>
-              {/* Visibility toggle */}
+              {/* ── Manage ── */}
+              <div style={{ padding: '10px 16px 4px', fontSize: 9, fontWeight: 800, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                Manage
+              </div>
+
               {isLoggedIn && (
                 <button
                   onClick={() => { visibilityMutation.mutate({ id: s._id, isPublic: !s.isPublic }); setMenuOpenId(null); }}
                   disabled={visibilityMutation.isPending}
                   style={{
                     width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '13px 16px', background: 'none', border: 'none',
-                    borderBottom: '1px solid var(--border)', cursor: 'pointer', gap: 10,
+                    padding: '10px 16px', background: 'none', border: 'none',
+                    cursor: 'pointer', gap: 10,
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
@@ -1391,15 +1407,14 @@ Coach:`;
                 </button>
               )}
 
-              {/* Re-apply */}
               {isLoggedIn && s.sourceId && (
                 <button
                   onClick={() => { reapplyMutation.mutate(s._id); setMenuOpenId(null); }}
                   disabled={reapplyMutation.isPending}
                   style={{
                     width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-                    padding: '11px 16px', background: 'none', border: 'none',
-                    borderBottom: '1px solid var(--border)', cursor: 'pointer',
+                    padding: '10px 16px', background: 'none', border: 'none',
+                    cursor: 'pointer',
                     color: 'var(--accent)', fontSize: 13, fontWeight: 600,
                   }}
                 >
@@ -1410,12 +1425,11 @@ Coach:`;
                 </button>
               )}
 
-              {/* Edit */}
               <button
                 onClick={() => { setEditingSplitId(s._id); setMenuOpenId(null); }}
                 style={{
                   width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '11px 16px', background: 'none', border: 'none',
+                  padding: '10px 16px', background: 'none', border: 'none',
                   cursor: 'pointer', color: 'var(--text)', fontSize: 13, fontWeight: 600,
                 }}
               >
@@ -1426,12 +1440,11 @@ Coach:`;
                 Edit Days
               </button>
 
-              {/* Rename */}
               <button
                 onClick={() => { setModal({ type: 'rename', split: s }); setMenuOpenId(null); }}
                 style={{
                   width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '11px 16px', background: 'none', border: 'none',
+                  padding: '10px 16px', background: 'none', border: 'none',
                   cursor: 'pointer', color: 'var(--text)', fontSize: 13, fontWeight: 600,
                 }}
               >
@@ -1441,13 +1454,12 @@ Coach:`;
                 Rename
               </button>
 
-              {/* Duplicate */}
               <button
                 onClick={() => { duplicateMutation.mutate(s._id); setMenuOpenId(null); }}
                 disabled={duplicateMutation.isPending}
                 style={{
                   width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '11px 16px', background: 'none', border: 'none',
+                  padding: '10px 16px', background: 'none', border: 'none',
                   cursor: 'pointer', color: 'var(--text)', fontSize: 13, fontWeight: 600,
                 }}
               >
@@ -1457,12 +1469,59 @@ Coach:`;
                 Duplicate
               </button>
 
-              {/* Version History */}
+              {/* ── Share & Export ── */}
+              <div style={{ padding: '10px 16px 4px', fontSize: 9, fontWeight: 800, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', borderTop: '1px solid var(--border)' }}>
+                Share &amp; Export
+              </div>
+
+              <button
+                onClick={() => { setShareModal(s); setMenuOpenId(null); }}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '10px 16px', background: 'none', border: 'none',
+                  cursor: 'pointer', color: 'var(--text)', fontSize: 13, fontWeight: 600,
+                }}
+              >
+                <ShareIcon />
+                Share Card
+              </button>
+
+              <button
+                onClick={() => { handleCopySplit(s); setMenuOpenId(null); }}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '10px 16px', background: 'none', border: 'none',
+                  cursor: 'pointer', color: 'var(--text)', fontSize: 13, fontWeight: 600,
+                }}
+              >
+                <CopyIcon />
+                Copy as Text
+              </button>
+
+              <button
+                onClick={() => { handleExportSplit(s); setMenuOpenId(null); }}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '10px 16px', background: 'none', border: 'none',
+                  cursor: 'pointer', color: 'var(--text)', fontSize: 13, fontWeight: 600,
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                Export as JSON
+              </button>
+
+              {/* ── History ── */}
+              <div style={{ padding: '10px 16px 4px', fontSize: 9, fontWeight: 800, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', borderTop: '1px solid var(--border)' }}>
+                History
+              </div>
+
               <button
                 onClick={() => { setHistoryModal(s); setMenuOpenId(null); }}
                 style={{
                   width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '11px 16px', background: 'none', border: 'none',
+                  padding: '10px 16px', background: 'none', border: 'none',
                   cursor: 'pointer', color: 'var(--text)', fontSize: 13, fontWeight: 600,
                 }}
               >
@@ -1472,13 +1531,12 @@ Coach:`;
                 Version History
               </button>
 
-              {/* Compare with another split */}
               {splits.length > 1 && (
                 <button
                   onClick={() => { setCompareModal(s._id); setMenuOpenId(null); }}
                   style={{
                     width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-                    padding: '11px 16px', background: 'none', border: 'none',
+                    padding: '10px 16px', background: 'none', border: 'none',
                     cursor: 'pointer', color: 'var(--text)', fontSize: 13, fontWeight: 600,
                   }}
                 >
@@ -1489,54 +1547,16 @@ Coach:`;
                 </button>
               )}
 
-              {/* Export as JSON */}
-              <button
-                onClick={() => { handleExportSplit(s); setMenuOpenId(null); }}
-                style={{
-                  width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '11px 16px', background: 'none', border: 'none',
-                  cursor: 'pointer', color: 'var(--text)', fontSize: 13, fontWeight: 600,
-                }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
-                </svg>
-                Export as JSON
-              </button>
+              {/* ── Danger Zone ── */}
+              <div style={{ padding: '10px 16px 4px', fontSize: 9, fontWeight: 800, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', borderTop: '1px solid var(--border)', marginTop: 4 }}>
+                Danger Zone
+              </div>
 
-              {/* Copy as Text */}
-              <button
-                onClick={() => { handleCopySplit(s); setMenuOpenId(null); }}
-                style={{
-                  width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '11px 16px', background: 'none', border: 'none',
-                  cursor: 'pointer', color: 'var(--text)', fontSize: 13, fontWeight: 600,
-                }}
-              >
-                <CopyIcon />
-                Copy as Text
-              </button>
-
-              {/* Share */}
-              <button
-                onClick={() => { setShareModal(s); setMenuOpenId(null); }}
-                style={{
-                  width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '11px 16px', background: 'none', border: 'none',
-                  borderBottom: '1px solid var(--border)',
-                  cursor: 'pointer', color: 'var(--text)', fontSize: 13, fontWeight: 600,
-                }}
-              >
-                <ShareIcon />
-                Share Card
-              </button>
-
-              {/* Delete */}
               <button
                 onClick={() => { setModal({ type: 'delete', split: s }); setMenuOpenId(null); }}
                 style={{
                   width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '11px 16px', background: 'none', border: 'none',
+                  padding: '10px 16px 13px', background: 'none', border: 'none',
                   cursor: 'pointer', color: 'var(--red)', fontSize: 13, fontWeight: 600,
                 }}
               >
