@@ -115,7 +115,7 @@ function ExerciseHistoryModal({ exName, logs, onClose }) {
             {history.map((rec, idx) => {
               const wKg = convertWeight(rec.weight, rec.weightUnit, 'kg');
               const isPr = maxWKg > 0 && Math.abs(wKg - maxWKg) < 0.01;
-              const rLabel = (rec.untilFailure || rec.reps === 0) ? 'Failure' : `${rec.reps}`;
+              const rLabel = rec.duration > 0 ? `${rec.duration}${rec.durationUnit || 'sec'}` : (rec.untilFailure || rec.reps === 0) ? 'Failure' : `${rec.reps}`;
               
               return (
                 <div key={idx} style={{
@@ -1773,7 +1773,7 @@ function AddExerciseFromOtherDaysModal({ splitDays, logs, onConfirm, onClose }) 
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                       {exs.map((ex, exIdx) => {
-                        const rLabel = (ex.untilFailure || !ex.reps || ex.reps === 0) ? 'Failure' : ex.reps;
+                        const rLabel = ex.duration > 0 ? `${ex.duration}${ex.durationUnit || 'sec'}` : (ex.untilFailure || !ex.reps || ex.reps === 0) ? 'Failure' : ex.reps;
                         return (
                           <div key={ex._id || exIdx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderBottom: exIdx < exs.length - 1 ? '1px solid var(--border2)' : 'none' }}>
                             <div style={{ minWidth: 0, flex: 1 }}>
@@ -2466,7 +2466,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {lastWeekLog.exercises.map((lwEx, idx) => {
               const alreadyAdded = exercises.some(e => e.name.toLowerCase() === lwEx.name.toLowerCase());
-              const rLabel = (lwEx.untilFailure || !lwEx.reps || lwEx.reps === 0) ? 'Failure' : lwEx.reps;
+              const rLabel = lwEx.duration > 0 ? `${lwEx.duration}${lwEx.durationUnit || 'sec'}` : (lwEx.untilFailure || !lwEx.reps || lwEx.reps === 0) ? 'Failure' : lwEx.reps;
 
               return (
                 <div key={idx} style={{
@@ -3099,11 +3099,11 @@ export default function TodayPage() {
 
 Today's session — Day: ${todayDay.name}${todayDay.tag ? ` (${todayDay.tag})` : ''}
 Exercises ${todayLog ? 'done' : 'planned'}:
-${targetExs.map(e => `- ${e.name}: ${e.sets}×${(e.untilFailure || !e.reps || e.reps === 0) ? 'failure' : e.reps} reps${e.weight ? ` @ ${e.weight}${e.weightUnit}` : ''}`).join('\n')}`
+${targetExs.map(e => `- ${e.name}: ${e.sets}×${e.duration > 0 ? `${e.duration}${e.durationUnit || 'sec'}` : (e.untilFailure || !e.reps || e.reps === 0) ? 'failure' : `${e.reps} reps`}${e.weight ? ` @ ${e.weight}${e.weightUnit}` : ''}`).join('\n')}`
       : `Analyze this ${todayLog ? 'completed' : 'planned'} workout. Keep it under 100 words with bullet points.
 
 Split: ${activeSplit.name} | Day: ${todayDay.name}
-Exercises: ${targetExs.map(e => `${e.name} ${e.sets}×${(e.untilFailure || !e.reps || e.reps === 0) ? 'failure' : e.reps}`).join(', ')}`;
+Exercises: ${targetExs.map(e => `${e.name} ${e.sets}×${e.duration > 0 ? `${e.duration}${e.durationUnit || 'sec'}` : (e.untilFailure || !e.reps || e.reps === 0) ? 'failure' : e.reps}`).join(', ')}`;
 
     try {
       let result = '';

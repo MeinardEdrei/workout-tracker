@@ -856,7 +856,7 @@ function LogCard({ log, onDelete, hasPR }) {
         <div style={{ borderTop: '1px solid var(--border)' }}>
           {log.exercises.map((ex, i) => {
             const wLabel = ex.weight > 0 ? `${ex.weight}${ex.weightUnit}` : '—';
-            const rLabel = (ex.untilFailure || !ex.reps || ex.reps === 0) ? 'Failure' : ex.reps;
+            const rLabel = ex.duration > 0 ? `${ex.duration}${ex.durationUnit || 'sec'}` : (ex.untilFailure || !ex.reps || ex.reps === 0) ? 'Failure' : ex.reps;
             let prefix = "";
             let nameStyle = { fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-display)', textTransform: 'uppercase', color: 'var(--text)', letterSpacing: '0.01em' };
             if (ex.category === 'warmup') {
@@ -946,7 +946,7 @@ function BackupModal({ logs, splits, storage, queryClient, onClose }) {
         const exName = (ex.name || '').replace(/,/g, ' ');
         const cat = ex.category || 'workout';
         const sets = ex.sets || 0;
-        const reps = (ex.untilFailure || ex.reps === 0) ? 'Failure' : (ex.reps || 0);
+        const reps = ex.duration > 0 ? `${ex.duration}${ex.durationUnit || 'sec'}` : (ex.untilFailure || ex.reps === 0) ? 'Failure' : (ex.reps || 0);
         const weight = ex.weight || 0;
         const unit = ex.weightUnit || 'kg';
         const notes = (ex.notes || '').replace(/,/g, ' ');

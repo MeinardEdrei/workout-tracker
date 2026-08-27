@@ -19,7 +19,7 @@ function fs(base, scale) {
 }
 
 function ExerciseRow({ ex, scale }) {
-  const rLabel = (ex.untilFailure || !ex.reps || ex.reps === 0) ? 'Failure' : ex.reps;
+  const rLabel = ex.duration > 0 ? `${ex.duration}${ex.durationUnit || 'sec'}` : (ex.untilFailure || !ex.reps || ex.reps === 0) ? 'Failure' : ex.reps;
   const stats = [
     ex.sets > 0 ? `${ex.sets}×${rLabel}` : null,
     ex.weight > 0 ? `${ex.weight}${ex.weightUnit}` : null,

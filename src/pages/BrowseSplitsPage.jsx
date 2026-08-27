@@ -257,7 +257,7 @@ export default function BrowseSplitsPage({ onBack }) {
                                     <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: 'var(--text2)', padding: '1px 0' }}>
                                       <span style={nameStyle}>{prefix}{idx + 1}. {ex.name}</span>
                                       <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text3)', fontSize: 11 }}>
-                                        {ex.sets}×{(ex.untilFailure || !ex.reps || ex.reps === 0) ? 'Failure' : ex.reps}
+                                        {ex.sets}×{ex.duration > 0 ? `${ex.duration}${ex.durationUnit || 'sec'}` : (ex.untilFailure || !ex.reps || ex.reps === 0) ? 'Failure' : ex.reps}
                                       </span>
                                     </div>
                                   );
