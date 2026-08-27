@@ -1,12 +1,12 @@
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useStorage } from '../hooks/useStorage';
 import StatsShareModal from '../components/StatsShareModal';
 import { createPortal } from 'react-dom';
 import { capitalizeWords, formatRelativeDate } from '../utils/textFormat';
 import { normKey, findDuplicatePairs } from '../utils/matchExercise';
-import BodyMuscleMap, { resolveExerciseMuscles } from '../components/BodyMuscleMap';
-import { X, TrendingUp, TrendingDown, ArrowRight, RotateCcw, BarChart3, FolderOpen, Download, Tag, Pencil, Check } from 'lucide-react';
+import { X, TrendingUp, TrendingDown, ArrowRight, RotateCcw, BarChart3, FolderOpen, Download, Tag, Pencil, Check, Flame, Minus, Trophy } from 'lucide-react';
+import { computeStreak } from '../utils/streaks';
 
 function convertWeight(weight, fromUnit, toUnit) {
   if (fromUnit === toUnit) return weight;
@@ -228,39 +228,27 @@ function ActivityTracker({ logs }) {
   const displayYear = displayDate.getFullYear();
   const displayMonth = displayDate.getMonth();
 
-  const sessionCountMonth = logs.filter((l) => {
-    const d = new Date(l.date + 'T12:00:00');
-    return d.getFullYear() === displayYear && d.getMonth() === displayMonth;
-  }).length;
-
-  const sessionCountYear = logs.filter((l) => l.date.startsWith(String(viewYear))).length;
-
   const minYear = logs.length > 0 ? Math.min(...logs.map((l) => +l.date.slice(0, 4))) : today.getFullYear();
 
   return (
     <div style={{ borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg2)', padding: '16px', marginBottom: 24 }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-        <div style={{ display: 'flex', gap: 6 }}>
-          {['month', 'year'].map((v) => (
-            <button
-              key={v}
-              onClick={() => setView(v)}
-              style={{
-                padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700,
-                letterSpacing: '0.05em', textTransform: 'uppercase', cursor: 'pointer', border: 'none',
-                background: view === v ? 'var(--accent)' : 'var(--bg3)',
-                color: view === v ? '#0a0a0a' : 'var(--text3)',
-                transition: 'all 0.15s',
-              }}
-            >
-              {v}
-            </button>
-          ))}
-        </div>
-        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--accent)', fontWeight: 700 }}>
-          {view === 'month' ? `${sessionCountMonth} session${sessionCountMonth !== 1 ? 's' : ''}` : `${sessionCountYear} sessions`}
-        </div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+        {['month', 'year'].map((v) => (
+          <button
+            key={v}
+            onClick={() => setView(v)}
+            style={{
+              padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+              letterSpacing: '0.05em', textTransform: 'uppercase', cursor: 'pointer', border: 'none',
+              background: view === v ? 'var(--accent)' : 'var(--bg3)',
+              color: view === v ? '#0a0a0a' : 'var(--text3)',
+              transition: 'all 0.15s',
+            }}
+          >
+            {v}
+          </button>
+        ))}
       </div>
 
       {view === 'month' ? (
@@ -358,6 +346,157 @@ function WeekStrip({ weekLogs }) {
   );
 }
 
+// Returns the last `n` Monday-Sunday week ranges, oldest first, ending on the current week.
+function getLastNWeeks(n) {
+  const now = new Date();
+  const dow = now.getDay();
+  const diffToMon = dow === 0 ? -6 : 1 - dow;
+  const thisMonday = new Date(now);
+  thisMonday.setDate(now.getDate() + diffToMon);
+
+  return Array.from({ length: n }, (_, i) => {
+    const weekStart = new Date(thisMonday);
+    weekStart.setDate(thisMonday.getDate() - (n - 1 - i) * 7);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    return {
+      startStr: weekStart.toISOString().slice(0, 10),
+      endStr: weekEnd.toISOString().slice(0, 10),
+      isCurrent: i === n - 1,
+      label: `${weekStart.getMonth() + 1}/${weekStart.getDate()}`,
+    };
+  });
+}
+
+function WeeklySessionsChart({ logs }) {
+  const weeks = getLastNWeeks(8).map((w) => ({
+    ...w,
+    count: logs.filter((l) => l.date >= w.startStr && l.date <= w.endStr).length,
+  }));
+
+  const maxCount = Math.max(...weeks.map((w) => w.count), 1);
+
+  return (
+    <div style={{ borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg2)', padding: '16px', marginBottom: 24 }}>
+      <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text3)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 14 }}>
+        Sessions / Week
+      </div>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 80 }}>
+        {weeks.map((w, i) => {
+          const h = w.count > 0 ? Math.max(6, Math.round((w.count / maxCount) * 72)) : 3;
+          return (
+            <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%', gap: 4 }}>
+              {w.count > 0 && (
+                <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', fontWeight: 700, color: w.isCurrent ? 'var(--accent)' : 'var(--text3)' }}>{w.count}</div>
+              )}
+              <div style={{
+                width: '100%', height: h, borderRadius: 3,
+                background: w.isCurrent ? 'var(--accent)' : 'var(--bg3)',
+                transition: 'height 0.2s',
+              }} />
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+        {weeks.map((w, i) => (
+          <div key={i} style={{ flex: 1, textAlign: 'center', fontSize: 8, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>
+            {w.label}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function WeeklyVolumeChart({ logs }) {
+  // Standardise to kg across weeks so the trend line is comparable even if
+  // the user logged in mixed units at different points in their history.
+  const weeks = getLastNWeeks(8).map((w) => {
+    const weekLogs = logs.filter((l) => l.date >= w.startStr && l.date <= w.endStr);
+    const volumeKg = weekLogs.reduce((sum, l) => sum + (l.exercises || []).reduce((s, ex) => {
+      const weightKg = convertWeight(ex.weight || 0, ex.weightUnit || 'kg', 'kg');
+      return s + (ex.sets || 0) * (ex.reps || 0) * weightKg;
+    }, 0), 0);
+    return { ...w, volume: Math.round(volumeKg) };
+  });
+
+  const fmtVol = (v) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : `${v}`);
+
+  let linePath = '';
+  let areaPath = '';
+  let lastPointPct = null;
+  let maxVal = 0;
+  let minVal = 0;
+  const hasData = weeks.some((w) => w.volume > 0);
+  if (hasData) {
+    const vals = weeks.map((w) => w.volume);
+    minVal = Math.min(...vals);
+    maxVal = Math.max(...vals);
+    const range = maxVal - minVal || 1;
+    const points = weeks.map((w, i) => {
+      const x = (i / (weeks.length - 1)) * 300;
+      const y = 90 - ((w.volume - minVal) / range) * 80;
+      return [x, y];
+    });
+    linePath = points.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x},${y}`).join(' ');
+    areaPath = `${linePath} L300,100 L0,100 Z`;
+    const [lx, ly] = points[points.length - 1];
+    lastPointPct = { left: (lx / 300) * 100, top: ly };
+  }
+
+  const currentWeekVolume = weeks[weeks.length - 1].volume;
+
+  return (
+    <div style={{ borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg2)', padding: '16px', marginBottom: 24 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
+        <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text3)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+          Volume / Week
+        </div>
+        {hasData && (
+          <div style={{ fontSize: 13, fontWeight: 900, fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>
+            {fmtVol(currentWeekVolume)}<span style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 400, marginLeft: 3 }}>kg this week</span>
+          </div>
+        )}
+      </div>
+      {hasData ? (
+        <>
+          <div style={{ position: 'relative' }}>
+            <div style={{ position: 'absolute', top: 0, left: 0, fontSize: 8, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>{fmtVol(maxVal)}kg</div>
+            <div style={{ position: 'absolute', bottom: 0, left: 0, fontSize: 8, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>{fmtVol(minVal)}kg</div>
+            <svg viewBox="0 0 300 100" preserveAspectRatio="none" style={{ width: '100%', height: 100, display: 'block' }}>
+              <defs>
+                <linearGradient id="grad-weekly-volume" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.25" />
+                  <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              <path d={areaPath} fill="url(#grad-weekly-volume)" />
+              <path d={linePath} fill="none" stroke="var(--accent)" strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
+            </svg>
+            {lastPointPct && (
+              <div style={{
+                position: 'absolute', left: `${lastPointPct.left}%`, top: lastPointPct.top,
+                width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)',
+                transform: 'translate(-50%, -50%)', boxShadow: '0 0 0 3px rgba(232,255,90,0.2)',
+              }} />
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+            {weeks.map((w, i) => (
+              <div key={i} style={{ flex: 1, textAlign: 'center', fontSize: 8, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>
+                {w.label}
+              </div>
+            ))}
+          </div>
+        </>
+      ) : (
+        <div style={{ textAlign: 'center', color: 'var(--text3)', fontSize: 12, padding: '20px 0' }}>No weighted volume logged yet</div>
+      )}
+    </div>
+  );
+}
+
 /* ─── Exercise progression section ─── */
 function buildProgressionMap(logs) {
   const map = {};
@@ -390,104 +529,20 @@ function buildProgressionMap(logs) {
     });
 }
 
-function MuscleVolumeBreakdown({ weekLogs }) {
-  const [selectedMuscle, setSelectedMuscle] = useState(null);
-
-  const { muscleSetsMap, muscleSetsList } = useMemo(() => {
-    const map = {};
-    (weekLogs || []).forEach((log) => {
-      (log.exercises || []).forEach((ex) => {
-        const targets = resolveExerciseMuscles(ex);
-        const sets = ex.sets || 0;
-        targets.forEach((t) => {
-          const key = capitalizeWords(t);
-          map[key] = (map[key] || 0) + sets;
-        });
-      });
-    });
-    const list = Object.entries(map).sort((a, b) => b[1] - a[1]);
-    return { muscleSetsMap: map, muscleSetsList: list };
-  }, [weekLogs]);
-
-  if (muscleSetsList.length === 0) return null;
-
-  const displayList = selectedMuscle 
-    ? muscleSetsList.filter(([m]) => m.toLowerCase().includes(selectedMuscle.toLowerCase()))
-    : muscleSetsList;
-
-  const maxSets = Math.max(...muscleSetsList.map(([, s]) => s), 1);
-
-  return (
-    <div style={{ borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg2)', padding: '16px', marginBottom: 24 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-          Muscle Volume (This Week)
-        </div>
-        {selectedMuscle && (
-          <button
-            onClick={() => setSelectedMuscle(null)}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}
-          >
-            Show All ({selectedMuscle} <X size={10} />)
-          </button>
-        )}
-      </div>
-
-      <BodyMuscleMap 
-        muscleSetsMap={muscleSetsMap} 
-        selectedMuscle={selectedMuscle} 
-        onSelectMuscle={(m) => setSelectedMuscle(prev => prev === m ? null : m)} 
-      />
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {displayList.map(([muscle, sets]) => {
-          let statusText = 'Low Volume';
-          let statusColor = 'var(--text2)';
-          let statusBg = 'rgba(255,255,255,0.05)';
-          
-          if (sets >= 10 && sets <= 20) {
-            statusText = 'Optimal Volume';
-            statusColor = 'var(--green)';
-            statusBg = 'rgba(68,255,136,0.1)';
-          } else if (sets >= 6 && sets <= 9) {
-            statusText = 'Moderate Volume';
-            statusColor = 'var(--blue)';
-            statusBg = 'rgba(90,240,255,0.1)';
-          } else if (sets > 20) {
-            statusText = 'High Volume';
-            statusColor = 'var(--accent)';
-            statusBg = 'rgba(232,255,90,0.1)';
-          }
-
-          const percent = Math.min(100, Math.round((sets / Math.max(maxSets, 20)) * 100));
-
-          return (
-            <div key={muscle} style={{
-              background: selectedMuscle && muscle.toLowerCase().includes(selectedMuscle.toLowerCase()) ? 'rgba(232,255,90,0.04)' : 'transparent',
-              padding: '4px 6px', borderRadius: 6, transition: 'all 0.15s'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
-                  {muscle}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: statusColor, background: statusBg, padding: '2px 6px', borderRadius: 4, textTransform: 'uppercase' }}>
-                    {statusText}
-                  </span>
-                  <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text2)' }}>
-                    {sets} sets
-                  </span>
-                </div>
-              </div>
-              <div style={{ width: '100%', height: 6, background: 'var(--bg3)', borderRadius: 3, overflow: 'hidden' }}>
-                <div style={{ width: `${percent}%`, height: '100%', background: statusColor, borderRadius: 3, transition: 'width 0.3s ease' }} />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
+// Compares the average of the last 3 sessions' estimated 1RM against the
+// 3 before that (falling back to the earliest sessions if there aren't 6
+// yet) — a real recent-trend window, unlike a naive first-vs-last compare
+// which stays "improving" forever once early gains happened.
+function computeProgressStatus(weightedSessionsInKg) {
+  if (weightedSessionsInKg.length < 4) return null;
+  const recent = weightedSessionsInKg.slice(-3);
+  const prior = weightedSessionsInKg.slice(-6, -3).length ? weightedSessionsInKg.slice(-6, -3) : weightedSessionsInKg.slice(0, -3);
+  const avg = (arr) => arr.reduce((a, b) => a + b, 0) / arr.length;
+  const recentAvg = avg(recent);
+  const priorAvg = avg(prior);
+  if (recentAvg > priorAvg * 1.02) return 'improving';
+  if (recentAvg < priorAvg * 0.98) return 'declining';
+  return 'plateaued';
 }
 
 function ProgressionCard({ exercise }) {
@@ -506,6 +561,17 @@ function ProgressionCard({ exercise }) {
     return Math.round(s.weight * (1 + reps / 30) * 10) / 10;
   }
 
+  // e1RM series converted to the most recent session's unit so the trend
+  // comparison isn't skewed by a kg/lbs switch mid-history.
+  const e1RMSeries = last ? weightedSessions.map((s) => convertWeight(calc1RM(s), s.weightUnit, last.weightUnit)) : [];
+  const progressStatus = computeProgressStatus(e1RMSeries);
+  let sessionsSinceLastPR = 0;
+  if (progressStatus === 'plateaued' && e1RMSeries.length > 0) {
+    const maxE1RM = Math.max(...e1RMSeries);
+    const lastPRIdx = e1RMSeries.lastIndexOf(maxE1RM);
+    sessionsSinceLastPR = e1RMSeries.length - 1 - lastPRIdx;
+  }
+
   const firstVal = first ? (use1RM ? calc1RM(first) : first.weight) : 0;
   const lastVal = last ? (use1RM ? calc1RM(last) : last.weight) : 0;
   const firstConverted = first && last ? convertWeight(firstVal, first.weightUnit, last.weightUnit) : 0;
@@ -515,14 +581,37 @@ function ProgressionCard({ exercise }) {
     : lastVal < firstConverted ? TrendingDown : ArrowRight;
   const trendColor = TrendIcon === TrendingUp ? 'var(--green)' : TrendIcon === TrendingDown ? 'var(--red)' : 'var(--text3)';
 
-  const last6Converted = last ? last6.map(s => {
+  const allConverted = last ? weightedSessions.map(s => {
     const rawVal = use1RM ? calc1RM(s) : s.weight;
     return {
       ...s,
       displayVal: convertWeight(rawVal, s.weightUnit, last.weightUnit)
     };
   }) : [];
+  const last6Converted = allConverted.slice(-6);
   const maxW = Math.max(...last6Converted.map((s) => s.displayVal || 0), 1);
+
+  let linePath = '';
+  let areaPath = '';
+  let chartMin = 0;
+  let chartMax = 0;
+  let lastPointPct = null;
+  if (allConverted.length >= 3) {
+    const vals = allConverted.map((s) => s.displayVal);
+    chartMin = Math.min(...vals);
+    chartMax = Math.max(...vals);
+    const range = chartMax - chartMin || 1;
+    const points = allConverted.map((s, i) => {
+      const x = (i / (allConverted.length - 1)) * 300;
+      const y = 90 - ((s.displayVal - chartMin) / range) * 80;
+      return [x, y];
+    });
+    linePath = points.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x},${y}`).join(' ');
+    areaPath = `${linePath} L300,100 L0,100 Z`;
+    const [lx, ly] = points[points.length - 1];
+    lastPointPct = { left: (lx / 300) * 100, top: ly };
+  }
+  const chartUnit = last ? last.weightUnit : '';
 
   return (
     <div style={{ marginBottom: 8, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--bg2)', overflow: 'hidden' }}>
@@ -549,7 +638,25 @@ function ProgressionCard({ exercise }) {
               {use1RM ? 'Est 1RM' : 'Weight'}
             </button>
           </div>
-          {first && last && (
+          {progressStatus ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+              {progressStatus === 'improving' && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 800, color: 'var(--green)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  <TrendingUp size={12} /> Improving
+                </span>
+              )}
+              {progressStatus === 'declining' && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 800, color: 'var(--red)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  <TrendingDown size={12} /> Declining
+                </span>
+              )}
+              {progressStatus === 'plateaued' && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 800, color: 'var(--text3)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  <Minus size={12} /> Plateaued{sessionsSinceLastPR > 0 ? ` · no PR in ${sessionsSinceLastPR} session${sessionsSinceLastPR === 1 ? '' : 's'}` : ''}
+                </span>
+              )}
+            </div>
+          ) : first && last && (
             <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text3)', marginTop: 3 }}>
               <span>{Math.round(firstVal * 10) / 10}{first.weightUnit}</span>
               <span style={{ color: trendColor, margin: '0 5px', display: 'inline-flex', verticalAlign: 'middle' }}><TrendIcon size={13} /></span>
@@ -574,6 +681,44 @@ function ProgressionCard({ exercise }) {
 
       {expanded && (
         <div style={{ borderTop: '1px solid var(--border)' }}>
+          {allConverted.length >= 3 && (
+            <div style={{ padding: '14px 14px 4px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+                <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                  {use1RM ? 'Est. 1RM' : 'Weight'} trend
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 900, fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>
+                  {Math.round(allConverted[allConverted.length - 1].displayVal * 10) / 10}{chartUnit}
+                </div>
+              </div>
+              <div style={{ position: 'relative' }}>
+                <div style={{ position: 'absolute', top: 0, left: 0, fontSize: 8, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>{Math.round(chartMax * 10) / 10}{chartUnit}</div>
+                <div style={{ position: 'absolute', bottom: 0, left: 0, fontSize: 8, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>{Math.round(chartMin * 10) / 10}{chartUnit}</div>
+                <svg viewBox="0 0 300 100" preserveAspectRatio="none" style={{ width: '100%', height: 100, display: 'block' }}>
+                  <defs>
+                    <linearGradient id={`grad-${normKey(exercise.name)}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.25" />
+                      <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
+                    </linearGradient>
+                  </defs>
+                  <path d={areaPath} fill={`url(#grad-${normKey(exercise.name)})`} />
+                  <path d={linePath} fill="none" stroke="var(--accent)" strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
+                </svg>
+                {lastPointPct && (
+                  <div style={{
+                    position: 'absolute', left: `${lastPointPct.left}%`, top: lastPointPct.top,
+                    width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)',
+                    transform: 'translate(-50%, -50%)', boxShadow: '0 0 0 3px rgba(232,255,90,0.2)',
+                  }} />
+                )}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: 'var(--text3)', fontFamily: 'var(--font-mono)', marginTop: 4 }}>
+                <span>{formatRelativeDate(allConverted[0].date)}</span>
+                <span>{allConverted.length} sessions</span>
+                <span>{formatRelativeDate(allConverted[allConverted.length - 1].date)}</span>
+              </div>
+            </div>
+          )}
           <div style={{ padding: '8px 14px', background: 'var(--bg3)', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
             <button
               onClick={() => setUse1RM(false)}
@@ -661,7 +806,7 @@ function getExercisesVolumeAndUnit(exercises) {
 }
 
 /* ─── Log history card ─── */
-function LogCard({ log, onDelete }) {
+function LogCard({ log, onDelete, hasPR }) {
   const [expanded, setExpanded] = useState(false);
   const date = new Date(log.date + 'T12:00:00');
   const dayAbbr = date.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
@@ -683,7 +828,19 @@ function LogCard({ log, onDelete }) {
 
         {/* Name / tag */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 16, fontWeight: 900, fontFamily: 'var(--font-display)', textTransform: 'uppercase', letterSpacing: '0.02em', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{log.dayName}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ fontSize: 16, fontWeight: 900, fontFamily: 'var(--font-display)', textTransform: 'uppercase', letterSpacing: '0.02em', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{log.dayName}</div>
+            {hasPR && (
+              <span style={{
+                fontSize: 8, fontWeight: 900, color: 'var(--accent)', background: 'rgba(232, 255, 90, 0.1)',
+                border: '1px solid var(--accent)', padding: '1px 5px', borderRadius: 4,
+                textTransform: 'uppercase', letterSpacing: '0.05em', flexShrink: 0,
+                display: 'inline-flex', alignItems: 'center', gap: 3,
+              }}>
+                <Trophy size={9} /> PR
+              </span>
+            )}
+          </div>
           {log.dayTag && <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 2 }}>{log.dayTag}</div>}
           <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>{log.exercises.length} exercises</div>
         </div>
@@ -750,6 +907,21 @@ function LogCard({ log, onDelete }) {
       )}
     </div>
   );
+}
+
+function groupLogsByMonth(logsArr) {
+  const groups = [];
+  let currentKey = null;
+  logsArr.forEach((log) => {
+    const d = new Date(log.date + 'T12:00:00');
+    const key = `${d.getFullYear()}-${d.getMonth()}`;
+    if (key !== currentKey) {
+      groups.push({ label: d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }), logs: [] });
+      currentKey = key;
+    }
+    groups[groups.length - 1].logs.push(log);
+  });
+  return groups;
 }
 
 function SectionLabel({ children }) {
@@ -1207,9 +1379,58 @@ export default function StatsPage() {
   const [showManageExercises, setShowManageExercises] = useState(false);
   const [confirm, setConfirm] = useState(null);
   const [progressionSearch, setProgressionSearch] = useState('');
+  const [showAllHistory, setShowAllHistory] = useState(false);
+  const [historySearch, setHistorySearch] = useState('');
+  const [showAllPRs, setShowAllPRs] = useState(false);
+  const [showAllProgression, setShowAllProgression] = useState(false);
+  const TABS = ['Overview', 'Progress', 'History'];
+  const [activeTabIndex, setActiveTabIndex] = useState(0);
+  const [trackHeight, setTrackHeight] = useState(undefined);
+  const trackRef = useRef(null);
+  const panelRefs = useRef({});
 
   const { data: logs = [], isLoading } = useQuery({ queryKey: ['logs', storageKey], queryFn: storage.getLogs, staleTime: LOGS_STALE });
   const { data: weekLogs = [] } = useQuery({ queryKey: ['logs', 'week', storageKey], queryFn: storage.getWeekLogs, staleTime: LOGS_STALE });
+  const { data: splits = [] } = useQuery({ queryKey: ['splits', storageKey], queryFn: storage.getSplits, staleTime: LOGS_STALE });
+  const activeSplit = splits.find((s) => s.isActive) || splits[0] || null;
+
+  // Track which panel is active from the track's own scroll position — panels
+  // are full-width with no gap, so scrollLeft / clientWidth gives an exact
+  // index directly, more reliable here than IntersectionObserver ratios
+  // (which get noisy while the track's height is mid-transition). Depends on
+  // isLoading because the track only mounts once the loading spinner is
+  // replaced by real content — attaching on an empty-deps mount would run
+  // while trackRef.current is still null and never re-attach.
+  useEffect(() => {
+    const el = trackRef.current;
+    if (!el) return;
+    let raf = null;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = null;
+        if (!el.clientWidth) return;
+        const idx = Math.round(el.scrollLeft / el.clientWidth);
+        setActiveTabIndex((prev) => (prev === idx ? prev : idx));
+      });
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [isLoading]);
+
+  // Keep the track's height matched to the active panel's natural height
+  useEffect(() => {
+    const el = panelRefs.current[activeTabIndex];
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) setTrackHeight(entry.contentRect.height);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [activeTabIndex, isLoading]);
 
   const invalidateLogs = () => queryClient.invalidateQueries({ queryKey: ['logs'] });
   const deleteMutation = useMutation({ mutationFn: (id) => storage.deleteLog(id), onSuccess: invalidateLogs });
@@ -1225,10 +1446,51 @@ export default function StatsPage() {
     ? progressionData.filter((e) => e.name.toLowerCase().includes(progressionSearch.toLowerCase()))
     : progressionData;
 
+  // ── All-time stat tiles ──
+  const { streakDays, streakWeeks } = computeStreak(logs, activeSplit);
+  const streakLabel = streakWeeks > 0 ? `${streakWeeks}w` : `${streakDays}d`;
+  const { volume: allTimeVolume, unit: allTimeVolUnit } = getExercisesVolumeAndUnit(logs.flatMap((l) => l.exercises || []));
+  const allTimeVolLabel = allTimeVolume >= 1000 ? `${(allTimeVolume / 1000).toFixed(1)}k` : `${allTimeVolume || 0}`;
+  const earliestLogDate = logs.length > 0 ? logs.reduce((min, l) => (l.date < min ? l.date : min), logs[0].date) : null;
+  const weeksSinceFirstLog = earliestLogDate
+    ? Math.max(1, (Date.now() - new Date(earliestLogDate + 'T00:00:00').getTime()) / (7 * 24 * 60 * 60 * 1000))
+    : 1;
+  const avgPerWeek = logs.length > 0 ? (logs.length / weeksSinceFirstLog).toFixed(1) : '0';
+
+  // ── All-time personal records ──
+  const personalRecords = progressionData
+    .map((e) => {
+      const weighted = e.sessions.filter((s) => s.weight > 0);
+      if (weighted.length === 0) return null;
+      const commonUnit = weighted[weighted.length - 1].weightUnit;
+      let best = weighted[0];
+      let bestConverted = convertWeight(best.weight, best.weightUnit, commonUnit);
+      weighted.forEach((s) => {
+        const converted = convertWeight(s.weight, s.weightUnit, commonUnit);
+        if (converted > bestConverted) { best = s; bestConverted = converted; }
+      });
+      return { name: e.name, weight: best.weight, unit: best.weightUnit, date: best.date };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.date.localeCompare(a.date));
+  const prDates = new Set(personalRecords.map((pr) => pr.date));
+
+  // ── History search/filter ──
+  const filteredLogs = historySearch.trim()
+    ? logs.filter((log) => {
+        const q = historySearch.trim().toLowerCase();
+        return log.dayName?.toLowerCase().includes(q)
+          || log.dayTag?.toLowerCase().includes(q)
+          || (log.exercises || []).some((ex) => ex.name?.toLowerCase().includes(q));
+      })
+    : logs;
+  const displayedLogs = historySearch.trim() ? filteredLogs : (showAllHistory ? filteredLogs : filteredLogs.slice(0, 10));
+  const historyGroups = groupLogsByMonth(displayedLogs);
+
   return (
     <div>
       {/* Page header */}
-      <div className="page-header" style={{ paddingRight: 20 }}>
+      <div className="page-header">
         <div>
           <h1 className="page-title">Stats</h1>
           <div className="page-subtitle">{logs.length} total workouts</div>
@@ -1250,93 +1512,233 @@ export default function StatsPage() {
       {isLoading ? <div className="spinner" /> : (
         <div style={{ padding: '16px 16px 0' }}>
 
-          {/* ── This Week ── */}
-          <SectionLabel>This Week</SectionLabel>
-          <div style={{ borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg2)', padding: '16px', marginBottom: 24 }}>
-            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text3)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 4 }}>Sessions</div>
-                <div style={{ fontSize: 'clamp(34px, 12vw, 52px)', fontWeight: 900, fontFamily: 'var(--font-display)', color: 'var(--accent)', lineHeight: 1, letterSpacing: '-0.01em' }}>{weekLogs.length}</div>
-                <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>this week</div>
-              </div>
-              <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-end', minWidth: 0 }}>
-                <button className="btn" style={{ background: 'transparent', border: '1px solid var(--border2)', color: 'var(--text2)', fontSize: 12, gap: 6 }} onClick={() => setShowShareModal(true)}>
-                  <ShareIcon /> Share
-                </button>
-                {totalVolume > 0 && (
-                  <div>
-                    <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text3)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2, textAlign: 'right' }}>Volume</div>
-                    <div style={{ fontSize: 'clamp(18px, 6vw, 24px)', fontWeight: 900, fontFamily: 'var(--font-mono)', color: 'var(--text)', letterSpacing: '-0.02em' }}>
-                      {volLabel}<span style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 400, marginLeft: 3 }}>{weekVolUnit !== 'mixed' ? weekVolUnit : ''}</span>
-                    </div>
+          {/* ── Tab control ── */}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 20 }}>
+            {TABS.map((t, i) => (
+              <button
+                key={t}
+                onClick={() => panelRefs.current[i]?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })}
+                style={{
+                  flex: 1, padding: '8px 0', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                  letterSpacing: '0.05em', textTransform: 'uppercase', cursor: 'pointer', border: 'none',
+                  background: activeTabIndex === i ? 'var(--accent)' : 'var(--bg3)',
+                  color: activeTabIndex === i ? '#0a0a0a' : 'var(--text3)',
+                  transition: 'all 0.15s',
+                }}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+
+          <div
+            ref={trackRef}
+            className="stats-tab-track"
+            style={{
+              display: 'flex', overflowX: 'auto', scrollSnapType: 'x mandatory',
+              WebkitOverflowScrolling: 'touch', height: trackHeight, overflowY: 'hidden',
+              transition: 'height 0.2s ease',
+            }}
+          >
+          <div
+            ref={(el) => { panelRefs.current[0] = el; }}
+            style={{ flex: '0 0 100%', scrollSnapAlign: 'start', scrollSnapStop: 'always', minWidth: 0 }}
+          >
+              {/* ── This Week ── */}
+              <SectionLabel>This Week</SectionLabel>
+              <div style={{ borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg2)', padding: '16px', marginBottom: 24 }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text3)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 4 }}>Sessions</div>
+                    <div style={{ fontSize: 'clamp(34px, 12vw, 52px)', fontWeight: 900, fontFamily: 'var(--font-display)', color: 'var(--accent)', lineHeight: 1, letterSpacing: '-0.01em' }}>{weekLogs.length}</div>
+                    <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>this week</div>
                   </div>
-                )}
+                  <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-end', minWidth: 0 }}>
+                    <button className="btn" style={{ background: 'transparent', border: '1px solid var(--border2)', color: 'var(--text2)', fontSize: 12, gap: 6 }} onClick={() => setShowShareModal(true)}>
+                      <ShareIcon /> Share
+                    </button>
+                    {totalVolume > 0 && (
+                      <div>
+                        <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text3)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2, textAlign: 'right' }}>Volume</div>
+                        <div style={{ fontSize: 'clamp(18px, 6vw, 24px)', fontWeight: 900, fontFamily: 'var(--font-mono)', color: 'var(--text)', letterSpacing: '-0.02em' }}>
+                          {volLabel}<span style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 400, marginLeft: 3 }}>{weekVolUnit !== 'mixed' ? weekVolUnit : ''}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <WeekStrip weekLogs={weekLogs} />
               </div>
-            </div>
-            <WeekStrip weekLogs={weekLogs} />
+
+              {/* ── All-time stat tiles ── */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 24 }}>
+                {[
+                  { icon: <Flame size={14} />, value: streakLabel, label: 'streak' },
+                  { icon: null, value: logs.length, label: 'workouts' },
+                  { icon: null, value: allTimeVolLabel, label: allTimeVolUnit !== 'mixed' ? allTimeVolUnit : 'volume' },
+                  { icon: null, value: avgPerWeek, label: 'avg/week' },
+                ].map((t, i) => (
+                  <div key={i} style={{ borderRadius: 10, border: '1px solid var(--border)', background: 'var(--bg2)', padding: '10px 6px', textAlign: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3, fontSize: 16, fontWeight: 900, fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>
+                      {t.icon}{t.value}
+                    </div>
+                    <div style={{ fontSize: 9, color: 'var(--text3)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 3 }}>{t.label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* ── Weekly sessions chart ── */}
+              {logs.length > 0 && <WeeklySessionsChart logs={logs} />}
+              {logs.length > 0 && <WeeklyVolumeChart logs={logs} />}
           </div>
 
-          {/* ── Muscle Volume Breakdown ── */}
-          {/* <MuscleVolumeBreakdown weekLogs={weekLogs} /> */}
+          <div
+            ref={(el) => { panelRefs.current[1] = el; }}
+            style={{ flex: '0 0 100%', scrollSnapAlign: 'start', scrollSnapStop: 'always', minWidth: 0 }}
+          >
+              {/* ── Activity Tracker ── */}
+              {logs.length > 0 && (
+                <>
+                  <SectionLabel>Activity</SectionLabel>
+                  <ActivityTracker logs={logs} />
+                </>
+              )}
 
-          {/* ── Activity Tracker ── */}
-          {logs.length > 0 && (
-            <>
-              <SectionLabel>Activity</SectionLabel>
-              <ActivityTracker logs={logs} />
-            </>
-          )}
-
-          {/* ── Manage Exercises ── */}
-          <SectionLabel>Exercises</SectionLabel>
-          <div style={{ borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg2)', padding: '16px', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ width: 44, height: 44, borderRadius: 10, background: 'rgba(232,255,90,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', flexShrink: 0 }}>
-              <Tag size={20} />
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)', textTransform: 'uppercase', letterSpacing: '0.02em' }}>Manage Exercises</div>
-              <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 3, lineHeight: 1.4 }}>
-                Rename an exercise, or merge duplicates like "DB Curl" and "Dumbbell Curl" so their history stays connected.
+              {/* ── Manage Exercises ── */}
+              <SectionLabel>Exercises</SectionLabel>
+              <div style={{ borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg2)', padding: '16px', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 14 }}>
+                <div style={{ width: 44, height: 44, borderRadius: 10, background: 'rgba(232,255,90,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', flexShrink: 0 }}>
+                  <Tag size={20} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)', textTransform: 'uppercase', letterSpacing: '0.02em' }}>Manage Exercises</div>
+                  <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 3, lineHeight: 1.4 }}>
+                    Rename an exercise, or merge duplicates like "DB Curl" and "Dumbbell Curl" so their history stays connected.
+                  </div>
+                </div>
+                <button className="btn btn-accent" style={{ fontSize: 12, padding: '8px 14px', flexShrink: 0 }} onClick={() => setShowManageExercises(true)}>
+                  Open
+                </button>
               </div>
-            </div>
-            <button className="btn btn-accent" style={{ fontSize: 12, padding: '8px 14px', flexShrink: 0 }} onClick={() => setShowManageExercises(true)}>
-              Open
-            </button>
+
+              {/* ── Personal Records ── */}
+              {personalRecords.length > 0 && (
+                <>
+                  <SectionLabel>Personal Records</SectionLabel>
+                  <div style={{ borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg2)', marginBottom: 10, overflow: 'hidden' }}>
+                    {(showAllPRs ? personalRecords : personalRecords.slice(0, 5)).map((pr, i, arr) => (
+                      <div key={pr.name} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                        <Trophy size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                        <div style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-display)', textTransform: 'uppercase', letterSpacing: '0.01em', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {pr.name}
+                        </div>
+                        <div style={{ fontSize: 13, fontWeight: 900, fontFamily: 'var(--font-mono)', color: 'var(--accent)', flexShrink: 0 }}>{pr.weight}{pr.unit}</div>
+                        <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)', flexShrink: 0, width: 56, textAlign: 'right' }}>{formatRelativeDate(pr.date)}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {!showAllPRs && personalRecords.length > 5 && (
+                    <button
+                      className="btn btn-ghost"
+                      style={{ width: '100%', fontSize: 12, marginBottom: 24 }}
+                      onClick={() => setShowAllPRs(true)}
+                    >
+                      Show all {personalRecords.length} records
+                    </button>
+                  )}
+                  {(showAllPRs || personalRecords.length <= 5) && <div style={{ marginBottom: 14 }} />}
+                </>
+              )}
+
+              {/* ── Progression ── */}
+              {progressionData.length > 0 && (
+                <>
+                  <SectionLabel>Progression</SectionLabel>
+                  <div style={{ marginBottom: 10 }}>
+                    <input
+                      type="text"
+                      placeholder="Search exercise..."
+                      value={progressionSearch}
+                      onChange={(e) => setProgressionSearch(e.target.value)}
+                      style={{
+                        width: '100%', padding: '9px 12px', borderRadius: 8,
+                        border: '1px solid var(--border2)', background: 'var(--bg3)',
+                        color: 'var(--text)', fontSize: 13, fontFamily: 'var(--font-display)',
+                        outline: 'none', boxSizing: 'border-box', marginBottom: 10,
+                      }}
+                    />
+                    {filteredProgression.length === 0 ? (
+                      <div style={{ textAlign: 'center', color: 'var(--text3)', fontSize: 13, padding: '12px 0' }}>No results</div>
+                    ) : (
+                      <>
+                        {(progressionSearch.trim() || showAllProgression ? filteredProgression : filteredProgression.slice(0, 5)).map((ex) => (
+                          <ProgressionCard key={ex.name} exercise={ex} />
+                        ))}
+                        {!progressionSearch.trim() && !showAllProgression && filteredProgression.length > 5 && (
+                          <button
+                            className="btn btn-ghost"
+                            style={{ width: '100%', fontSize: 12, marginTop: 4 }}
+                            onClick={() => setShowAllProgression(true)}
+                          >
+                            Show all {filteredProgression.length} exercises
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
           </div>
 
-          {/* ── Progression ── */}
-          {progressionData.length > 0 && (
-            <>
-              <SectionLabel>Progression</SectionLabel>
-              <div style={{ marginBottom: 10 }}>
-                <input
-                  type="text"
-                  placeholder="Search exercise..."
-                  value={progressionSearch}
-                  onChange={(e) => setProgressionSearch(e.target.value)}
-                  style={{
-                    width: '100%', padding: '9px 12px', borderRadius: 8,
-                    border: '1px solid var(--border2)', background: 'var(--bg3)',
-                    color: 'var(--text)', fontSize: 13, fontFamily: 'var(--font-display)',
-                    outline: 'none', boxSizing: 'border-box', marginBottom: 10,
-                  }}
-                />
-                {filteredProgression.length === 0 ? (
-                  <div style={{ textAlign: 'center', color: 'var(--text3)', fontSize: 13, padding: '12px 0' }}>No results</div>
-                ) : (
-                  filteredProgression.map((ex) => <ProgressionCard key={ex.name} exercise={ex} />)
-                )}
-              </div>
-            </>
-          )}
-
-          {/* ── History ── */}
-          <SectionLabel>History</SectionLabel>
-          {logs.length === 0 ? (
-            <div className="empty-state">No workouts logged yet.<br />Finish a workout to see it here.</div>
-          ) : (
-            logs.map((log) => <LogCard key={log._id} log={log} onDelete={(id) => setConfirm(id)} />)
-          )}
+          <div
+            ref={(el) => { panelRefs.current[2] = el; }}
+            style={{ flex: '0 0 100%', scrollSnapAlign: 'start', scrollSnapStop: 'always', minWidth: 0 }}
+          >
+              {/* ── History ── */}
+              <SectionLabel>History</SectionLabel>
+              {logs.length === 0 ? (
+                <div className="empty-state">No workouts logged yet.<br />Finish a workout to see it here.</div>
+              ) : (
+                <>
+                  <input
+                    type="text"
+                    placeholder="Search by exercise or day name..."
+                    value={historySearch}
+                    onChange={(e) => setHistorySearch(e.target.value)}
+                    style={{
+                      width: '100%', padding: '9px 12px', borderRadius: 8,
+                      border: '1px solid var(--border2)', background: 'var(--bg3)',
+                      color: 'var(--text)', fontSize: 13, fontFamily: 'var(--font-display)',
+                      outline: 'none', boxSizing: 'border-box', marginBottom: 14,
+                    }}
+                  />
+                  {filteredLogs.length === 0 ? (
+                    <div style={{ textAlign: 'center', color: 'var(--text3)', fontSize: 13, padding: '12px 0' }}>No results</div>
+                  ) : (
+                    historyGroups.map((group) => (
+                      <div key={group.label} style={{ marginBottom: 4 }}>
+                        <div style={{ fontSize: 10, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', margin: '10px 2px 8px' }}>
+                          {group.label}
+                        </div>
+                        {group.logs.map((log) => (
+                          <LogCard key={log._id} log={log} onDelete={(id) => setConfirm(id)} hasPR={prDates.has(log.date)} />
+                        ))}
+                      </div>
+                    ))
+                  )}
+                  {!historySearch.trim() && !showAllHistory && filteredLogs.length > 10 && (
+                    <button
+                      className="btn btn-ghost"
+                      style={{ width: '100%', fontSize: 12, marginTop: 4 }}
+                      onClick={() => setShowAllHistory(true)}
+                    >
+                      Show all {filteredLogs.length} workouts
+                    </button>
+                  )}
+                </>
+              )}
+          </div>
+          </div>
 
           <div style={{ height: 24 }} />
         </div>
@@ -1352,7 +1754,7 @@ export default function StatsPage() {
       {showBackupModal && (
         <BackupModal
           logs={logs}
-          splits={storage.getSplits ? storage.getSplits() : []}
+          splits={splits}
           storage={storage}
           queryClient={queryClient}
           onClose={() => setShowBackupModal(false)}

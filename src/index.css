@@ -379,6 +379,13 @@ html, body, #root {
   display: none;
 }
 
+.stats-tab-track {
+  scrollbar-width: none;
+}
+.stats-tab-track::-webkit-scrollbar {
+  display: none;
+}
+
 .day-snap-scroll {
   scrollbar-width: none;
 }
