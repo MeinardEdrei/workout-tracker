@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { sendHeartbeat } from '../api/index';
 
 const AuthContext = createContext(null);
 
@@ -85,6 +86,24 @@ export function AuthProvider({ children }) {
   }, [logout]);
 
   const isLoggedIn = !!user;
+
+  // Presence heartbeat — pings periodically while the app is actually open and
+  // visible, so other users' "Online" status reflects real activity instead of
+  // just last login. No websockets (this app is a single serverless function);
+  // "online" is derived elsewhere as "lastActiveAt within the last few minutes".
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    const ping = () => { if (document.visibilityState === 'visible') sendHeartbeat().catch(() => {}); };
+    ping();
+
+    const interval = setInterval(ping, 90 * 1000);
+    document.addEventListener('visibilitychange', ping);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', ping);
+    };
+  }, [isLoggedIn]);
   const isAdmin = isLoggedIn && user.email === import.meta.env.VITE_ADMIN_EMAIL;
 
   const value = {

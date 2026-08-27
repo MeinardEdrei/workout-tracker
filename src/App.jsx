@@ -12,6 +12,7 @@ import SplitsPage from './pages/SplitsPage';
 import StatsPage from './pages/StatsPage';
 import AdminPage from './pages/AdminPage';
 import CalculatorPage from './pages/CalculatorPage';
+import ProfilePage from './pages/ProfilePage';
 
 const API = import.meta.env.VITE_API_URL || '';
 
@@ -129,7 +130,7 @@ function AuthErrorToast() {
 }
 
 // ── Auth corner — floating, shown on all tabs except Splits ────────────────
-function AuthCorner() {
+function AuthCorner({ onOpenProfile }) {
   const { user, isLoggedIn, isAdmin, logout } = useAuth();
   const [showMenu, setShowMenu] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
@@ -242,6 +243,17 @@ function AuthCorner() {
                       </div>
                     )}
                   </div>
+                  <button
+                    onClick={() => { setShowMenu(false); onOpenProfile(); }}
+                    style={{
+                      width: '100%', padding: '10px 16px', background: 'none', border: 'none',
+                      cursor: 'pointer', textAlign: 'left', color: 'var(--text)',
+                      fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700,
+                      letterSpacing: '0.06em', textTransform: 'uppercase',
+                    }}
+                  >
+                    My Profile
+                  </button>
                   <button
                     onClick={() => { setShowMenu(false); logout(); }}
                     style={{
@@ -426,6 +438,7 @@ export default function App() {
     }
     return 'today';
   });
+  const [showProfile, setShowProfile] = useState(false);
 
   useEffect(() => {
     if (tab === 'admin' && !isAdmin && !loading) {
@@ -547,20 +560,26 @@ export default function App() {
       <AuthErrorToast />
       <ReloadPrompt />
       {/* AuthCorner floats over all tabs except Splits, which owns its header */}
-      {tab !== 'splits' && <AuthCorner />}
+      {tab !== 'splits' && !showProfile && <AuthCorner onOpenProfile={() => setShowProfile(true)} />}
       <div className="page">
-        {tab === 'today' && <TodayPage />}
-        {tab === 'splits' && <SplitsPage />}
-        {tab === 'stats' && <StatsPage />}
-        {tab === 'calc' && <CalculatorPage />}
-        {tab === 'admin' && isAdmin && <AdminPage />}
+        {showProfile ? (
+          <ProfilePage onBack={() => setShowProfile(false)} />
+        ) : (
+          <>
+            {tab === 'today' && <TodayPage />}
+            {tab === 'splits' && <SplitsPage />}
+            {tab === 'stats' && <StatsPage />}
+            {tab === 'calc' && <CalculatorPage />}
+            {tab === 'admin' && isAdmin && <AdminPage />}
+          </>
+        )}
       </div>
       <nav className="bottom-nav">
         {nav.map((n) => {
           const Icon = ICONS[n.id];
-          const active = tab === n.id;
+          const active = tab === n.id && !showProfile;
           return (
-            <button key={n.id} className={`nav-btn ${active ? 'active' : ''}`} onClick={() => setTab(n.id)}>
+            <button key={n.id} className={`nav-btn ${active ? 'active' : ''}`} onClick={() => { setShowProfile(false); setTab(n.id); }}>
               <Icon active={active} />
               {n.label}
             </button>

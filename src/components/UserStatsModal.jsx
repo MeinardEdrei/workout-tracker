@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { isOnline, formatPresence } from '../utils/presence';
 
 function CloseIcon() {
   return (
@@ -26,21 +27,14 @@ export default function UserStatsModal({ user, filter, onClose }) {
   const totalVolume = user.totalVolume || 0;
   const volLabel = totalVolume >= 1000 ? `${(totalVolume / 1000).toFixed(1)}k kg` : `${totalVolume} kg`;
 
-  // Format last active time
+  // Format last active time — from real presence (lastActiveAt, kept fresh by
+  // a heartbeat while the app is open), not lastLoginAt (only updates on OAuth
+  // login, so it can be stale for days into a still-valid session).
+  const online = isOnline(user.lastActiveAt);
   const lastActiveStr = useMemo(() => {
-    if (!user.lastLoginAt) return 'Active recently';
-    const date = new Date(user.lastLoginAt);
-    const diffMs = new Date() - date;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMins / 60);
-    const diffDays = Math.floor(diffHours / 24);
-
-    if (diffMins < 5) return 'Active now';
-    if (diffMins < 60) return `Active ${diffMins}m ago`;
-    if (diffHours < 24) return `Active ${diffHours}h ago`;
-    if (diffDays === 1) return 'Active yesterday';
-    return `Active ${diffDays} days ago`;
-  }, [user.lastLoginAt]);
+    const presence = formatPresence(user.lastActiveAt);
+    return presence === 'Online' ? 'Online now' : `Active ${presence}`;
+  }, [user.lastActiveAt]);
 
   // Format last workout message
   const lastWorkoutStr = useMemo(() => {
@@ -76,7 +70,8 @@ export default function UserStatsModal({ user, filter, onClose }) {
               <div style={{ fontSize: 16, fontWeight: 900, color: 'var(--text)', fontFamily: 'var(--font-display)', textTransform: 'uppercase', letterSpacing: '0.01em' }}>
                 {user.name}
               </div>
-              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: online ? 'var(--green)' : 'var(--text3)', marginTop: 2, fontWeight: online ? 700 : 400 }}>
+                {online && <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--green)', flexShrink: 0 }} />}
                 {lastActiveStr}
               </div>
             </div>

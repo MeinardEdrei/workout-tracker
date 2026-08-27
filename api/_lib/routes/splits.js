@@ -439,7 +439,7 @@ router.get('/ranking', async (req, res) => {
     const results = [];
     for (const entry of rankingAgg) {
       if (!entry._id) continue;
-      const user = await User.findById(entry._id).select('name avatar lastLoginAt');
+      const user = await User.findById(entry._id).select('name avatar lastLoginAt lastActiveAt');
       if (!user) continue;
 
       let activeSplit = await Split.findOne({ userId: entry._id, isActive: true }).select('name days');
@@ -453,6 +453,7 @@ router.get('/ranking', async (req, res) => {
         name: user.name || 'Anonymous User',
         avatar: user.avatar || '',
         lastLoginAt: user.lastLoginAt,
+        lastActiveAt: user.lastActiveAt,
         workoutCount: entry.workoutCount,
         totalVolume: entry.totalVolume,
         latestWorkout: entry.latestLog,

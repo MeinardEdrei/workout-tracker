@@ -7,6 +7,7 @@ const UserSchema = new mongoose.Schema(
     name: { type: String, default: '' },
     avatar: { type: String, default: '' },
     lastLoginAt: { type: Date, default: Date.now },
+    lastActiveAt: { type: Date, default: Date.now },
   },
   { timestamps: true }
 );

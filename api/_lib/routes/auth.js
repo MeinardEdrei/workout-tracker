@@ -56,6 +56,7 @@ async function upsertUser(profile) {
     });
   } else {
     user.lastLoginAt = new Date();
+    user.lastActiveAt = new Date();
     if (!user.avatar && profile.picture) user.avatar = profile.picture;
     await user.save();
   }
@@ -133,6 +134,19 @@ router.get('/me', requireAuth, async (req, res) => {
     const user = await User.findById(req.userId).select('-__v');
     if (!user) return res.status(404).json({ error: 'User not found' });
     res.json(user);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/auth/heartbeat — cheap presence ping, called periodically by the
+// client while the app is open (see AuthContext.jsx). No websockets/SSE here
+// (this app runs as a single Vercel serverless function) — "online" is
+// derived client-side as "lastActiveAt within the last few minutes".
+router.post('/heartbeat', requireAuth, async (req, res) => {
+  try {
+    await User.findByIdAndUpdate(req.userId, { lastActiveAt: new Date() });
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

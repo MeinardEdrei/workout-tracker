@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getRanking } from '../api/index';
+import { isOnline, formatPresence } from '../utils/presence';
 import UserStatsModal from './UserStatsModal';
 
 function ChevronLeftIcon() {
@@ -177,11 +178,18 @@ export default function LeaderboardPage({ onBack }) {
 
                   {/* Name + Active Split info */}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)', textTransform: 'uppercase', letterSpacing: '0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {row.name}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)', textTransform: 'uppercase', letterSpacing: '0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {row.name}
+                      </div>
+                      {isOnline(row.lastActiveAt) && (
+                        <span title="Online" style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--green)', flexShrink: 0 }} />
+                      )}
                     </div>
                     <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 2, textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.04em' }}>
                       Split: <span style={{ color: 'var(--text2)' }}>{row.activeSplitName}</span>
+                      <span style={{ color: 'var(--border2)' }}> · </span>
+                      <span style={{ color: isOnline(row.lastActiveAt) ? 'var(--green)' : 'var(--text3)' }}>{formatPresence(row.lastActiveAt)}</span>
                     </div>
                   </div>
 

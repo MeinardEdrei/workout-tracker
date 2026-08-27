@@ -22,6 +22,7 @@ async function req(method, path, body) {
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 export const getMe = () => req('GET', '/api/auth/me');
+export const sendHeartbeat = () => req('POST', '/api/auth/heartbeat');
 export const logoutApi = () => req('POST', '/api/auth/logout');
 
 // ─── Admin ────────────────────────────────────────────────────────────────────
