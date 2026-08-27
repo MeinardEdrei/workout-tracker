@@ -6,6 +6,7 @@ export default function CalculatorPage() {
   const [kgVal, setKgVal] = useState('60');
   const [lbsVal, setLbsVal] = useState('132.3');
   const [refTab, setRefTab] = useState('plates'); // 'plates' or 'grid'
+  const [kgFirst, setKgFirst] = useState(true);
 
   const handleKgChange = (val) => {
     setKgVal(val);
@@ -110,114 +111,142 @@ export default function CalculatorPage() {
         }}>
 
           {/* Dual Inputs */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {/* KG Input Block */}
-            <div style={{ position: 'relative' }}>
-              <span style={{
-                position: 'absolute',
-                left: 16,
-                top: '50%',
-                transform: 'translateY(-50%)',
-                color: 'var(--text3)',
-                fontSize: 14,
-                fontWeight: 700,
-                letterSpacing: '0.05em'
-              }}>
-                KG
-              </span>
-              <input
-                type="number"
-                inputMode="decimal"
-                pattern="[0-9]*"
-                value={kgVal}
-                onChange={(e) => handleKgChange(e.target.value)}
-                placeholder="0.0"
-                className="calc-number-input"
-                style={{
-                  width: '100%',
-                  background: 'rgba(0,0,0,0.3)',
-                  border: '1px solid var(--border2)',
-                  borderRadius: 10,
-                  color: 'var(--text)',
-                  fontSize: 28,
-                  fontWeight: 800,
-                  padding: '12px 16px 12px 50px',
-                  textAlign: 'right',
-                  fontFamily: 'var(--font-mono)',
-                  outline: 'none',
-                  transition: 'all 0.2s',
-                }}
-              />
-            </div>
-
-            {/* Visual Divider / Icon */}
-            <div style={{ display: 'flex', justifyContent: 'center', margin: '-8px 0' }}>
-              <div style={{
-                background: 'var(--bg4)',
-                border: '1px solid var(--border)',
-                borderRadius: '50%',
-                width: 32,
-                height: 32,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'var(--accent)',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
-              }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="17 1 21 5 17 9" />
-                  <path d="M3 11V9a4 4 0 0 1 4-4h14" />
-                  <polyline points="7 23 3 19 7 15" />
-                  <path d="M21 13v2a4 4 0 0 1-4 4H3" />
-                </svg>
+          {(() => {
+            const kgBlock = (
+              <div key="kg" style={{ position: 'relative' }}>
+                <span style={{
+                  position: 'absolute',
+                  left: 16,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: 'var(--text3)',
+                  fontSize: 14,
+                  fontWeight: 700,
+                  letterSpacing: '0.05em'
+                }}>
+                  KG
+                </span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  pattern="[0-9]*"
+                  aria-label="Kilograms"
+                  value={kgVal}
+                  onChange={(e) => handleKgChange(e.target.value)}
+                  placeholder="0.0"
+                  className="calc-number-input"
+                  style={{
+                    width: '100%',
+                    background: 'rgba(0,0,0,0.3)',
+                    border: '1px solid var(--border2)',
+                    borderRadius: 10,
+                    color: 'var(--text)',
+                    fontSize: 28,
+                    fontWeight: 800,
+                    padding: '12px 16px 12px 50px',
+                    textAlign: 'right',
+                    fontFamily: 'var(--font-mono)',
+                    outline: 'none',
+                    transition: 'all 0.2s',
+                  }}
+                />
               </div>
-            </div>
+            );
 
-            {/* LBS Input Block */}
-            <div style={{ position: 'relative' }}>
-              <span style={{
-                position: 'absolute',
-                left: 16,
-                top: '50%',
-                transform: 'translateY(-50%)',
-                color: 'var(--text3)',
-                fontSize: 14,
-                fontWeight: 700,
-                letterSpacing: '0.05em'
-              }}>
-                LBS
-              </span>
-              <input
-                type="number"
-                inputMode="decimal"
-                pattern="[0-9]*"
-                value={lbsVal}
-                onChange={(e) => handleLbsChange(e.target.value)}
-                placeholder="0.0"
-                className="calc-number-input"
-                style={{
-                  width: '100%',
-                  background: 'rgba(0,0,0,0.3)',
-                  border: '1px solid var(--border2)',
-                  borderRadius: 10,
-                  color: 'var(--text)',
-                  fontSize: 28,
-                  fontWeight: 800,
-                  padding: '12px 16px 12px 55px',
-                  textAlign: 'right',
-                  fontFamily: 'var(--font-mono)',
-                  outline: 'none',
-                  transition: 'all 0.2s',
-                }}
-              />
-            </div>
+            const lbsBlock = (
+              <div key="lbs" style={{ position: 'relative' }}>
+                <span style={{
+                  position: 'absolute',
+                  left: 16,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: 'var(--text3)',
+                  fontSize: 14,
+                  fontWeight: 700,
+                  letterSpacing: '0.05em'
+                }}>
+                  LBS
+                </span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  pattern="[0-9]*"
+                  aria-label="Pounds"
+                  value={lbsVal}
+                  onChange={(e) => handleLbsChange(e.target.value)}
+                  placeholder="0.0"
+                  className="calc-number-input"
+                  style={{
+                    width: '100%',
+                    background: 'rgba(0,0,0,0.3)',
+                    border: '1px solid var(--border2)',
+                    borderRadius: 10,
+                    color: 'var(--text)',
+                    fontSize: 28,
+                    fontWeight: 800,
+                    padding: '12px 16px 12px 55px',
+                    textAlign: 'right',
+                    fontFamily: 'var(--font-mono)',
+                    outline: 'none',
+                    transition: 'all 0.2s',
+                  }}
+                />
+              </div>
+            );
+
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {kgFirst ? kgBlock : lbsBlock}
+
+                {/* Swap KG/LBS field order */}
+                <div style={{ display: 'flex', justifyContent: 'center', margin: '-8px 0' }}>
+                  <button
+                    type="button"
+                    onClick={() => setKgFirst((v) => !v)}
+                    title="Swap KG/LBS order"
+                    aria-label="Swap KG and LBS field order"
+                    style={{
+                      background: 'var(--bg4)',
+                      border: '1px solid var(--border)',
+                      borderRadius: '50%',
+                      width: 44,
+                      height: 44,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'var(--accent)',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                      cursor: 'pointer',
+                      padding: 0,
+                      transition: 'transform 0.2s',
+                    }}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: kgFirst ? 'none' : 'rotate(180deg)', transition: 'transform 0.2s' }}>
+                      <polyline points="17 1 21 5 17 9" />
+                      <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+                      <polyline points="7 23 3 19 7 15" />
+                      <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+                    </svg>
+                  </button>
+                </div>
+
+                {kgFirst ? lbsBlock : kgBlock}
+              </div>
+            );
+          })()}
+
+          {/* Quick Adjust group — visually separated from the inputs above */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '20px 0 14px' }}>
+            <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--text3)', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+              Quick Adjust
+            </span>
+            <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
           </div>
 
-          {/* Slider & Quick Adjusters */}
-          <div style={{ marginTop: 20 }}>
+          <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <span style={{ fontSize: 11, color: 'var(--text2)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Quick Slider (0 - 250 kg)
+                Slider (0 - 250 kg)
               </span>
               <span style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
                 {(parseFloat(kgVal) || 0).toFixed(1)} kg
@@ -244,10 +273,10 @@ export default function CalculatorPage() {
 
             {/* Quick Adjustment Taps */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
-              <button className="btn btn-ghost" style={{ padding: '8px 4px', fontSize: 12, borderRadius: 6, fontFamily: 'var(--font-mono)' }} onClick={() => adjustWeight(-10)}>-10k</button>
-              <button className="btn btn-ghost" style={{ padding: '8px 4px', fontSize: 12, borderRadius: 6, fontFamily: 'var(--font-mono)' }} onClick={() => adjustWeight(-2.5)}>-2.5k</button>
-              <button className="btn btn-ghost" style={{ padding: '8px 4px', fontSize: 12, borderRadius: 6, fontFamily: 'var(--font-mono)' }} onClick={() => adjustWeight(2.5)}>+2.5k</button>
-              <button className="btn btn-ghost" style={{ padding: '8px 4px', fontSize: 12, borderRadius: 6, fontFamily: 'var(--font-mono)' }} onClick={() => adjustWeight(10)}>+10k</button>
+              <button className="btn btn-ghost" style={{ minHeight: 44, padding: '8px 4px', fontSize: 12, borderRadius: 6, fontFamily: 'var(--font-mono)' }} onClick={() => adjustWeight(-10)}>−10 kg</button>
+              <button className="btn btn-ghost" style={{ minHeight: 44, padding: '8px 4px', fontSize: 12, borderRadius: 6, fontFamily: 'var(--font-mono)' }} onClick={() => adjustWeight(-2.5)}>−2.5 kg</button>
+              <button className="btn btn-ghost" style={{ minHeight: 44, padding: '8px 4px', fontSize: 12, borderRadius: 6, fontFamily: 'var(--font-mono)' }} onClick={() => adjustWeight(2.5)}>+2.5 kg</button>
+              <button className="btn btn-ghost" style={{ minHeight: 44, padding: '8px 4px', fontSize: 12, borderRadius: 6, fontFamily: 'var(--font-mono)' }} onClick={() => adjustWeight(10)}>+10 kg</button>
             </div>
           </div>
 
@@ -306,14 +335,15 @@ export default function CalculatorPage() {
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                     {kgPlatesMilestones.map((m, i) => (
-                      <div
+                      <button
                         key={i}
+                        type="button"
                         onClick={() => { handleKgChange(m.totalKg.toString()); }}
-                        style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', background: 'var(--bg3)', borderRadius: 4, cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font-mono)' }}
+                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', minHeight: 44, padding: '8px 10px', background: 'var(--bg3)', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font-mono)', textAlign: 'left' }}
                       >
                         <span style={{ color: 'var(--text2)' }}>{m.label}</span>
                         <span style={{ fontWeight: 700, color: 'var(--text)' }}>{m.totalKg}k <span style={{ color: 'var(--text3)', fontSize: 10 }}>({m.totalLbs.toFixed(0)}#)</span></span>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -325,14 +355,15 @@ export default function CalculatorPage() {
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                     {lbsPlatesMilestones.map((m, i) => (
-                      <div
+                      <button
                         key={i}
+                        type="button"
                         onClick={() => { handleLbsChange(m.totalLbs.toString()); }}
-                        style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', background: 'var(--bg3)', borderRadius: 4, cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font-mono)' }}
+                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', minHeight: 44, padding: '8px 10px', background: 'var(--bg3)', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font-mono)', textAlign: 'left' }}
                       >
                         <span style={{ color: 'var(--text2)' }}>{m.label}</span>
                         <span style={{ fontWeight: 700, color: 'var(--text)' }}>{m.totalLbs}# <span style={{ color: 'var(--text3)', fontSize: 10 }}>({m.totalKg.toFixed(1)}k)</span></span>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -345,23 +376,29 @@ export default function CalculatorPage() {
             <div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                 {quickKgConversions.map((item, idx) => (
-                  <div
+                  <button
                     key={idx}
+                    type="button"
                     onClick={() => handleKgChange(item.kg.toString())}
                     style={{
                       display: 'flex',
                       justifyContent: 'space-between',
+                      alignItems: 'center',
+                      width: '100%',
+                      minHeight: 44,
                       padding: '8px 12px',
                       background: 'var(--bg3)',
+                      border: 'none',
                       borderRadius: 6,
                       cursor: 'pointer',
                       fontSize: 13,
-                      fontFamily: 'var(--font-mono)'
+                      fontFamily: 'var(--font-mono)',
+                      textAlign: 'left',
                     }}
                   >
                     <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{item.kg} kg</span>
                     <span style={{ color: 'var(--text2)' }}>{item.lbs.toFixed(1)} lbs</span>
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
