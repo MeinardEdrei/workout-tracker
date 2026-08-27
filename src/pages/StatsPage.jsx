@@ -7,13 +7,7 @@ import { capitalizeWords, formatRelativeDate } from '../utils/textFormat';
 import { normKey, findDuplicatePairs } from '../utils/matchExercise';
 import { X, TrendingUp, TrendingDown, ArrowRight, RotateCcw, BarChart3, FolderOpen, Download, Tag, Pencil, Check, Flame, Minus, Trophy } from 'lucide-react';
 import { computeStreak } from '../utils/streaks';
-
-function convertWeight(weight, fromUnit, toUnit) {
-  if (fromUnit === toUnit) return weight;
-  if (fromUnit === 'kg' && toUnit === 'lbs') return weight * 2.20462;
-  if (fromUnit === 'lbs' && toUnit === 'kg') return weight / 2.20462;
-  return weight;
-}
+import { convertWeight } from '../utils/weight';
 
 const LOGS_STALE = 2 * 60 * 1000;
 const DOW_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
@@ -799,7 +793,7 @@ function getExercisesVolumeAndUnit(exercises) {
   // Mixed units: standardise to kg
   const volumeInKg = exercises.reduce((sum, ex) => {
     const w = ex.weight || 0;
-    const weightInKg = (ex.weightUnit === 'lbs') ? (w / 2.20462) : w;
+    const weightInKg = convertWeight(w, ex.weightUnit || 'kg', 'kg');
     return sum + (ex.sets || 0) * (ex.reps || 0) * weightInKg;
   }, 0);
   return { volume: Math.round(volumeInKg), unit: 'kg' };

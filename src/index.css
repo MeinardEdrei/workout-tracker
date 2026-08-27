@@ -386,6 +386,10 @@ html, body, #root {
   display: none;
 }
 
+.calc-number-input:focus {
+  border-color: var(--accent);
+}
+
 .day-snap-scroll {
   scrollbar-width: none;
 }
