@@ -12,6 +12,7 @@ import { X, Trophy, ArrowRight, RotateCcw, Upload } from 'lucide-react';
 import AiChatBubble from '../components/AiChatBubble';
 
 const API = import.meta.env.VITE_API_URL || '';
+const SHOW_AI_CHAT = false; // archived: unused feature, flip to re-enable
 
 function PlusIcon() {
   return (
@@ -1455,7 +1456,8 @@ Coach:`;
         </div>
       )}
 
-      {/* ── Floating AI Chat Bubble ────────────────────────────────────────── */}
+      {/* ── Floating AI Chat Bubble ── archived (unused): flip to re-enable ── */}
+      {SHOW_AI_CHAT && (
       <AiChatBubble
         title="AI Split Advisor"
         messages={chatHistory}
@@ -1486,6 +1488,7 @@ Coach:`;
         open={showAiChat}
         onToggle={() => setShowAiChat((v) => !v)}
       />
+      )}
 
       {modal?.type === 'add' && (
         <NewSplitModal

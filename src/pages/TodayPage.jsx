@@ -14,6 +14,7 @@ import { createPortal } from 'react-dom';
 import AiChatBubble from '../components/AiChatBubble';
 import { X, Check, RotateCcw, Trophy, BarChart3, StickyNote, Dumbbell, Zap, Moon, PartyPopper, Flame, ChevronDown, CalendarDays } from 'lucide-react';
 
+const SHOW_AI_CHAT = false; // archived: unused feature, flip to re-enable
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const MON_FIRST_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const TODAY_DOW = new Date().getDay();
@@ -3361,6 +3362,8 @@ Coach:`;
           </div>
         </>
       )}
+      {/* ── AI Coach ── archived (unused): flip SHOW_AI_CHAT to re-enable ── */}
+      {SHOW_AI_CHAT && (
       <AiChatBubble
         title="AI Coach"
         badge={aiApiKey ? 'Search Enabled' : undefined}
@@ -3384,6 +3387,7 @@ Coach:`;
         onToggle={() => setShowAiChat((v) => !v)}
         onInitialCritique={!aiCritique ? handleAiCritique : null}
       />
+      )}
       {aiPendingAction && (
         <ActionPermissionModal
           pendingAction={aiPendingAction}
