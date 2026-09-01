@@ -225,7 +225,7 @@ function CompletionScreen({ log, onClose, onShare, sharing }) {
         <div style={{ display: 'flex', gap: 8 }}>
           <div style={{ flex: 1, background: 'var(--bg3)', borderRadius: 10, padding: '10px 12px', border: '1px solid var(--border)', textAlign: 'center' }}>
             <div style={{ fontSize: 9, color: 'var(--text3)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 2 }}>Exercises</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text)' }}>{log.exercises.length}</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text)' }}>{log.exercises.filter((ex) => !ex.skipped).length}</div>
           </div>
           <div style={{ flex: 1, background: 'var(--bg3)', borderRadius: 10, padding: '10px 12px', border: '1px solid var(--border)', textAlign: 'center' }}>
             <div style={{ fontSize: 9, color: 'var(--text3)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 2 }}>Sets</div>
@@ -709,8 +709,8 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
       setShowSwapModal(false);
     },
   });
-  const effectiveChecked = isCompleted ? true : (ex.lastCheckedDate === TODAY_STR ? ex.checked : false);
-  const effectiveSkipped = isCompleted ? false : (ex.lastSkippedDate === TODAY_STR ? ex.skipped : false);
+  const effectiveChecked = isCompleted ? !ex.skipped : (ex.lastCheckedDate === TODAY_STR ? ex.checked : false);
+  const effectiveSkipped = isCompleted ? !!ex.skipped : (ex.lastSkippedDate === TODAY_STR ? ex.skipped : false);
   const effectiveSetLogs = isCompleted ? [] : (ex.todaySetLogsDate === TODAY_STR ? (ex.todaySetLogs || []) : []);
 
   const toggleMutation = useMutation({
@@ -1452,7 +1452,11 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
         )}
 
         {readOnly ? (
-          effectiveChecked && (
+          effectiveSkipped ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, color: 'var(--text3)', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              <Ban size={14} /> Skipped
+            </div>
+          ) : effectiveChecked && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, color: 'var(--green)', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               <Check size={14} /> Completed
             </div>
@@ -2561,19 +2565,21 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
           ...logEx,
           _id: defaultEx?._id || logEx.name,
           imageUrl: defaultEx?.imageUrl,
-          muscleTargets: defaultEx?.muscleTargets || [],
-          checked: true,
+          muscleTargets: logEx.muscleTargets?.length ? logEx.muscleTargets : (defaultEx?.muscleTargets || []),
+          checked: !logEx.skipped,
           lastCheckedDate: dateStr,
+          skipped: !!logEx.skipped,
+          lastSkippedDate: logEx.skipped ? dateStr : '',
           category: logEx.category || defaultEx?.category || 'workout'
         };
       })
     : exercises;
 
   const checkedCount = isCompleted
-    ? displayExercises.length
+    ? displayExercises.filter((e) => !e.skipped).length
     : displayExercises.filter((e) => e.lastCheckedDate === TODAY_STR && e.checked).length;
   const total = isCompleted
-    ? displayExercises.length
+    ? displayExercises.filter((e) => !e.skipped).length
     : (day.exercises || []).filter((e) => !(e.lastSkippedDate === TODAY_STR && e.skipped)).length;
 
   const saveLogMutation = useMutation({

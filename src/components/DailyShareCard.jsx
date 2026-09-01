@@ -140,29 +140,32 @@ export default function DailyShareCard({ log, cardRef }) {
 
       {/* Exercise list */}
       <div style={{ padding: '8px 0 4px', background: '#0a0a0d' }}>
-        {log.exercises.map((ex, i) => {
-          const wLabel = ex.weight > 0 ? ` · ${ex.weight}${ex.weightUnit}` : '';
-          const rLabel = ex.duration > 0
-            ? `${ex.duration}${ex.durationUnit || 'sec'}`
-            : ((ex.untilFailure || !ex.reps || ex.reps === 0) ? 'Failure' : `${ex.reps} reps`);
+        {(() => {
+          const doneExercises = log.exercises.filter((ex) => !ex.skipped);
+          return doneExercises.map((ex, i) => {
+            const wLabel = ex.weight > 0 ? ` · ${ex.weight}${ex.weightUnit}` : '';
+            const rLabel = ex.duration > 0
+              ? `${ex.duration}${ex.durationUnit || 'sec'}`
+              : ((ex.untilFailure || !ex.reps || ex.reps === 0) ? 'Failure' : `${ex.reps} reps`);
 
-          return (
-            <div key={i} style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '11px 24px',
-              borderBottom: i < log.exercises.length - 1 ? '1px solid #14141a' : 'none',
-            }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: '#d0d0d8', textTransform: 'uppercase', letterSpacing: '0.01em' }}>
-                {ex.name}
+            return (
+              <div key={i} style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '11px 24px',
+                borderBottom: i < doneExercises.length - 1 ? '1px solid #14141a' : 'none',
+              }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: '#d0d0d8', textTransform: 'uppercase', letterSpacing: '0.01em' }}>
+                  {ex.name}
+                </div>
+                <div style={{ fontSize: 12, color: '#686878', fontFamily: 'monospace', fontWeight: 700, flexShrink: 0, marginLeft: 8 }}>
+                  {ex.sets}×{rLabel}{wLabel}
+                </div>
               </div>
-              <div style={{ fontSize: 12, color: '#686878', fontFamily: 'monospace', fontWeight: 700, flexShrink: 0, marginLeft: 8 }}>
-                {ex.sets}×{rLabel}{wLabel}
-              </div>
-            </div>
-          );
-        })}
+            );
+          });
+        })()}
       </div>
 
       {/* Footer */}
