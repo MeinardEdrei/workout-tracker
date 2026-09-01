@@ -788,10 +788,11 @@ router.put('/:id/days/:dayId/exercises/:exId', async (req, res) => {
     const ex = day.exercises.id(req.params.exId);
     if (!ex) return res.status(404).json({ error: 'Exercise not found' });
     const structuralFields = ['name', 'sets', 'reps', 'weight', 'weightUnit', 'muscleTargets', 'untilFailure', 'imageUrl', 'imageSource', 'placeholderUsed', 'category', 'notes'];
-    // Skip snapshotting for pure today's-set-log writes (happens repeatedly
-    // per set during a session) — versioning is for reverting template/structure
-    // changes, not transient daily performance data.
-    if (structuralFields.some((f) => req.body[f] !== undefined)) await snapshotVersion(split);
+    // Only real template/structure edits get a version snapshot (for revert)
+    // — weight/notes/duration are routine in-workout tracking edits made many
+    // times per session and don't need a full split-tree copy each time.
+    const snapshotTriggerFields = ['name', 'muscleTargets', 'untilFailure', 'imageUrl', 'imageSource', 'placeholderUsed', 'category'];
+    if (snapshotTriggerFields.some((f) => req.body[f] !== undefined)) await snapshotVersion(split);
     const fields = [...structuralFields, 'todaySetLogs', 'todaySetLogsDate'];
     fields.forEach((f) => { if (req.body[f] !== undefined) ex[f] = req.body[f]; });
     if (req.body.untilFailure === true) ex.reps = null;

@@ -660,13 +660,17 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
       if (localOnly) return Promise.resolve({ notes });
       return storage.updateExercise(splitId, dayId, ex._id, { notes });
     },
+    // Update visible state on tap, not after the network round-trip —
+    // otherwise every edit feels laggy regardless of how fast the server is.
+    onMutate: (notes) => {
+      onToggle({ ...ex, notes });
+      setEditingNotes(false);
+    },
     onSuccess: (data) => {
-      if (localOnly) {
-        onToggle({ ...ex, notes: data.notes });
-      } else {
+      onToggle({ ...ex, notes: data.notes });
+      if (!localOnly) {
         queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
       }
-      setEditingNotes(false);
     },
   });
 
@@ -717,6 +721,10 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
       }
       return storage.toggleExercise(splitId, dayId, ex._id);
     },
+    onMutate: () => {
+      const nextChecked = !effectiveChecked;
+      onToggle({ ...ex, checked: nextChecked, lastCheckedDate: TODAY_STR, skipped: nextChecked ? false : ex.skipped });
+    },
     onSuccess: (updated) => {
       onToggle(updated);
       if (!localOnly) {
@@ -736,6 +744,10 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
       }
       return storage.toggleSkipExercise(splitId, dayId, ex._id);
     },
+    onMutate: () => {
+      const nextSkipped = !effectiveSkipped;
+      onToggle({ ...ex, skipped: nextSkipped, lastSkippedDate: TODAY_STR, checked: nextSkipped ? false : ex.checked });
+    },
     onSuccess: (updated) => {
       onToggle(updated);
       if (!localOnly) {
@@ -748,6 +760,9 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
     mutationFn: (nextSetLogs) => {
       if (localOnly) return Promise.resolve({ ...ex, todaySetLogs: nextSetLogs, todaySetLogsDate: TODAY_STR });
       return storage.updateExercise(splitId, dayId, ex._id, { todaySetLogs: nextSetLogs, todaySetLogsDate: TODAY_STR });
+    },
+    onMutate: (nextSetLogs) => {
+      onToggle({ ...ex, todaySetLogs: nextSetLogs, todaySetLogsDate: TODAY_STR });
     },
     onSuccess: (updated) => {
       onToggle(updated);
@@ -762,13 +777,14 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
       if (localOnly) return Promise.resolve({ weight: +weight, weightUnit: unit });
       return storage.updateExercise(splitId, dayId, ex._id, { weight: +weight, weightUnit: unit });
     },
+    onMutate: ({ weight, unit }) => {
+      onToggle({ ...ex, weight: +weight, weightUnit: unit });
+      setEditingWeight(false);
+    },
     onSuccess: (data) => {
-      if (localOnly) {
-        onToggle({ ...ex, weight: data.weight, weightUnit: data.weightUnit });
-        setEditingWeight(false);
-      } else {
+      onToggle({ ...ex, weight: data.weight, weightUnit: data.weightUnit });
+      if (!localOnly) {
         queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
-        setEditingWeight(false);
 
         const newW = data.weight;
         const oldW = ex.weight ?? 0;
@@ -808,30 +824,36 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
     },
   });
 
+  function buildSetsRepsPayload({ sets, reps, duration, durationUnit }) {
+    const payload = { sets: +sets };
+    if (duration !== undefined) {
+      payload.duration = +duration;
+      payload.durationUnit = durationUnit || 'sec';
+      payload.reps = 0;
+      payload.untilFailure = false;
+    } else {
+      const numReps = +reps;
+      payload.reps = numReps;
+      payload.untilFailure = numReps === 0;
+      payload.duration = 0;
+    }
+    return payload;
+  }
+
   const setsRepsMutation = useMutation({
-    mutationFn: ({ sets, reps, duration, durationUnit }) => {
-      const payload = { sets: +sets };
-      if (duration !== undefined) {
-        payload.duration = +duration;
-        payload.durationUnit = durationUnit || 'sec';
-        payload.reps = 0;
-        payload.untilFailure = false;
-      } else {
-        const numReps = +reps;
-        payload.reps = numReps;
-        payload.untilFailure = numReps === 0;
-        payload.duration = 0;
-      }
+    mutationFn: (vals) => {
+      const payload = buildSetsRepsPayload(vals);
       if (localOnly) return Promise.resolve(payload);
       return storage.updateExercise(splitId, dayId, ex._id, payload);
     },
+    onMutate: (vals) => {
+      onToggle({ ...ex, ...buildSetsRepsPayload(vals) });
+      setEditingSetsReps(false);
+    },
     onSuccess: (data, { sets, reps, duration, durationUnit }) => {
-      if (localOnly) {
-        onToggle({ ...ex, ...data });
-        setEditingSetsReps(false);
-      } else {
+      onToggle({ ...ex, ...data });
+      if (!localOnly) {
         queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
-        setEditingSetsReps(false);
 
         const newSets = +sets;
         const newReps = reps !== undefined ? +reps : 0;

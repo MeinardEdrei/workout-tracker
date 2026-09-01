@@ -466,9 +466,11 @@ export function updateExercise(splitId, dayId, exId, data) {
   const ex = (day.exercises || []).find((e) => e._id === exId);
   if (!ex) return Promise.reject(new Error('Exercise not found'));
   const structuralFields = ['name', 'sets', 'reps', 'weight', 'weightUnit', 'muscleTargets', 'untilFailure', 'imageUrl', 'imageSource', 'placeholderUsed', 'category', 'notes', 'duration', 'durationUnit'];
-  // Skip snapshotting for pure today's-set-log writes (happens repeatedly per
-  // set during a session) — versioning is for template/structure changes.
-  if (structuralFields.some((f) => data[f] !== undefined)) snapshotVersion(split);
+  // Only real template/structure edits get a version snapshot (for revert) —
+  // weight/notes/duration are routine in-workout tracking edits made many
+  // times per session and don't need a full split-tree copy each time.
+  const snapshotTriggerFields = ['name', 'muscleTargets', 'untilFailure', 'imageUrl', 'imageSource', 'placeholderUsed', 'category'];
+  if (snapshotTriggerFields.some((f) => data[f] !== undefined)) snapshotVersion(split);
   [...structuralFields, 'todaySetLogs', 'todaySetLogsDate'].forEach((f) => {
     if (data[f] !== undefined) ex[f] = data[f];
   });

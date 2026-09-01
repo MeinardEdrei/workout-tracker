@@ -127,7 +127,7 @@ export async function syncOfflineQueue(onStatusChange) {
 
     // All replayed successfully
     localStorage.removeItem(`wt_queue_${getUserId()}`);
-    await updateLocalCacheFromSever();
+    updateLocalCacheFromSever();
     
     if (onStatusChange) onStatusChange({ status: 'success' });
   } catch (err) {
@@ -204,7 +204,7 @@ export async function createSplit(name) {
   const userId = getUserId();
   if (navigator.onLine && isQueueEmpty()) {
     const res = await apiStorage.createSplit(name);
-    await updateLocalCacheFromSever();
+    updateLocalCacheFromSever();
     return res;
   }
   guestStorage.setStoragePrefix(`wt_offline_${userId}`);
@@ -217,7 +217,7 @@ export async function renameSplit(id, name) {
   const userId = getUserId();
   if (navigator.onLine && isQueueEmpty()) {
     const res = await apiStorage.renameSplit(id, name);
-    await updateLocalCacheFromSever();
+    updateLocalCacheFromSever();
     return res;
   }
   guestStorage.setStoragePrefix(`wt_offline_${userId}`);
@@ -230,7 +230,7 @@ export async function deleteSplit(id) {
   const userId = getUserId();
   if (navigator.onLine && isQueueEmpty()) {
     const res = await apiStorage.deleteSplit(id);
-    await updateLocalCacheFromSever();
+    updateLocalCacheFromSever();
     return res;
   }
   guestStorage.setStoragePrefix(`wt_offline_${userId}`);
@@ -243,7 +243,7 @@ export async function activateSplit(id) {
   const userId = getUserId();
   if (navigator.onLine && isQueueEmpty()) {
     const res = await apiStorage.activateSplit(id);
-    await updateLocalCacheFromSever();
+    updateLocalCacheFromSever();
     return res;
   }
   guestStorage.setStoragePrefix(`wt_offline_${userId}`);
@@ -256,7 +256,7 @@ export async function setSplitVisibility(id, isPublic) {
   const userId = getUserId();
   if (navigator.onLine && isQueueEmpty()) {
     const res = await apiStorage.setSplitVisibility(id, isPublic);
-    await updateLocalCacheFromSever();
+    updateLocalCacheFromSever();
     return res;
   }
   // Local storage mock
@@ -271,7 +271,7 @@ export async function copyPublicSplit(id) {
     throw new Error('You need to be online to add a split from the community.');
   }
   const res = await apiStorage.copyPublicSplit(id);
-  await updateLocalCacheFromSever();
+  updateLocalCacheFromSever();
   return res;
 }
 
@@ -279,7 +279,7 @@ export async function reapplySplit(id) {
   const userId = getUserId();
   if (navigator.onLine && isQueueEmpty()) {
     const res = await apiStorage.reapplySplit(id);
-    await updateLocalCacheFromSever();
+    updateLocalCacheFromSever();
     return res;
   }
   // Local storage mock
@@ -306,7 +306,7 @@ export async function revertSplitVersion(id, versionId) {
   const userId = getUserId();
   if (navigator.onLine && isQueueEmpty()) {
     const res = await apiStorage.revertSplitVersion(id, versionId);
-    await updateLocalCacheFromSever();
+    updateLocalCacheFromSever();
     return res;
   }
   guestStorage.setStoragePrefix(`wt_offline_${userId}`);
@@ -319,7 +319,7 @@ export async function duplicateSplit(id) {
   const userId = getUserId();
   if (navigator.onLine && isQueueEmpty()) {
     const res = await apiStorage.duplicateSplit(id);
-    await updateLocalCacheFromSever();
+    updateLocalCacheFromSever();
     return res;
   }
   guestStorage.setStoragePrefix(`wt_offline_${userId}`);
@@ -332,7 +332,7 @@ export async function importSplit(data) {
   const userId = getUserId();
   if (navigator.onLine && isQueueEmpty()) {
     const res = await apiStorage.importSplit(data);
-    await updateLocalCacheFromSever();
+    updateLocalCacheFromSever();
     return res;
   }
   guestStorage.setStoragePrefix(`wt_offline_${userId}`);
@@ -358,7 +358,7 @@ export async function applySync(fields, targets) {
   const userId = getUserId();
   if (navigator.onLine && isQueueEmpty()) {
     const res = await apiStorage.applySync(fields, targets);
-    await updateLocalCacheFromSever();
+    updateLocalCacheFromSever();
     return res;
   }
   guestStorage.setStoragePrefix(`wt_offline_${userId}`);
@@ -384,7 +384,7 @@ export async function renameHistory(oldName, newName, scope) {
   const userId = getUserId();
   if (navigator.onLine && isQueueEmpty()) {
     const res = await apiStorage.renameHistory(oldName, newName, scope);
-    await updateLocalCacheFromSever();
+    updateLocalCacheFromSever();
     return res;
   }
   guestStorage.setStoragePrefix(`wt_offline_${userId}`);
@@ -411,7 +411,7 @@ export async function createDay(splitId, data) {
   const userId = getUserId();
   if (navigator.onLine && isQueueEmpty()) {
     const res = await apiStorage.createDay(splitId, data);
-    await updateLocalCacheFromSever();
+    updateLocalCacheFromSever();
     return res;
   }
   guestStorage.setStoragePrefix(`wt_offline_${userId}`);
@@ -424,7 +424,7 @@ export async function updateDay(splitId, dayId, data) {
   const userId = getUserId();
   if (navigator.onLine && isQueueEmpty()) {
     const res = await apiStorage.updateDay(splitId, dayId, data);
-    await updateLocalCacheFromSever();
+    updateLocalCacheFromSever();
     return res;
   }
   guestStorage.setStoragePrefix(`wt_offline_${userId}`);
@@ -437,7 +437,7 @@ export async function deleteDay(splitId, dayId) {
   const userId = getUserId();
   if (navigator.onLine && isQueueEmpty()) {
     const res = await apiStorage.deleteDay(splitId, dayId);
-    await updateLocalCacheFromSever();
+    updateLocalCacheFromSever();
     return res;
   }
   guestStorage.setStoragePrefix(`wt_offline_${userId}`);
@@ -450,7 +450,7 @@ export async function swapDays(splitId, dayId, targetDayId) {
   const userId = getUserId();
   if (navigator.onLine && isQueueEmpty()) {
     const res = await apiStorage.swapDays(splitId, dayId, targetDayId);
-    await updateLocalCacheFromSever();
+    updateLocalCacheFromSever();
     return res;
   }
   guestStorage.setStoragePrefix(`wt_offline_${userId}`);
@@ -463,7 +463,7 @@ export async function copyDayTo(splitId, dayId, targetDayId) {
   const userId = getUserId();
   if (navigator.onLine && isQueueEmpty()) {
     const res = await apiStorage.copyDayTo(splitId, dayId, targetDayId);
-    await updateLocalCacheFromSever();
+    updateLocalCacheFromSever();
     return res;
   }
   guestStorage.setStoragePrefix(`wt_offline_${userId}`);
@@ -490,7 +490,7 @@ export async function createExercise(splitId, dayId, data) {
   const userId = getUserId();
   if (navigator.onLine && isQueueEmpty()) {
     const res = await apiStorage.createExercise(splitId, dayId, data);
-    await updateLocalCacheFromSever();
+    updateLocalCacheFromSever();
     return res;
   }
   guestStorage.setStoragePrefix(`wt_offline_${userId}`);
@@ -503,7 +503,7 @@ export async function updateExercise(splitId, dayId, exId, data) {
   const userId = getUserId();
   if (navigator.onLine && isQueueEmpty()) {
     const res = await apiStorage.updateExercise(splitId, dayId, exId, data);
-    await updateLocalCacheFromSever();
+    updateLocalCacheFromSever();
     return res;
   }
   guestStorage.setStoragePrefix(`wt_offline_${userId}`);
@@ -516,7 +516,7 @@ export async function deleteExercise(splitId, dayId, exId) {
   const userId = getUserId();
   if (navigator.onLine && isQueueEmpty()) {
     const res = await apiStorage.deleteExercise(splitId, dayId, exId);
-    await updateLocalCacheFromSever();
+    updateLocalCacheFromSever();
     return res;
   }
   guestStorage.setStoragePrefix(`wt_offline_${userId}`);
@@ -529,7 +529,7 @@ export async function toggleExercise(splitId, dayId, exId) {
   const userId = getUserId();
   if (navigator.onLine && isQueueEmpty()) {
     const res = await apiStorage.toggleExercise(splitId, dayId, exId);
-    await updateLocalCacheFromSever();
+    updateLocalCacheFromSever();
     return res;
   }
   guestStorage.setStoragePrefix(`wt_offline_${userId}`);
@@ -542,7 +542,7 @@ export async function toggleSkipExercise(splitId, dayId, exId) {
   const userId = getUserId();
   if (navigator.onLine && isQueueEmpty()) {
     const res = await apiStorage.toggleSkipExercise(splitId, dayId, exId);
-    await updateLocalCacheFromSever();
+    updateLocalCacheFromSever();
     return res;
   }
   guestStorage.setStoragePrefix(`wt_offline_${userId}`);
@@ -555,7 +555,7 @@ export async function reorderExercises(splitId, dayId, exercises) {
   const userId = getUserId();
   if (navigator.onLine && isQueueEmpty()) {
     const res = await apiStorage.reorderExercises(splitId, dayId, exercises);
-    await updateLocalCacheFromSever();
+    updateLocalCacheFromSever();
     return res;
   }
   guestStorage.setStoragePrefix(`wt_offline_${userId}`);
@@ -568,7 +568,7 @@ export async function moveExercise(splitId, dayId, exId, targetDayId) {
   const userId = getUserId();
   if (navigator.onLine && isQueueEmpty()) {
     const res = await apiStorage.moveExercise(splitId, dayId, exId, targetDayId);
-    await updateLocalCacheFromSever();
+    updateLocalCacheFromSever();
     return res;
   }
   guestStorage.setStoragePrefix(`wt_offline_${userId}`);
@@ -592,7 +592,7 @@ export async function uploadExerciseImage(splitId, dayId, exId, imageData) {
   const userId = getUserId();
   if (navigator.onLine && isQueueEmpty()) {
     const res = await apiStorage.uploadExerciseImage(splitId, dayId, exId, imageData);
-    await updateLocalCacheFromSever();
+    updateLocalCacheFromSever();
     return res;
   }
   guestStorage.setStoragePrefix(`wt_offline_${userId}`);
@@ -605,7 +605,7 @@ export async function clearExerciseImage(splitId, dayId, exId) {
   const userId = getUserId();
   if (navigator.onLine && isQueueEmpty()) {
     const res = await apiStorage.clearExerciseImage(splitId, dayId, exId);
-    await updateLocalCacheFromSever();
+    updateLocalCacheFromSever();
     return res;
   }
   guestStorage.setStoragePrefix(`wt_offline_${userId}`);
@@ -661,7 +661,7 @@ export async function saveLog(data) {
   const userId = getUserId();
   if (navigator.onLine && isQueueEmpty()) {
     const res = await apiStorage.saveLog(data);
-    await updateLocalCacheFromSever();
+    updateLocalCacheFromSever();
     return res;
   }
   guestStorage.setStoragePrefix(`wt_offline_${userId}`);
@@ -674,7 +674,7 @@ export async function deleteLog(id) {
   const userId = getUserId();
   if (navigator.onLine && isQueueEmpty()) {
     const res = await apiStorage.deleteLog(id);
-    await updateLocalCacheFromSever();
+    updateLocalCacheFromSever();
     return res;
   }
   guestStorage.setStoragePrefix(`wt_offline_${userId}`);
@@ -687,7 +687,7 @@ export async function clearLogs() {
   const userId = getUserId();
   if (navigator.onLine && isQueueEmpty()) {
     const res = await apiStorage.clearLogs();
-    await updateLocalCacheFromSever();
+    updateLocalCacheFromSever();
     return res;
   }
   guestStorage.setStoragePrefix(`wt_offline_${userId}`);
