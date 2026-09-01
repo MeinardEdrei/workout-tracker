@@ -410,7 +410,8 @@ router.get('/ranking', async (req, res) => {
     const rankingAgg = await WorkoutLog.aggregate([
       {
         $match: {
-          date: { $gte: startDateStr }
+          date: { $gte: startDateStr },
+          skipped: { $ne: true }
         }
       },
       {
@@ -858,7 +859,36 @@ router.patch('/:id/days/:dayId/exercises/:exId/toggle', async (req, res) => {
       ex.lastCheckedDate = today;
     }
     ex.checked = !ex.checked;
-    if (ex.checked) ex.lastCheckedDate = today;
+    if (ex.checked) {
+      ex.lastCheckedDate = today;
+      ex.skipped = false; // mutually exclusive with skip
+    }
+    await split.save();
+    res.json(ex);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.patch('/:id/days/:dayId/exercises/:exId/skip', async (req, res) => {
+  try {
+    const split = await Split.findOne({ _id: req.params.id, userId: req.userId });
+    if (!split) return res.status(404).json({ error: 'Split not found' });
+    const day = split.days.id(req.params.dayId);
+    if (!day) return res.status(404).json({ error: 'Day not found' });
+    const ex = day.exercises.id(req.params.exId);
+    if (!ex) return res.status(404).json({ error: 'Exercise not found' });
+
+    const today = new Date().toISOString().slice(0, 10);
+    if (ex.lastSkippedDate !== today) {
+      ex.skipped = false;
+      ex.lastSkippedDate = today;
+    }
+    ex.skipped = !ex.skipped;
+    if (ex.skipped) {
+      ex.lastSkippedDate = today;
+      ex.checked = false; // mutually exclusive with done
+    }
     await split.save();
     res.json(ex);
   } catch (err) {

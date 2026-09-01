@@ -500,7 +500,33 @@ export function toggleExercise(splitId, dayId, exId) {
     ex.lastCheckedDate = today;
   }
   ex.checked = !ex.checked;
-  if (ex.checked) ex.lastCheckedDate = today;
+  if (ex.checked) {
+    ex.lastCheckedDate = today;
+    ex.skipped = false; // mutually exclusive with skip
+  }
+  writeSplits(splits);
+  return Promise.resolve({ ...ex });
+}
+
+export function toggleSkipExercise(splitId, dayId, exId) {
+  const splits = readSplits();
+  const split = splits.find((s) => s._id === splitId);
+  if (!split) return Promise.reject(new Error('Split not found'));
+  const day = split.days.find((d) => d._id === dayId);
+  if (!day) return Promise.reject(new Error('Day not found'));
+  const ex = (day.exercises || []).find((e) => e._id === exId);
+  if (!ex) return Promise.reject(new Error('Exercise not found'));
+
+  const today = TODAY();
+  if (ex.lastSkippedDate !== today) {
+    ex.skipped = false;
+    ex.lastSkippedDate = today;
+  }
+  ex.skipped = !ex.skipped;
+  if (ex.skipped) {
+    ex.lastSkippedDate = today;
+    ex.checked = false; // mutually exclusive with done
+  }
   writeSplits(splits);
   return Promise.resolve({ ...ex });
 }
@@ -558,6 +584,7 @@ export function saveLog(data) {
     dayTag: data.dayTag || '',
     exercises: data.exercises || [],
     totalVolume,
+    skipped: !!data.skipped,
     createdAt: new Date().toISOString(),
   };
   logs.unshift(log);

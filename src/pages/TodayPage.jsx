@@ -12,7 +12,7 @@ import { isSyncExcluded, excludeFromSync } from '../utils/syncPrefs';
 import { computeStreak } from '../utils/streaks';
 import { createPortal } from 'react-dom';
 import AiChatBubble from '../components/AiChatBubble';
-import { X, Check, RotateCcw, Trophy, BarChart3, StickyNote, Dumbbell, Zap, Moon, PartyPopper, Flame, ChevronDown, CalendarDays, SkipForward, MoreHorizontal } from 'lucide-react';
+import { X, Check, RotateCcw, Trophy, BarChart3, StickyNote, Dumbbell, Zap, Moon, PartyPopper, Flame, ChevronDown, CalendarDays, SkipForward, MoreHorizontal, Ban } from 'lucide-react';
 
 const SHOW_AI_CHAT = false; // archived: unused feature, flip to re-enable
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -695,6 +695,7 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
     },
   });
   const effectiveChecked = isCompleted ? true : (ex.lastCheckedDate === TODAY_STR ? ex.checked : false);
+  const effectiveSkipped = isCompleted ? false : (ex.lastSkippedDate === TODAY_STR ? ex.skipped : false);
 
   const toggleMutation = useMutation({
     mutationFn: () => {
@@ -711,6 +712,22 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
       }
       if (updated.checked && prInfo?.isPr && onShowToast) {
         onShowToast(`NEW PR! ${ex.name} @ ${ex.weight}${ex.weightUnit}`, 'success', Trophy);
+      }
+    },
+  });
+
+  const skipMutation = useMutation({
+    mutationFn: () => {
+      if (localOnly) {
+        const nextSkipped = !effectiveSkipped;
+        return Promise.resolve({ ...ex, skipped: nextSkipped, lastSkippedDate: TODAY_STR, checked: nextSkipped ? false : ex.checked });
+      }
+      return storage.toggleSkipExercise(splitId, dayId, ex._id);
+    },
+    onSuccess: (updated) => {
+      onToggle(updated);
+      if (!localOnly) {
+        queryClient.invalidateQueries({ queryKey: ['splits'] });
       }
     },
   });
@@ -1012,7 +1029,7 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
       </button>
     ) : (
       <div style={{ display: 'flex', alignItems: 'center', gap: isHero ? 8 : 4, flexWrap: 'wrap', justifyContent: isHero ? 'center' : 'flex-start' }}>
-        {onPromote && (
+        {!effectiveSkipped && onPromote && (
           <button
             onClick={onPromote}
             style={{ color: 'var(--accent)', fontSize: isHero ? 11 : 10, fontFamily: 'var(--font-mono)', cursor: 'pointer', padding: isHero ? '4px 8px' : '2px 5px', borderRadius: 4, border: '1.5px solid rgba(232,255,90,0.3)', background: 'rgba(232,255,90,0.06)', display: 'inline-flex', alignItems: 'center', gap: 3 }}
@@ -1056,9 +1073,15 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
         </button>
         <button
           onClick={() => { setShowActionsMenu(false); setEditingNotes((v) => !v); }}
-          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer', color: ex.notes ? 'var(--accent)' : 'var(--text)', fontSize: 13, fontWeight: 600, textAlign: 'left' }}
+          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'none', border: 'none', borderBottom: '1px solid var(--border)', cursor: 'pointer', color: ex.notes ? 'var(--accent)' : 'var(--text)', fontSize: 13, fontWeight: 600, textAlign: 'left' }}
         >
           <StickyNote size={14} /> {ex.notes ? 'Edit Note' : 'Add Note'}
+        </button>
+        <button
+          onClick={() => { setShowActionsMenu(false); skipMutation.mutate(); }}
+          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer', color: effectiveSkipped ? 'var(--accent)' : 'var(--text)', fontSize: 13, fontWeight: 600, textAlign: 'left' }}
+        >
+          <Ban size={14} /> {effectiveSkipped ? 'Undo Skip' : 'Skip Exercise'}
         </button>
       </div>
     </>,
@@ -1157,7 +1180,15 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
 
         {weightEditorEl}
 
-        {editingSetsReps ? setsRepsEditorEl : (
+        {editingSetsReps ? setsRepsEditorEl : effectiveSkipped ? (
+          <div
+            onClick={() => !readOnly && skipMutation.mutate()}
+            title={readOnly ? '' : 'Tap to undo skip'}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--text3)', fontFamily: 'var(--font-mono)', cursor: readOnly ? 'default' : 'pointer' }}
+          >
+            <Ban size={13} /> Skipped
+          </div>
+        ) : (
           <div
             onClick={() => !readOnly && setEditingSetsReps(true)}
             title={readOnly ? '' : 'Tap to edit sets & reps/duration'}
@@ -1277,17 +1308,27 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
         </div>
         {editingSetsReps ? setsRepsEditorEl : (
           <div style={{ display: 'flex', alignItems: 'center', marginTop: 2, flexWrap: 'wrap', gap: 4 }}>
-            <div
-              onClick={() => !readOnly && setEditingSetsReps(true)}
-              title={readOnly ? '' : 'Tap to edit sets & reps/duration'}
-              style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)', cursor: readOnly ? 'default' : 'pointer', display: 'inline-block' }}
-            >
-              {ex.duration > 0 ? (
-                <span>{ex.sets} × {ex.duration}{ex.durationUnit || 'sec'}</span>
-              ) : (
-                <span>{ex.sets} × {repsLabel}</span>
-              )}
-            </div>
+            {effectiveSkipped ? (
+              <div
+                onClick={() => !readOnly && skipMutation.mutate()}
+                title={readOnly ? '' : 'Tap to undo skip'}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)', cursor: readOnly ? 'default' : 'pointer' }}
+              >
+                <Ban size={11} /> Skipped
+              </div>
+            ) : (
+              <div
+                onClick={() => !readOnly && setEditingSetsReps(true)}
+                title={readOnly ? '' : 'Tap to edit sets & reps/duration'}
+                style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)', cursor: readOnly ? 'default' : 'pointer', display: 'inline-block' }}
+              >
+                {ex.duration > 0 ? (
+                  <span>{ex.sets} × {ex.duration}{ex.durationUnit || 'sec'}</span>
+                ) : (
+                  <span>{ex.sets} × {repsLabel}</span>
+                )}
+              </div>
+            )}
             {actionsRowEl}
             {actionsMenuEl}
           </div>
@@ -2141,6 +2182,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
   const [sharing, setSharing] = useState(false);
   const shareCardRef = useRef(null);
   const [showConfirmFinish, setShowConfirmFinish] = useState(false);
+  const [showConfirmSkipDay, setShowConfirmSkipDay] = useState(false);
   const [isRetaking, setIsRetaking] = useState(false);
   const [isAdvancing, setIsAdvancing] = useState(false);
   // Session-only "do this one next" nudge — lets a queued exercise jump
@@ -2248,6 +2290,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
   }
 
   const isCompleted = !!logForDate;
+  const isSkippedDay = !!logForDate?.skipped;
   const isPast = dateStr < TODAY_STR;
   const isFuture = dateStr > TODAY_STR;
   const readOnly = (!isRetaking && !isAdvancing && !isToday) || isCompleted;
@@ -2272,14 +2315,18 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
     : displayExercises.filter((e) => e.lastCheckedDate === TODAY_STR && e.checked).length;
   const total = isCompleted
     ? displayExercises.length
-    : (day.exercises || []).length;
+    : (day.exercises || []).filter((e) => !(e.lastSkippedDate === TODAY_STR && e.skipped)).length;
 
   const saveLogMutation = useMutation({
     mutationFn: (logData) => storage.saveLog(logData),
     onSuccess: (saved) => {
       setIsRetaking(false);
       setIsAdvancing(false);
-      setCompletedLog(saved);
+      if (saved.skipped) {
+        if (onShowToast) onShowToast('Day skipped — streak stays safe', 'success', Ban);
+      } else {
+        setCompletedLog(saved);
+      }
       queryClient.invalidateQueries({ queryKey: ['logs'] });
     },
     onError: (e) => alert('Failed to save workout: ' + e.message),
@@ -2299,6 +2346,14 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
       }))
     });
     setShowConfirmFinish(false);
+  }
+
+  function handleSkipDay() {
+    saveLogMutation.mutate({
+      date: dateStr, splitName, dayName: day.name, dayTag: day.tag || '',
+      exercises: [], skipped: true,
+    });
+    setShowConfirmSkipDay(false);
   }
 
   async function handleShare() {
@@ -2487,42 +2542,64 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
         />
       )}
 
-      {(isToday || isRetaking || isAdvancing) && !isCompleted && (
-        <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', display: 'flex', gap: 8 }}>
-          {checkedCount > 0 ? (
-            <button className="btn btn-accent" style={{ flex: 1, fontSize: 14, padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }} onClick={() => setShowConfirmFinish(true)} disabled={saveLogMutation.isPending}>
-              {saveLogMutation.isPending ? 'Saving…' : (<><Check size={15} /> Finish Workout ({checkedCount} done)</>)}
-            </button>
-          ) : null}
-          {(isRetaking || isAdvancing) && (
-            <button className="btn btn-ghost" style={{ flex: checkedCount > 0 ? 0.4 : 1, fontSize: 14, padding: '12px' }} onClick={() => { setIsRetaking(false); setIsAdvancing(false); }}>
-              Cancel
-            </button>
-          )}
-        </div>
-      )}
-
       {isCompleted && (
         <div style={{
           padding: '14px 16px',
           borderTop: '1px solid var(--border)',
-          background: 'rgba(68,255,136,0.03)',
+          background: isSkippedDay ? 'rgba(255,255,255,0.02)' : 'rgba(68,255,136,0.03)',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           gap: 4,
           marginTop: 12
         }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--green)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Workout Logged
-          </div>
+          {isSkippedDay ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <Ban size={14} /> Day Skipped
+            </div>
+          ) : (
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--green)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Workout Logged
+            </div>
+          )}
           <div style={{ fontSize: 11, color: 'var(--text2)', textAlign: 'center' }}>
-            This workout is locked. To modify it, delete its log in the Stats tab.
+            {isSkippedDay
+              ? "This day is marked skipped — it won't count as a workout, but your streak is safe."
+              : 'This workout is locked. To modify it, delete its log in the Stats tab.'}
           </div>
         </div>
       )}
 
     </>
+  );
+
+  // Rendered as a sibling of the scrollable exercise list, not inside it —
+  // otherwise it's buried at the bottom of a potentially long list and
+  // requires scrolling past every exercise to reach it.
+  const finishBarEl = (isToday || isRetaking || isAdvancing) && !isCompleted && (
+    <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
+      <div style={{ display: 'flex', gap: 8 }}>
+        {checkedCount > 0 ? (
+          <button className="btn btn-accent" style={{ flex: 1, fontSize: 14, padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }} onClick={() => setShowConfirmFinish(true)} disabled={saveLogMutation.isPending}>
+            {saveLogMutation.isPending ? 'Saving…' : (<><Check size={15} /> Finish Workout ({checkedCount} done)</>)}
+          </button>
+        ) : null}
+        {(isRetaking || isAdvancing) && (
+          <button className="btn btn-ghost" style={{ flex: checkedCount > 0 ? 0.4 : 1, fontSize: 14, padding: '12px' }} onClick={() => { setIsRetaking(false); setIsAdvancing(false); }}>
+            Cancel
+          </button>
+        )}
+      </div>
+      {!isRetaking && !isAdvancing && (
+        <button
+          onClick={() => setShowConfirmSkipDay(true)}
+          disabled={saveLogMutation.isPending}
+          style={{ alignSelf: 'center', background: 'none', border: 'none', color: 'var(--text3)', fontSize: 11, fontFamily: 'var(--font-mono)', cursor: 'pointer', padding: '2px 4px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+        >
+          <Ban size={11} /> Skip this day
+        </button>
+      )}
+    </div>
   );
 
   // Shown above the exercise list (not buried below it) so the unlock action
@@ -2666,27 +2743,31 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
 
         {open && !day.isRest && (
           isScreen ? (
-            <div className="day-snap-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', scrollSnapType: 'y mandatory' }}>
-              {heroSectionEl && (
-                <div style={{ position: 'relative', scrollSnapAlign: 'start', minHeight: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                  {heroSectionEl}
-                  {displayExercises.length > 1 && (
-                    <div className="scroll-hint-bounce" style={{ position: 'absolute', left: '50%', bottom: 10, transform: 'translateX(-50%)', color: 'var(--text3)', pointerEvents: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-                      <ChevronDown size={16} />
-                      <ChevronDown size={16} style={{ marginTop: -10, opacity: 0.5 }} />
-                    </div>
-                  )}
+            <>
+              <div className="day-snap-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', scrollSnapType: 'y mandatory' }}>
+                {heroSectionEl && (
+                  <div style={{ position: 'relative', scrollSnapAlign: 'start', minHeight: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                    {heroSectionEl}
+                    {displayExercises.length > 1 && (
+                      <div className="scroll-hint-bounce" style={{ position: 'absolute', left: '50%', bottom: 10, transform: 'translateX(-50%)', color: 'var(--text3)', pointerEvents: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+                        <ChevronDown size={16} />
+                        <ChevronDown size={16} style={{ marginTop: -10, opacity: 0.5 }} />
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div style={{ scrollSnapAlign: 'start', borderTop: '1px solid var(--border)' }}>
+                  {queueGroupsEl}
+                  {restOfDayBodyEl}
                 </div>
-              )}
-              <div style={{ scrollSnapAlign: 'start', borderTop: '1px solid var(--border)' }}>
-                {queueGroupsEl}
-                {restOfDayBodyEl}
               </div>
-            </div>
+              {finishBarEl}
+            </>
           ) : (
             <div style={{ borderTop: '1px solid var(--border)' }}>
               {queueGroupsEl}
               {restOfDayBodyEl}
+              {finishBarEl}
             </div>
           )
         )}
@@ -2699,6 +2780,17 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
           message={`Finish this workout? You have completed ${checkedCount} of ${total} exercises.`}
           onConfirm={handleFinish}
           onClose={() => setShowConfirmFinish(false)}
+        />
+      )}
+      {showConfirmSkipDay && (
+        <ConfirmModal
+          message={
+            checkedCount > 0
+              ? `Skip this day? You'll lose the ${checkedCount} exercise${checkedCount === 1 ? '' : 's'} already marked done.`
+              : "Skip this day? It won't count as a workout, but it won't break your streak either."
+          }
+          onConfirm={handleSkipDay}
+          onClose={() => setShowConfirmSkipDay(false)}
         />
       )}
     </>

@@ -22,6 +22,7 @@ const WorkoutLogSchema = new mongoose.Schema(
     dayTag: { type: String, default: '' },
     exercises: [LogExerciseSchema],
     totalVolume: { type: Number, default: 0 },
+    skipped: { type: Boolean, default: false },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
   },
   { timestamps: true }

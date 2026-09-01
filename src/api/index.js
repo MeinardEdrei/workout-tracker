@@ -81,6 +81,8 @@ export const deleteExercise = (splitId, dayId, exId) =>
   req('DELETE', `/api/splits/${splitId}/days/${dayId}/exercises/${exId}`);
 export const toggleExercise = (splitId, dayId, exId) =>
   req('PATCH', `/api/splits/${splitId}/days/${dayId}/exercises/${exId}/toggle`);
+export const toggleSkipExercise = (splitId, dayId, exId) =>
+  req('PATCH', `/api/splits/${splitId}/days/${dayId}/exercises/${exId}/skip`);
 export const reorderExercises = (splitId, dayId, exercises) =>
   req('PATCH', `/api/splits/${splitId}/days/${dayId}/exercises/reorder`, { exercises });
 export const moveExercise = (splitId, dayId, exId, targetDayId) =>

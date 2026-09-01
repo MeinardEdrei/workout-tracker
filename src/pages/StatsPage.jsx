@@ -1384,6 +1384,9 @@ export default function StatsPage() {
   const panelRefs = useRef({});
 
   const { data: logs = [], isLoading } = useQuery({ queryKey: ['logs', storageKey], queryFn: storage.getLogs, staleTime: LOGS_STALE });
+  // Skipped days keep a log so the streak isn't broken (see computeStreak below),
+  // but shouldn't inflate "workouts completed" counts or volume totals.
+  const workoutLogs = logs.filter((l) => !l.skipped);
   const { data: weekLogs = [] } = useQuery({ queryKey: ['logs', 'week', storageKey], queryFn: storage.getWeekLogs, staleTime: LOGS_STALE });
   const { data: splits = [] } = useQuery({ queryKey: ['splits', storageKey], queryFn: storage.getSplits, staleTime: LOGS_STALE });
   const activeSplit = splits.find((s) => s.isActive) || splits[0] || null;
@@ -1443,13 +1446,13 @@ export default function StatsPage() {
   // ── All-time stat tiles ──
   const { streakDays, streakWeeks } = computeStreak(logs, activeSplit);
   const streakLabel = streakWeeks > 0 ? `${streakWeeks}w` : `${streakDays}d`;
-  const { volume: allTimeVolume, unit: allTimeVolUnit } = getExercisesVolumeAndUnit(logs.flatMap((l) => l.exercises || []));
+  const { volume: allTimeVolume, unit: allTimeVolUnit } = getExercisesVolumeAndUnit(workoutLogs.flatMap((l) => l.exercises || []));
   const allTimeVolLabel = allTimeVolume >= 1000 ? `${(allTimeVolume / 1000).toFixed(1)}k` : `${allTimeVolume || 0}`;
-  const earliestLogDate = logs.length > 0 ? logs.reduce((min, l) => (l.date < min ? l.date : min), logs[0].date) : null;
+  const earliestLogDate = workoutLogs.length > 0 ? workoutLogs.reduce((min, l) => (l.date < min ? l.date : min), workoutLogs[0].date) : null;
   const weeksSinceFirstLog = earliestLogDate
     ? Math.max(1, (Date.now() - new Date(earliestLogDate + 'T00:00:00').getTime()) / (7 * 24 * 60 * 60 * 1000))
     : 1;
-  const avgPerWeek = logs.length > 0 ? (logs.length / weeksSinceFirstLog).toFixed(1) : '0';
+  const avgPerWeek = workoutLogs.length > 0 ? (workoutLogs.length / weeksSinceFirstLog).toFixed(1) : '0';
 
   // ── All-time personal records ──
   const personalRecords = progressionData
@@ -1487,7 +1490,7 @@ export default function StatsPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Stats</h1>
-          <div className="page-subtitle">{logs.length} total workouts</div>
+          <div className="page-subtitle">{workoutLogs.length} total workouts</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <button
@@ -1568,7 +1571,7 @@ export default function StatsPage() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 24 }}>
                 {[
                   { icon: <Flame size={14} />, value: streakLabel, label: 'streak' },
-                  { icon: null, value: logs.length, label: 'workouts' },
+                  { icon: null, value: workoutLogs.length, label: 'workouts' },
                   { icon: null, value: allTimeVolLabel, label: allTimeVolUnit !== 'mixed' ? allTimeVolUnit : 'volume' },
                   { icon: null, value: avgPerWeek, label: 'avg/week' },
                 ].map((t, i) => (
@@ -1582,8 +1585,8 @@ export default function StatsPage() {
               </div>
 
               {/* ── Weekly sessions chart ── */}
-              {logs.length > 0 && <WeeklySessionsChart logs={logs} />}
-              {logs.length > 0 && <WeeklyVolumeChart logs={logs} />}
+              {workoutLogs.length > 0 && <WeeklySessionsChart logs={workoutLogs} />}
+              {workoutLogs.length > 0 && <WeeklyVolumeChart logs={workoutLogs} />}
           </div>
 
           <div

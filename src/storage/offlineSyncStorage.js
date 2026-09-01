@@ -538,6 +538,19 @@ export async function toggleExercise(splitId, dayId, exId) {
   return localRes;
 }
 
+export async function toggleSkipExercise(splitId, dayId, exId) {
+  const userId = getUserId();
+  if (navigator.onLine && isQueueEmpty()) {
+    const res = await apiStorage.toggleSkipExercise(splitId, dayId, exId);
+    await updateLocalCacheFromSever();
+    return res;
+  }
+  guestStorage.setStoragePrefix(`wt_offline_${userId}`);
+  const localRes = await guestStorage.toggleSkipExercise(splitId, dayId, exId);
+  addToQueue({ action: 'toggleSkipExercise', args: [splitId, dayId, exId] });
+  return localRes;
+}
+
 export async function reorderExercises(splitId, dayId, exercises) {
   const userId = getUserId();
   if (navigator.onLine && isQueueEmpty()) {
