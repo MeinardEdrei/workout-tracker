@@ -16,7 +16,9 @@ router.post('/', async (req, res) => {
     const totalVolume = Math.round((exercises || []).reduce((sum, ex) => {
       const w = ex.weight || 0;
       const weightInKg = (ex.weightUnit === 'lbs') ? (w / 2.20462) : w;
-      return sum + (ex.sets || 0) * (ex.reps || 0) * weightInKg;
+      // Prefer real per-set rep counts when logged, fall back to the flat sets*reps estimate
+      const repVolume = ex.setLogs?.length ? ex.setLogs.reduce((s, l) => s + (l.reps || 0), 0) : (ex.sets || 0) * (ex.reps || 0);
+      return sum + repVolume * weightInKg;
     }, 0));
 
     if (existingLog) {

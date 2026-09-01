@@ -465,8 +465,11 @@ export function updateExercise(splitId, dayId, exId, data) {
   if (!day) return Promise.reject(new Error('Day not found'));
   const ex = (day.exercises || []).find((e) => e._id === exId);
   if (!ex) return Promise.reject(new Error('Exercise not found'));
-  snapshotVersion(split);
-  ['name', 'sets', 'reps', 'weight', 'weightUnit', 'muscleTargets', 'untilFailure', 'imageUrl', 'imageSource', 'placeholderUsed', 'category', 'notes', 'duration', 'durationUnit'].forEach((f) => {
+  const structuralFields = ['name', 'sets', 'reps', 'weight', 'weightUnit', 'muscleTargets', 'untilFailure', 'imageUrl', 'imageSource', 'placeholderUsed', 'category', 'notes', 'duration', 'durationUnit'];
+  // Skip snapshotting for pure today's-set-log writes (happens repeatedly per
+  // set during a session) — versioning is for template/structure changes.
+  if (structuralFields.some((f) => data[f] !== undefined)) snapshotVersion(split);
+  [...structuralFields, 'todaySetLogs', 'todaySetLogsDate'].forEach((f) => {
     if (data[f] !== undefined) ex[f] = data[f];
   });
   writeSplits(splits);

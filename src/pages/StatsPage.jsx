@@ -778,23 +778,31 @@ function ProgressionCard({ exercise }) {
 
 /* ─── Derive volume unit and convert/recalculate volume accurately ─── */
 
+// Prefers real per-set rep counts (ex.setLogs, logged via the RIR/reps set
+// logger) over the flat sets*reps estimate — falls back to the flat calc for
+// older logs and duration-based exercises that never got per-set data.
+function exerciseRepVolume(ex) {
+  if (ex.setLogs?.length) return ex.setLogs.reduce((sum, s) => sum + (s.reps || 0), 0);
+  return (ex.sets || 0) * (ex.reps || 0);
+}
+
 function getExercisesVolumeAndUnit(exercises) {
   if (!exercises || exercises.length === 0) return { volume: 0, unit: 'kg' };
   const activeExs = exercises.filter((e) => e.weight > 0);
   const units = [...new Set(activeExs.map((e) => e.weightUnit || 'kg'))];
-  
+
   if (units.length === 0) return { volume: 0, unit: 'kg' };
   if (units.length === 1) {
     const unit = units[0];
-    const volume = exercises.reduce((sum, ex) => sum + (ex.sets || 0) * (ex.reps || 0) * (ex.weight || 0), 0);
+    const volume = exercises.reduce((sum, ex) => sum + exerciseRepVolume(ex) * (ex.weight || 0), 0);
     return { volume: Math.round(volume), unit };
   }
-  
+
   // Mixed units: standardise to kg
   const volumeInKg = exercises.reduce((sum, ex) => {
     const w = ex.weight || 0;
     const weightInKg = convertWeight(w, ex.weightUnit || 'kg', 'kg');
-    return sum + (ex.sets || 0) * (ex.reps || 0) * weightInKg;
+    return sum + exerciseRepVolume(ex) * weightInKg;
   }, 0);
   return { volume: Math.round(volumeInKg), unit: 'kg' };
 }

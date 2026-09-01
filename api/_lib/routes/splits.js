@@ -787,8 +787,12 @@ router.put('/:id/days/:dayId/exercises/:exId', async (req, res) => {
     if (!day) return res.status(404).json({ error: 'Day not found' });
     const ex = day.exercises.id(req.params.exId);
     if (!ex) return res.status(404).json({ error: 'Exercise not found' });
-    await snapshotVersion(split);
-    const fields = ['name', 'sets', 'reps', 'weight', 'weightUnit', 'muscleTargets', 'untilFailure', 'imageUrl', 'imageSource', 'placeholderUsed', 'category', 'notes'];
+    const structuralFields = ['name', 'sets', 'reps', 'weight', 'weightUnit', 'muscleTargets', 'untilFailure', 'imageUrl', 'imageSource', 'placeholderUsed', 'category', 'notes'];
+    // Skip snapshotting for pure today's-set-log writes (happens repeatedly
+    // per set during a session) — versioning is for reverting template/structure
+    // changes, not transient daily performance data.
+    if (structuralFields.some((f) => req.body[f] !== undefined)) await snapshotVersion(split);
+    const fields = [...structuralFields, 'todaySetLogs', 'todaySetLogsDate'];
     fields.forEach((f) => { if (req.body[f] !== undefined) ex[f] = req.body[f]; });
     if (req.body.untilFailure === true) ex.reps = null;
     await split.save();

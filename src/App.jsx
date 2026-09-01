@@ -3,6 +3,8 @@ import { X } from 'lucide-react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { useQueryClient } from '@tanstack/react-query';
 import './index.css';
+import '@ncdai/react-wheel-picker/style.css';
+import './styles/wheelPicker.css';
 import { useAuth } from './context/AuthContext';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { syncOfflineQueue } from './storage/offlineSyncStorage';

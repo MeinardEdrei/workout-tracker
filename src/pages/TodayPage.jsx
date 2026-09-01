@@ -13,12 +13,17 @@ import { computeStreak } from '../utils/streaks';
 import { createPortal } from 'react-dom';
 import AiChatBubble from '../components/AiChatBubble';
 import { X, Check, RotateCcw, Trophy, BarChart3, StickyNote, Dumbbell, Zap, Moon, PartyPopper, Flame, ChevronDown, CalendarDays, SkipForward, MoreHorizontal, Ban } from 'lucide-react';
+import { WheelPicker, WheelPickerWrapper } from '@ncdai/react-wheel-picker';
 
 const SHOW_AI_CHAT = false; // archived: unused feature, flip to re-enable
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const MON_FIRST_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const TODAY_DOW = new Date().getDay();
 const TODAY_STR = new Date().toISOString().slice(0, 10);
+
+const WEIGHT_WHOLE_OPTIONS = Array.from({ length: 301 }, (_, i) => ({ value: i, label: String(i) }));
+const WEIGHT_DECIMAL_OPTIONS = [{ value: 0, label: '.0' }, { value: 5, label: '.5' }];
+const WEIGHT_UNIT_OPTIONS = [{ value: 'kg', label: 'kg' }, { value: 'lbs', label: 'lbs' }];
 
 function convertWeight(weight, fromUnit, toUnit) {
   if (fromUnit === toUnit) return weight;
@@ -627,6 +632,10 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState({ top: 0, right: 0 });
   const menuBtnRef = useRef(null);
+  const [loggingSet, setLoggingSet] = useState(false);
+  const [editingLogIndex, setEditingLogIndex] = useState(null);
+  const [logRepsVal, setLogRepsVal] = useState(String(ex.reps ?? 0));
+  const [logRirVal, setLogRirVal] = useState(null);
 
   function openActionsMenu() {
     const rect = menuBtnRef.current.getBoundingClientRect();
@@ -696,6 +705,7 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
   });
   const effectiveChecked = isCompleted ? true : (ex.lastCheckedDate === TODAY_STR ? ex.checked : false);
   const effectiveSkipped = isCompleted ? false : (ex.lastSkippedDate === TODAY_STR ? ex.skipped : false);
+  const effectiveSetLogs = isCompleted ? [] : (ex.todaySetLogsDate === TODAY_STR ? (ex.todaySetLogs || []) : []);
 
   const toggleMutation = useMutation({
     mutationFn: () => {
@@ -728,6 +738,19 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
       onToggle(updated);
       if (!localOnly) {
         queryClient.invalidateQueries({ queryKey: ['splits'] });
+      }
+    },
+  });
+
+  const setLogsMutation = useMutation({
+    mutationFn: (nextSetLogs) => {
+      if (localOnly) return Promise.resolve({ ...ex, todaySetLogs: nextSetLogs, todaySetLogsDate: TODAY_STR });
+      return storage.updateExercise(splitId, dayId, ex._id, { todaySetLogs: nextSetLogs, todaySetLogsDate: TODAY_STR });
+    },
+    onSuccess: (updated) => {
+      onToggle(updated);
+      if (!localOnly) {
+        queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
       }
     },
   });
@@ -881,47 +904,44 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
 
   const repsLabel = (ex.untilFailure || !ex.reps || ex.reps === 0) ? '∞' : ex.reps;
 
+  const weightNum = Math.max(0, parseFloat(weightVal) || 0);
+  const weightWhole = Math.trunc(weightNum);
+  const weightDecimal = Math.round((weightNum - weightWhole) * 10) >= 5 ? 5 : 0;
+
   const weightEditorEl = editingWeight ? (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 5, alignItems: isHero ? 'center' : 'flex-end', flexShrink: 0 }}>
-      <div style={{ display: 'flex', gap: 4 }}>
-        <input
-          type="number" min="0" step="0.5"
-          value={weightVal}
-          onChange={(e) => setWeightVal(e.target.value)}
-          autoFocus
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') weightMutation.mutate({ weight: weightVal, unit: weightUnit });
-            if (e.key === 'Escape') { setEditingWeight(false); setWeightVal(String(ex.weight ?? 0)); }
-          }}
-          style={{
-            width: isHero ? 90 : 62, padding: isHero ? '8px 10px' : '5px 8px', borderRadius: 6,
-            border: '1.5px solid var(--accent)',
-            background: 'var(--bg3)', color: 'var(--text)',
-            fontSize: isHero ? 20 : 14, fontFamily: 'var(--font-mono)', textAlign: 'center', outline: 'none',
-          }}
+      <WheelPickerWrapper className="wt-wheel-wrapper" style={{ width: isHero ? 200 : 160, height: isHero ? 130 : 100 }}>
+        <WheelPicker
+          options={WEIGHT_WHOLE_OPTIONS}
+          value={weightWhole}
+          onValueChange={(v) => setWeightVal(String(v + weightDecimal / 10))}
+          infinite
+          optionItemHeight={isHero ? 34 : 26}
+          classNames={{ optionItem: 'wt-wheel-option', highlightWrapper: 'wt-wheel-highlight-wrapper', highlightItem: 'wt-wheel-highlight-item' }}
         />
-        <select
+        <WheelPicker
+          options={WEIGHT_DECIMAL_OPTIONS}
+          value={weightDecimal}
+          onValueChange={(v) => setWeightVal(String(weightWhole + v / 10))}
+          optionItemHeight={isHero ? 34 : 26}
+          classNames={{ optionItem: 'wt-wheel-option', highlightWrapper: 'wt-wheel-highlight-wrapper', highlightItem: 'wt-wheel-highlight-item' }}
+        />
+        <WheelPicker
+          options={WEIGHT_UNIT_OPTIONS}
           value={weightUnit}
-          onChange={(e) => {
-            const nextUnit = e.target.value;
+          onValueChange={(nextUnit) => {
             const prevUnit = weightUnit;
             setWeightUnit(nextUnit);
-            const num = parseFloat(weightVal);
-            if (!isNaN(num) && num > 0) {
-              const converted = convertWeight(num, prevUnit, nextUnit);
+            if (weightNum > 0) {
+              const converted = convertWeight(weightNum, prevUnit, nextUnit);
               const rounded = Math.round(converted * 2) / 2;
               setWeightVal(String(rounded));
             }
           }}
-          style={{
-            padding: '5px 4px', borderRadius: 6, border: '1px solid var(--border2)',
-            background: 'var(--bg3)', color: 'var(--text2)', fontSize: 11, outline: 'none',
-          }}
-        >
-          <option value="kg">kg</option>
-          <option value="lbs">lbs</option>
-        </select>
-      </div>
+          optionItemHeight={isHero ? 34 : 26}
+          classNames={{ optionItem: 'wt-wheel-option', highlightWrapper: 'wt-wheel-highlight-wrapper', highlightItem: 'wt-wheel-highlight-item' }}
+        />
+      </WheelPickerWrapper>
       <div style={{ display: 'flex', gap: 4 }}>
         <button
           onClick={() => weightMutation.mutate({ weight: weightVal, unit: weightUnit })}
@@ -963,17 +983,19 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
   // like weightEditorEl/actionsRowEl/notesEditorEl already were.
   const setsRepsEditorEl = editingSetsReps && (
     <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', justifyContent: isHero ? 'center' : 'flex-start', marginTop: isHero ? 0 : 3 }}>
-      <input
-        type="number" min="1" max="99" value={setsVal} onChange={(e) => setSetsVal(e.target.value)} autoFocus
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            if (ex.duration > 0) setsRepsMutation.mutate({ sets: setsVal, duration: durationVal, durationUnit: durationUnitVal });
-            else setsRepsMutation.mutate({ sets: setsVal, reps: repsVal });
-          }
-          if (e.key === 'Escape') { setEditingSetsReps(false); setSetsVal(String(ex.sets ?? 3)); setRepsVal(String(ex.reps ?? 0)); setDurationVal(String(ex.duration ?? 0)); setDurationUnitVal(ex.durationUnit || 'sec'); }
-        }}
-        style={{ width: isHero ? 44 : 38, padding: isHero ? '5px 6px' : '3px 5px', borderRadius: 5, border: '1.5px solid var(--accent)', background: 'var(--bg3)', color: 'var(--text)', fontSize: isHero ? 14 : 12, fontFamily: 'var(--font-mono)', textAlign: 'center', outline: 'none' }}
-      />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+        <button
+          type="button"
+          onClick={() => setSetsVal((v) => String(Math.max(1, (+v || 1) - 1)))}
+          style={{ width: isHero ? 26 : 22, height: isHero ? 26 : 22, borderRadius: 5, border: '1px solid var(--border2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: isHero ? 14 : 12, fontWeight: 900, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+        >−</button>
+        <span style={{ minWidth: isHero ? 22 : 18, textAlign: 'center', fontSize: isHero ? 14 : 12, fontFamily: 'var(--font-mono)', color: 'var(--text)', fontWeight: 800 }}>{setsVal}</span>
+        <button
+          type="button"
+          onClick={() => setSetsVal((v) => String(Math.min(99, (+v || 0) + 1)))}
+          style={{ width: isHero ? 26 : 22, height: isHero ? 26 : 22, borderRadius: 5, border: '1px solid var(--border2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: isHero ? 14 : 12, fontWeight: 900, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+        >+</button>
+      </div>
       <span style={{ fontSize: isHero ? 13 : 11, color: 'var(--text3)' }}>×</span>
       {ex.duration > 0 ? (
         <>
@@ -1009,6 +1031,156 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
         onClick={() => { setEditingSetsReps(false); setSetsVal(String(ex.sets ?? 3)); setRepsVal(String(ex.reps ?? 0)); setDurationVal(String(ex.duration ?? 0)); setDurationUnitVal(ex.durationUnit || 'sec'); }}
         style={{ padding: isHero ? '4px 8px' : '2px 6px', borderRadius: 4, border: '1px solid var(--border2)', background: 'transparent', color: 'var(--text3)', fontWeight: 700, fontSize: isHero ? 13 : 11, cursor: 'pointer', display: 'inline-flex' }}
       ><X size={12} /></button>
+    </div>
+  );
+
+  // Per-set actual performance logging — replaces the plain "3 × 10" target
+  // display for rep-based exercises. The target (setsRepsEditorEl above) is
+  // still reachable via the "⋯" menu ("Edit Target Sets/Reps") since it's now
+  // an occasional admin action, not the primary one; what the user actually
+  // taps during a set is this reps stepper + RIR pill grid.
+  const nextSetNumber = effectiveSetLogs.length + 1;
+  const targetSetsReached = effectiveSetLogs.length >= (ex.sets || 0);
+
+  function openSetLogger(existingIndex, existingEntry) {
+    setEditingLogIndex(existingIndex);
+    setLogRepsVal(String(existingEntry?.reps ?? ex.reps ?? 0));
+    setLogRirVal(existingEntry?.rir ?? null);
+    setLoggingSet(true);
+  }
+
+  function closeSetLogger() {
+    setLoggingSet(false);
+    setEditingLogIndex(null);
+    setLogRirVal(null);
+  }
+
+  function confirmSetLog() {
+    const entry = { reps: Math.max(0, +logRepsVal || 0), rir: logRirVal };
+    const next = editingLogIndex != null
+      ? effectiveSetLogs.map((s, idx) => (idx === editingLogIndex ? entry : s))
+      : [...effectiveSetLogs, entry];
+    setLogsMutation.mutate(next);
+    closeSetLogger();
+  }
+
+  // The active reps+RIR entry form — shared by both variants, just sized
+  // down for the compact queue row so it doesn't dominate a dense list.
+  const setLogFormEl = (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: isHero ? 8 : 6, width: '100%', padding: isHero ? '10px' : '6px 8px', borderRadius: 8, background: 'var(--bg3)', border: '1px solid var(--border2)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: isHero ? 10 : 6 }}>
+        <button type="button" onClick={() => setLogRepsVal((v) => String(Math.max(0, (+v || 0) - 1)))} style={{ width: isHero ? 36 : 26, height: isHero ? 36 : 26, borderRadius: isHero ? 8 : 6, border: '1px solid var(--border2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: isHero ? 18 : 13, fontWeight: 900, cursor: 'pointer' }}>−</button>
+        <div style={{ minWidth: isHero ? 44 : 28, textAlign: 'center', fontSize: isHero ? 20 : 14, fontWeight: 900, fontFamily: 'var(--font-mono)', color: 'var(--text)' }}>{logRepsVal}</div>
+        <button type="button" onClick={() => setLogRepsVal((v) => String((+v || 0) + 1))} style={{ width: isHero ? 36 : 26, height: isHero ? 36 : 26, borderRadius: isHero ? 8 : 6, border: '1px solid var(--border2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: isHero ? 18 : 13, fontWeight: 900, cursor: 'pointer' }}>+</button>
+        <span style={{ fontSize: isHero ? 11 : 9, color: 'var(--text3)' }}>reps</span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
+        {isHero && <div style={{ fontSize: 9, color: 'var(--text3)', fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>RIR</div>}
+        <div style={{ display: 'flex', gap: isHero ? 4 : 3 }}>
+          {[0, 1, 2, 3, 4, 5].map((r) => (
+            <button
+              key={r}
+              type="button"
+              onClick={() => setLogRirVal(r)}
+              title={r === 0 ? 'RIR 0 (to failure)' : `RIR ${r}`}
+              style={{
+                width: isHero ? 32 : 22, height: isHero ? 32 : 22, borderRadius: isHero ? 6 : 5, cursor: 'pointer',
+                border: logRirVal === r ? '1.5px solid var(--accent)' : '1px solid var(--border2)',
+                background: logRirVal === r ? 'rgba(232,255,90,0.12)' : 'var(--bg2)',
+                color: logRirVal === r ? 'var(--accent)' : 'var(--text2)',
+                fontSize: isHero ? 12 : 9, fontWeight: 800, fontFamily: 'var(--font-mono)',
+              }}
+            >{r === 5 ? '5+' : r}</button>
+          ))}
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+        <button
+          type="button"
+          onClick={confirmSetLog}
+          disabled={setLogsMutation.isPending}
+          style={{ padding: isHero ? '6px 16px' : '4px 10px', borderRadius: 6, border: 'none', background: 'var(--accent)', color: '#0a0a0a', fontWeight: 900, fontSize: isHero ? 12 : 10, cursor: 'pointer' }}
+        >{editingLogIndex != null ? 'Save' : `Log Set ${nextSetNumber}`}</button>
+        <button
+          type="button"
+          onClick={closeSetLogger}
+          style={{ padding: isHero ? '6px 12px' : '4px 8px', borderRadius: 6, border: '1px solid var(--border2)', background: 'transparent', color: 'var(--text3)', fontWeight: 700, fontSize: isHero ? 12 : 10, cursor: 'pointer' }}
+        >Cancel</button>
+      </div>
+    </div>
+  );
+
+  const setLoggerEl = isHero ? (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center', width: 'min(280px, 100%)' }}>
+      {effectiveSetLogs.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: '100%' }}>
+          {effectiveSetLogs.map((s, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, padding: '6px 10px', borderRadius: 6, background: 'var(--bg3)', border: '1px solid var(--border2)' }}>
+              <button
+                type="button"
+                onClick={() => !readOnly && openSetLogger(i, s)}
+                style={{ flex: 1, textAlign: 'left', background: 'none', border: 'none', cursor: readOnly ? 'default' : 'pointer', color: 'var(--text2)', fontSize: 13, fontFamily: 'var(--font-mono)', display: 'flex', gap: 6 }}
+              >
+                <span style={{ color: 'var(--text3)' }}>Set {i + 1}</span>
+                <span>{s.reps} reps</span>
+                {s.rir != null && <span style={{ color: 'var(--accent)' }}>RIR {s.rir === 5 ? '5+' : s.rir}</span>}
+              </button>
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={() => setLogsMutation.mutate(effectiveSetLogs.filter((_, idx) => idx !== i))}
+                  style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', display: 'flex', padding: 2 }}
+                  title="Remove this set"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!readOnly && (loggingSet ? setLogFormEl : (
+        <button
+          type="button"
+          onClick={() => openSetLogger(null, null)}
+          style={{
+            padding: '8px 16px', borderRadius: 6, cursor: 'pointer',
+            border: targetSetsReached ? '1px dashed var(--border2)' : '1.5px solid var(--accent)',
+            background: targetSetsReached ? 'transparent' : 'rgba(232,255,90,0.08)',
+            color: targetSetsReached ? 'var(--text3)' : 'var(--accent)',
+            fontSize: 13, fontWeight: 800, fontFamily: 'var(--font-mono)',
+          }}
+        >
+          {targetSetsReached ? '+ Add Extra Set' : `Log Set ${nextSetNumber} · target ${repsLabel}`}
+        </button>
+      ))}
+    </div>
+  ) : (
+    // Compact queue row: no bordered cards, no per-set edit/delete — just a
+    // quiet inline summary + a text-style trigger, matching the visual weight
+    // of everything else in the row. Editing individual past sets is a hero
+    // (focus-view) action; compact is glance-and-log only.
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', width: '100%' }}>
+      {!loggingSet && (
+        <>
+          {effectiveSetLogs.length > 0 && (
+            <span style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>
+              {effectiveSetLogs.map((s) => `${s.reps}${s.rir != null ? `/${s.rir === 5 ? '5+' : s.rir}` : ''}`).join(', ')} reps
+            </span>
+          )}
+          {!readOnly && (
+            <button
+              type="button"
+              onClick={() => openSetLogger(null, null)}
+              style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: targetSetsReached ? 'var(--text3)' : 'var(--accent)', fontSize: 11, fontWeight: 800, fontFamily: 'var(--font-mono)' }}
+            >
+              {targetSetsReached ? '+ extra set' : `+ log set ${nextSetNumber}`}
+            </button>
+          )}
+        </>
+      )}
+      {!readOnly && loggingSet && setLogFormEl}
     </div>
   );
 
@@ -1077,6 +1249,14 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
         >
           <StickyNote size={14} /> {ex.notes ? 'Edit Note' : 'Add Note'}
         </button>
+        {ex.duration === 0 && (
+          <button
+            onClick={() => { setShowActionsMenu(false); setEditingSetsReps(true); }}
+            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'none', border: 'none', borderBottom: '1px solid var(--border)', cursor: 'pointer', color: 'var(--text)', fontSize: 13, fontWeight: 600, textAlign: 'left' }}
+          >
+            <RotateCcw size={14} /> Edit Target Sets/Reps
+          </button>
+        )}
         <button
           onClick={() => { setShowActionsMenu(false); skipMutation.mutate(); }}
           style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer', color: effectiveSkipped ? 'var(--accent)' : 'var(--text)', fontSize: 13, fontWeight: 600, textAlign: 'left' }}
@@ -1180,7 +1360,7 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
 
         {weightEditorEl}
 
-        {editingSetsReps ? setsRepsEditorEl : effectiveSkipped ? (
+        {effectiveSkipped ? (
           <div
             onClick={() => !readOnly && skipMutation.mutate()}
             title={readOnly ? '' : 'Tap to undo skip'}
@@ -1188,15 +1368,17 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
           >
             <Ban size={13} /> Skipped
           </div>
-        ) : (
-          <div
-            onClick={() => !readOnly && setEditingSetsReps(true)}
-            title={readOnly ? '' : 'Tap to edit sets & reps/duration'}
-            style={{ fontSize: 15, color: 'var(--text2)', fontFamily: 'var(--font-mono)', cursor: readOnly ? 'default' : 'pointer' }}
-          >
-            {ex.duration > 0 ? <span>{ex.sets} × {ex.duration}{ex.durationUnit || 'sec'}</span> : <span>{ex.sets} × {repsLabel}</span>}
-          </div>
-        )}
+        ) : ex.duration > 0 ? (
+          editingSetsReps ? setsRepsEditorEl : (
+            <div
+              onClick={() => !readOnly && setEditingSetsReps(true)}
+              title={readOnly ? '' : 'Tap to edit sets & duration'}
+              style={{ fontSize: 15, color: 'var(--text2)', fontFamily: 'var(--font-mono)', cursor: readOnly ? 'default' : 'pointer' }}
+            >
+              <span>{ex.sets} × {ex.duration}{ex.durationUnit || 'sec'}</span>
+            </div>
+          )
+        ) : editingSetsReps ? setsRepsEditorEl : setLoggerEl}
 
         {actionsRowEl}
         {actionsMenuEl}
@@ -1306,33 +1488,29 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
             </span>
           )}
         </div>
-        {editingSetsReps ? setsRepsEditorEl : (
-          <div style={{ display: 'flex', alignItems: 'center', marginTop: 2, flexWrap: 'wrap', gap: 4 }}>
-            {effectiveSkipped ? (
-              <div
-                onClick={() => !readOnly && skipMutation.mutate()}
-                title={readOnly ? '' : 'Tap to undo skip'}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)', cursor: readOnly ? 'default' : 'pointer' }}
-              >
-                <Ban size={11} /> Skipped
-              </div>
-            ) : (
+        <div style={{ display: 'flex', alignItems: 'center', marginTop: 2, flexWrap: 'wrap', gap: 4 }}>
+          {effectiveSkipped ? (
+            <div
+              onClick={() => !readOnly && skipMutation.mutate()}
+              title={readOnly ? '' : 'Tap to undo skip'}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)', cursor: readOnly ? 'default' : 'pointer' }}
+            >
+              <Ban size={11} /> Skipped
+            </div>
+          ) : ex.duration > 0 ? (
+            editingSetsReps ? setsRepsEditorEl : (
               <div
                 onClick={() => !readOnly && setEditingSetsReps(true)}
-                title={readOnly ? '' : 'Tap to edit sets & reps/duration'}
+                title={readOnly ? '' : 'Tap to edit sets & duration'}
                 style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)', cursor: readOnly ? 'default' : 'pointer', display: 'inline-block' }}
               >
-                {ex.duration > 0 ? (
-                  <span>{ex.sets} × {ex.duration}{ex.durationUnit || 'sec'}</span>
-                ) : (
-                  <span>{ex.sets} × {repsLabel}</span>
-                )}
+                <span>{ex.sets} × {ex.duration}{ex.durationUnit || 'sec'}</span>
               </div>
-            )}
-            {actionsRowEl}
-            {actionsMenuEl}
-          </div>
-        )}
+            )
+          ) : editingSetsReps ? setsRepsEditorEl : setLoggerEl}
+          {actionsRowEl}
+          {actionsMenuEl}
+        </div>
         {editingNotes ? (
           <div style={{ display: 'flex', gap: 4, marginTop: 5 }}>
             <input
@@ -2342,7 +2520,8 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
         category: e.category || 'workout',
         duration: e.duration ?? 0,
         durationUnit: e.durationUnit || 'sec',
-        isLastWeekWorkout: e.isLastWeekWorkout || false
+        isLastWeekWorkout: e.isLastWeekWorkout || false,
+        setLogs: e.todaySetLogsDate === TODAY_STR ? (e.todaySetLogs || []) : []
       }))
     });
     setShowConfirmFinish(false);
@@ -3079,7 +3258,8 @@ export default function TodayPage() {
             reps: e.reps,
             weight: e.weight,
             weightUnit: e.weightUnit,
-            category: e.category || 'workout'
+            category: e.category || 'workout',
+            setLogs: e.todaySetLogsDate === dateStr ? (e.todaySetLogs || []) : []
           }))
         }).then(() => {
           if (!logsInvalidated) {
