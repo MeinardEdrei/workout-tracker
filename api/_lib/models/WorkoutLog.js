@@ -12,7 +12,8 @@ const LogExerciseSchema = new mongoose.Schema({
   durationUnit: { type: String, enum: ['sec', 'min'], default: 'sec' },
   isLastWeekWorkout: { type: Boolean, default: false },
   muscleTargets: { type: [String], default: [] },
-  setLogs: { type: [{ reps: Number, rir: Number }], default: [] },
+  setLogs: { type: [{ reps: Number, rir: Number, weight: Number, isDropSet: { type: Boolean, default: false } }], default: [] },
+  skipped: { type: Boolean, default: false },
 });
 
 const WorkoutLogSchema = new mongoose.Schema(

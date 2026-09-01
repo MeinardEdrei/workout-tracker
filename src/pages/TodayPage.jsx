@@ -636,6 +636,8 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
   const [editingLogIndex, setEditingLogIndex] = useState(null);
   const [logRepsVal, setLogRepsVal] = useState(String(ex.reps ?? 0));
   const [logRirVal, setLogRirVal] = useState(null);
+  const [logWeightVal, setLogWeightVal] = useState(String(ex.weight ?? 0));
+  const [logIsDropSet, setLogIsDropSet] = useState(false);
 
   function openActionsMenu() {
     const rect = menuBtnRef.current.getBoundingClientRect();
@@ -1042,10 +1044,15 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
   const nextSetNumber = effectiveSetLogs.length + 1;
   const targetSetsReached = effectiveSetLogs.length >= (ex.sets || 0);
 
-  function openSetLogger(existingIndex, existingEntry) {
+  const weightStep = (ex.weightUnit || 'kg') === 'lbs' ? 5 : 2.5;
+
+  function openSetLogger(existingIndex, existingEntry, isDropSet = false) {
+    const lastLoggedWeight = effectiveSetLogs.length > 0 ? effectiveSetLogs[effectiveSetLogs.length - 1].weight : undefined;
     setEditingLogIndex(existingIndex);
     setLogRepsVal(String(existingEntry?.reps ?? ex.reps ?? 0));
     setLogRirVal(existingEntry?.rir ?? null);
+    setLogWeightVal(String(existingEntry?.weight ?? lastLoggedWeight ?? ex.weight ?? 0));
+    setLogIsDropSet(existingEntry?.isDropSet ?? isDropSet);
     setLoggingSet(true);
   }
 
@@ -1053,10 +1060,11 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
     setLoggingSet(false);
     setEditingLogIndex(null);
     setLogRirVal(null);
+    setLogIsDropSet(false);
   }
 
   function confirmSetLog() {
-    const entry = { reps: Math.max(0, +logRepsVal || 0), rir: logRirVal };
+    const entry = { reps: Math.max(0, +logRepsVal || 0), rir: logRirVal, weight: Math.max(0, +logWeightVal || 0), isDropSet: logIsDropSet };
     const next = editingLogIndex != null
       ? effectiveSetLogs.map((s, idx) => (idx === editingLogIndex ? entry : s))
       : [...effectiveSetLogs, entry];
@@ -1067,7 +1075,16 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
   // The active reps+RIR entry form — shared by both variants, just sized
   // down for the compact queue row so it doesn't dominate a dense list.
   const setLogFormEl = (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: isHero ? 8 : 6, width: '100%', padding: isHero ? '10px' : '6px 8px', borderRadius: 8, background: 'var(--bg3)', border: '1px solid var(--border2)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: isHero ? 8 : 6, width: '100%', padding: isHero ? '10px' : '6px 8px', borderRadius: 8, background: 'var(--bg3)', border: logIsDropSet ? '1px solid var(--accent)' : '1px solid var(--border2)' }}>
+      {logIsDropSet && (
+        <div style={{ fontSize: isHero ? 10 : 9, color: 'var(--accent)', fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', textAlign: 'center' }}>Drop Set</div>
+      )}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: isHero ? 10 : 6 }}>
+        <button type="button" onClick={() => setLogWeightVal((v) => String(Math.max(0, (+v || 0) - weightStep)))} style={{ width: isHero ? 36 : 26, height: isHero ? 36 : 26, borderRadius: isHero ? 8 : 6, border: '1px solid var(--border2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: isHero ? 18 : 13, fontWeight: 900, cursor: 'pointer' }}>−</button>
+        <div style={{ minWidth: isHero ? 50 : 34, textAlign: 'center', fontSize: isHero ? 20 : 14, fontWeight: 900, fontFamily: 'var(--font-mono)', color: 'var(--text)' }}>{logWeightVal}</div>
+        <button type="button" onClick={() => setLogWeightVal((v) => String((+v || 0) + weightStep))} style={{ width: isHero ? 36 : 26, height: isHero ? 36 : 26, borderRadius: isHero ? 8 : 6, border: '1px solid var(--border2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: isHero ? 18 : 13, fontWeight: 900, cursor: 'pointer' }}>+</button>
+        <span style={{ fontSize: isHero ? 11 : 9, color: 'var(--text3)' }}>{ex.weightUnit || 'kg'}</span>
+      </div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: isHero ? 10 : 6 }}>
         <button type="button" onClick={() => setLogRepsVal((v) => String(Math.max(0, (+v || 0) - 1)))} style={{ width: isHero ? 36 : 26, height: isHero ? 36 : 26, borderRadius: isHero ? 8 : 6, border: '1px solid var(--border2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: isHero ? 18 : 13, fontWeight: 900, cursor: 'pointer' }}>−</button>
         <div style={{ minWidth: isHero ? 44 : 28, textAlign: 'center', fontSize: isHero ? 20 : 14, fontWeight: 900, fontFamily: 'var(--font-mono)', color: 'var(--text)' }}>{logRepsVal}</div>
@@ -1119,11 +1136,13 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
               <button
                 type="button"
                 onClick={() => !readOnly && openSetLogger(i, s)}
-                style={{ flex: 1, textAlign: 'left', background: 'none', border: 'none', cursor: readOnly ? 'default' : 'pointer', color: 'var(--text2)', fontSize: 13, fontFamily: 'var(--font-mono)', display: 'flex', gap: 6 }}
+                style={{ flex: 1, textAlign: 'left', background: 'none', border: 'none', cursor: readOnly ? 'default' : 'pointer', color: 'var(--text2)', fontSize: 13, fontFamily: 'var(--font-mono)', display: 'flex', gap: 6, flexWrap: 'wrap' }}
               >
                 <span style={{ color: 'var(--text3)' }}>Set {i + 1}</span>
                 <span>{s.reps} reps</span>
+                {s.weight > 0 && <span>{s.weight}{ex.weightUnit || 'kg'}</span>}
                 {s.rir != null && <span style={{ color: 'var(--accent)' }}>RIR {s.rir === 5 ? '5+' : s.rir}</span>}
+                {s.isDropSet && <span style={{ color: 'var(--accent)', fontWeight: 800 }}>↓DS</span>}
               </button>
               {!readOnly && (
                 <button
@@ -1141,24 +1160,35 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
       )}
 
       {!readOnly && (loggingSet ? setLogFormEl : (
-        <button
-          type="button"
-          onClick={() => openSetLogger(null, null)}
-          style={{
-            padding: '8px 16px', borderRadius: 6, cursor: 'pointer',
-            border: targetSetsReached ? '1px dashed var(--border2)' : '1.5px solid var(--accent)',
-            background: targetSetsReached ? 'transparent' : 'rgba(232,255,90,0.08)',
-            color: targetSetsReached ? 'var(--text3)' : 'var(--accent)',
-            fontSize: 13, fontWeight: 800, fontFamily: 'var(--font-mono)',
-          }}
-        >
-          {targetSetsReached ? '+ Add Extra Set' : `Log Set ${nextSetNumber} · target ${repsLabel}`}
-        </button>
+        <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={() => openSetLogger(null, null)}
+            style={{
+              padding: '8px 16px', borderRadius: 6, cursor: 'pointer',
+              border: targetSetsReached ? '1px dashed var(--border2)' : '1.5px solid var(--accent)',
+              background: targetSetsReached ? 'transparent' : 'rgba(232,255,90,0.08)',
+              color: targetSetsReached ? 'var(--text3)' : 'var(--accent)',
+              fontSize: 13, fontWeight: 800, fontFamily: 'var(--font-mono)',
+            }}
+          >
+            {targetSetsReached ? '+ Add Extra Set' : `Log Set ${nextSetNumber} · target ${repsLabel}`}
+          </button>
+          {effectiveSetLogs.length > 0 && (
+            <button
+              type="button"
+              onClick={() => openSetLogger(null, null, true)}
+              style={{ padding: '8px 16px', borderRadius: 6, cursor: 'pointer', border: '1px dashed var(--border2)', background: 'transparent', color: 'var(--text3)', fontSize: 13, fontWeight: 800, fontFamily: 'var(--font-mono)' }}
+            >
+              + Drop Set
+            </button>
+          )}
+        </div>
       ))}
     </div>
   ) : (
     // Compact queue row: no bordered cards, no per-set edit/delete — just a
-    // quiet inline summary + a text-style trigger, matching the visual weight
+    // quiet inline summary + text-style triggers, matching the visual weight
     // of everything else in the row. Editing individual past sets is a hero
     // (focus-view) action; compact is glance-and-log only.
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', width: '100%' }}>
@@ -1166,7 +1196,7 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
         <>
           {effectiveSetLogs.length > 0 && (
             <span style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>
-              {effectiveSetLogs.map((s) => `${s.reps}${s.rir != null ? `/${s.rir === 5 ? '5+' : s.rir}` : ''}`).join(', ')} reps
+              {effectiveSetLogs.map((s) => `${s.reps}${s.weight > 0 ? `@${s.weight}` : ''}${s.rir != null ? `/${s.rir === 5 ? '5+' : s.rir}` : ''}${s.isDropSet ? '↓' : ''}`).join(', ')} reps
             </span>
           )}
           {!readOnly && (
@@ -1176,6 +1206,15 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
               style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: targetSetsReached ? 'var(--text3)' : 'var(--accent)', fontSize: 11, fontWeight: 800, fontFamily: 'var(--font-mono)' }}
             >
               {targetSetsReached ? '+ extra set' : `+ log set ${nextSetNumber}`}
+            </button>
+          )}
+          {!readOnly && effectiveSetLogs.length > 0 && (
+            <button
+              type="button"
+              onClick={() => openSetLogger(null, null, true)}
+              style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text3)', fontSize: 11, fontWeight: 800, fontFamily: 'var(--font-mono)' }}
+            >
+              + drop set
             </button>
           )}
         </>
@@ -1396,6 +1435,19 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
               <Check size={14} /> Completed
             </div>
           )
+        ) : effectiveSkipped ? (
+          <button
+            onClick={() => !skipMutation.isPending && skipMutation.mutate()}
+            disabled={skipMutation.isPending}
+            style={{
+              marginTop: 4, width: '100%', padding: 'clamp(10px, 2vh, 16px)', borderRadius: 14,
+              border: '1.5px solid var(--border2)', background: 'transparent', color: 'var(--text3)',
+              fontWeight: 900, fontSize: 15, textTransform: 'uppercase', letterSpacing: '0.04em',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            }}
+          >
+            <Ban size={16} /> Skipped — Undo
+          </button>
         ) : (
           <button
             onClick={() => !toggleMutation.isPending && toggleMutation.mutate()}
@@ -1425,9 +1477,16 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
       transition: 'opacity 0.15s',
       background: effectiveChecked ? 'rgba(255,255,255,0.01)' : 'transparent',
     }}>
-      {/* Circular checkbox */}
+      {/* Circular checkbox — doubles as "tap to undo" when skipped, so there's
+          one consistent tap target instead of a dead checkbox next to a
+          separate "Skipped" text affordance. */}
       <div
-        onClick={() => !readOnly && !toggleMutation.isPending && toggleMutation.mutate()}
+        onClick={() => {
+          if (readOnly) return;
+          if (effectiveSkipped) { if (!skipMutation.isPending) skipMutation.mutate(); return; }
+          if (!toggleMutation.isPending) toggleMutation.mutate();
+        }}
+        title={effectiveSkipped ? 'Tap to undo skip' : undefined}
         style={{
           width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
           border: `2px solid ${effectiveChecked ? 'var(--accent)' : 'var(--border2)'}`,
@@ -1437,7 +1496,7 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
           transition: 'all 0.15s',
         }}
       >
-        {effectiveChecked && <CheckIcon />}
+        {effectiveChecked ? <CheckIcon /> : effectiveSkipped ? <Ban size={16} color="var(--text3)" /> : null}
       </div>
 
       {/* Thumbnail */}
@@ -2511,18 +2570,28 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
   });
 
   function handleFinish() {
-    const done = exercises.filter((e) => e.lastCheckedDate === TODAY_STR && e.checked);
+    // Anything not checked off gets recorded as skipped instead of silently
+    // dropped, so history reflects "didn't do this" rather than just
+    // vanishing — same treatment whether it was explicitly skip-toggled or
+    // simply left untouched. Numeric fields stay zeroed so volume/PR/
+    // progression calcs (which already gate on weight > 0) exclude it for free.
     saveLogMutation.mutate({
       date: dateStr, splitName, dayName: day.name, dayTag: day.tag || '',
-      exercises: done.map((e) => ({
-        name: e.name, sets: e.sets, reps: e.reps, weight: e.weight, weightUnit: e.weightUnit,
-        untilFailure: e.untilFailure, notes: e.notes || '', muscleTargets: e.muscleTargets || [],
-        category: e.category || 'workout',
-        duration: e.duration ?? 0,
-        durationUnit: e.durationUnit || 'sec',
-        isLastWeekWorkout: e.isLastWeekWorkout || false,
-        setLogs: e.todaySetLogsDate === TODAY_STR ? (e.todaySetLogs || []) : []
-      }))
+      exercises: exercises.map((e) => {
+        const checkedNow = e.lastCheckedDate === TODAY_STR && e.checked;
+        if (!checkedNow) {
+          return { name: e.name, category: e.category || 'workout', muscleTargets: e.muscleTargets || [], skipped: true, sets: 0, reps: 0, weight: 0, setLogs: [] };
+        }
+        return {
+          name: e.name, sets: e.sets, reps: e.reps, weight: e.weight, weightUnit: e.weightUnit,
+          untilFailure: e.untilFailure, notes: e.notes || '', muscleTargets: e.muscleTargets || [],
+          category: e.category || 'workout',
+          duration: e.duration ?? 0,
+          durationUnit: e.durationUnit || 'sec',
+          isLastWeekWorkout: e.isLastWeekWorkout || false,
+          setLogs: e.todaySetLogsDate === TODAY_STR ? (e.todaySetLogs || []) : []
+        };
+      })
     });
     setShowConfirmFinish(false);
   }
@@ -2552,7 +2621,15 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
   let heroEx = null;
   if (showHero) {
     const ordered = [...warmups, ...workouts, ...cooldowns];
-    const isUnchecked = (e) => !(isCompleted ? true : (e.lastCheckedDate === TODAY_STR ? e.checked : false));
+    // A skipped exercise is neither "done" nor "still to do" — excluding it
+    // here is what makes skipping actually advance to the next exercise,
+    // instead of leaving the same skipped one stuck as hero forever.
+    const isUnchecked = (e) => {
+      if (isCompleted) return false;
+      const checkedNow = e.lastCheckedDate === TODAY_STR && e.checked;
+      const skippedNow = e.lastSkippedDate === TODAY_STR && e.skipped;
+      return !checkedNow && !skippedNow;
+    };
     heroEx = (heroOverrideId && ordered.find((e) => e._id === heroOverrideId && isUnchecked(e)))
       || ordered.find(isUnchecked)
       || null;
@@ -2956,7 +3033,11 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
       {completedLog && <CompletionScreen log={completedLog} onClose={() => setCompletedLog(null)} onShare={handleShare} sharing={sharing} />}
       {showConfirmFinish && (
         <ConfirmModal
-          message={`Finish this workout? You have completed ${checkedCount} of ${total} exercises.`}
+          message={
+            exercises.length - checkedCount > 0
+              ? `Finish this workout? ${checkedCount} of ${total} done — the other ${exercises.length - checkedCount} will be marked skipped.`
+              : `Finish this workout? You have completed ${checkedCount} of ${total} exercises.`
+          }
           onConfirm={handleFinish}
           onClose={() => setShowConfirmFinish(false)}
         />
@@ -3252,15 +3333,23 @@ export default function TodayPage() {
           splitName: activeSplit.name,
           dayName: day.name,
           dayTag: day.tag || '',
-          exercises: checkedExs.map((e) => ({
-            name: e.name,
-            sets: e.sets,
-            reps: e.reps,
-            weight: e.weight,
-            weightUnit: e.weightUnit,
-            category: e.category || 'workout',
-            setLogs: e.todaySetLogsDate === dateStr ? (e.todaySetLogs || []) : []
-          }))
+          // Same treatment as the manual Finish Workout flow: anything not
+          // checked for this date is recorded as skipped, not omitted.
+          exercises: (day.exercises || []).map((e) => {
+            const checkedOnDate = e.checked && e.lastCheckedDate === dateStr;
+            if (!checkedOnDate) {
+              return { name: e.name, category: e.category || 'workout', muscleTargets: e.muscleTargets || [], skipped: true, sets: 0, reps: 0, weight: 0, setLogs: [] };
+            }
+            return {
+              name: e.name,
+              sets: e.sets,
+              reps: e.reps,
+              weight: e.weight,
+              weightUnit: e.weightUnit,
+              category: e.category || 'workout',
+              setLogs: e.todaySetLogsDate === dateStr ? (e.todaySetLogs || []) : []
+            };
+          })
         }).then(() => {
           if (!logsInvalidated) {
             logsInvalidated = true;

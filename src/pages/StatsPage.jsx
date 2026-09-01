@@ -5,7 +5,7 @@ import StatsShareModal from '../components/StatsShareModal';
 import { createPortal } from 'react-dom';
 import { capitalizeWords, formatRelativeDate } from '../utils/textFormat';
 import { normKey, findDuplicatePairs } from '../utils/matchExercise';
-import { X, TrendingUp, TrendingDown, ArrowRight, RotateCcw, BarChart3, FolderOpen, Download, Tag, Pencil, Check, Flame, Minus, Trophy } from 'lucide-react';
+import { X, TrendingUp, TrendingDown, ArrowRight, RotateCcw, BarChart3, FolderOpen, Download, Tag, Pencil, Check, Flame, Minus, Trophy, Ban } from 'lucide-react';
 import { computeStreak } from '../utils/streaks';
 import { convertWeight } from '../utils/weight';
 
@@ -497,7 +497,7 @@ function buildProgressionMap(logs) {
   // logs are sorted newest-first; iterate so earliest entries win on dedupe
   [...logs].reverse().forEach((log) => {
     (log.exercises || []).forEach((ex) => {
-      if (!ex.name) return;
+      if (!ex.name || ex.skipped) return;
       const key = ex.name.trim().toLowerCase();
       if (!map[key]) map[key] = { name: ex.name.trim(), sessions: [] };
       // dedupe by date — keep last entry per date
@@ -778,31 +778,33 @@ function ProgressionCard({ exercise }) {
 
 /* ─── Derive volume unit and convert/recalculate volume accurately ─── */
 
-// Prefers real per-set rep counts (ex.setLogs, logged via the RIR/reps set
-// logger) over the flat sets*reps estimate — falls back to the flat calc for
-// older logs and duration-based exercises that never got per-set data.
-function exerciseRepVolume(ex) {
-  if (ex.setLogs?.length) return ex.setLogs.reduce((sum, s) => sum + (s.reps || 0), 0);
-  return (ex.sets || 0) * (ex.reps || 0);
+// Prefers real per-set weight/reps (ex.setLogs, logged via the RIR/reps set
+// logger — each set can carry its own weight, e.g. a drop set) over the flat
+// sets*reps*weight estimate, which is the fallback for older logs and
+// duration-based exercises that never got per-set data. weightInUnit lets
+// the caller convert (or leave as-is) before multiplying.
+function exerciseVolume(ex, weightInUnit = (w) => w) {
+  if (ex.setLogs?.length) {
+    return ex.setLogs.reduce((sum, s) => sum + (s.reps || 0) * weightInUnit(s.weight || ex.weight || 0), 0);
+  }
+  return (ex.sets || 0) * (ex.reps || 0) * weightInUnit(ex.weight || 0);
 }
 
 function getExercisesVolumeAndUnit(exercises) {
   if (!exercises || exercises.length === 0) return { volume: 0, unit: 'kg' };
-  const activeExs = exercises.filter((e) => e.weight > 0);
+  const activeExs = exercises.filter((e) => e.weight > 0 || e.setLogs?.some((s) => s.weight > 0));
   const units = [...new Set(activeExs.map((e) => e.weightUnit || 'kg'))];
 
   if (units.length === 0) return { volume: 0, unit: 'kg' };
   if (units.length === 1) {
     const unit = units[0];
-    const volume = exercises.reduce((sum, ex) => sum + exerciseRepVolume(ex) * (ex.weight || 0), 0);
+    const volume = exercises.reduce((sum, ex) => sum + exerciseVolume(ex), 0);
     return { volume: Math.round(volume), unit };
   }
 
   // Mixed units: standardise to kg
   const volumeInKg = exercises.reduce((sum, ex) => {
-    const w = ex.weight || 0;
-    const weightInKg = convertWeight(w, ex.weightUnit || 'kg', 'kg');
-    return sum + exerciseRepVolume(ex) * weightInKg;
+    return sum + exerciseVolume(ex, (w) => convertWeight(w, ex.weightUnit || 'kg', 'kg'));
   }, 0);
   return { volume: Math.round(volumeInKg), unit: 'kg' };
 }
@@ -844,7 +846,7 @@ function LogCard({ log, onDelete, hasPR }) {
             )}
           </div>
           {log.dayTag && <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 2 }}>{log.dayTag}</div>}
-          <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>{log.exercises.length} exercises</div>
+          <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>{log.exercises.filter((e) => !e.skipped).length} exercises</div>
         </div>
 
         {/* Volume */}
@@ -874,10 +876,23 @@ function LogCard({ log, onDelete, hasPR }) {
               prefix = "[CD] ";
               nameStyle.color = 'var(--blue)';
             }
+            if (ex.skipped) {
+              nameStyle = { ...nameStyle, color: 'var(--text3)' };
+            }
             return (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 14px', borderBottom: i < log.exercises.length - 1 ? '1px solid var(--border)' : 'none' }}>
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 14px', borderBottom: i < log.exercises.length - 1 ? '1px solid var(--border)' : 'none', opacity: ex.skipped ? 0.6 : 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
                   <div style={nameStyle}>{prefix}{ex.name}</div>
+                  {ex.skipped && (
+                    <span style={{
+                      fontSize: 8, fontWeight: 900, color: 'var(--text3)', background: 'var(--bg3)',
+                      border: '1px solid var(--border2)', padding: '1px 5px', borderRadius: 4,
+                      textTransform: 'uppercase', letterSpacing: '0.05em',
+                      flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 3
+                    }}>
+                      <Ban size={9} /> Skipped
+                    </span>
+                  )}
                   {ex.isLastWeekWorkout && (
                     <span style={{
                       fontSize: 8,
@@ -895,10 +910,12 @@ function LogCard({ log, onDelete, hasPR }) {
                     </span>
                   )}
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--text2)', fontFamily: 'var(--font-mono)', display: 'flex', gap: 8, flexShrink: 0 }}>
-                  <span>{ex.sets}×{rLabel}</span>
-                  <span style={{ color: ex.weight > 0 ? 'var(--accent)' : 'var(--text3)', fontWeight: 700 }}>{wLabel}</span>
-                </div>
+                {!ex.skipped && (
+                  <div style={{ fontSize: 11, color: 'var(--text2)', fontFamily: 'var(--font-mono)', display: 'flex', gap: 8, flexShrink: 0 }}>
+                    <span>{ex.sets}×{rLabel}</span>
+                    <span style={{ color: ex.weight > 0 ? 'var(--accent)' : 'var(--text3)', fontWeight: 700 }}>{wLabel}</span>
+                  </div>
+                )}
               </div>
             );
           })}

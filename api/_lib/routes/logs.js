@@ -13,12 +13,13 @@ router.post('/', async (req, res) => {
     // Check if a log for this date and user already exists
     const existingLog = await WorkoutLog.findOne({ userId: req.userId, date });
 
+    const toKg = (w, unit) => (unit === 'lbs' ? w / 2.20462 : w);
     const totalVolume = Math.round((exercises || []).reduce((sum, ex) => {
-      const w = ex.weight || 0;
-      const weightInKg = (ex.weightUnit === 'lbs') ? (w / 2.20462) : w;
-      // Prefer real per-set rep counts when logged, fall back to the flat sets*reps estimate
-      const repVolume = ex.setLogs?.length ? ex.setLogs.reduce((s, l) => s + (l.reps || 0), 0) : (ex.sets || 0) * (ex.reps || 0);
-      return sum + repVolume * weightInKg;
+      // Prefer real per-set weight/reps when logged, fall back to the flat sets*reps*weight estimate
+      if (ex.setLogs?.length) {
+        return sum + ex.setLogs.reduce((s, l) => s + (l.reps || 0) * toKg(l.weight || ex.weight || 0, ex.weightUnit), 0);
+      }
+      return sum + (ex.sets || 0) * (ex.reps || 0) * toKg(ex.weight || 0, ex.weightUnit);
     }, 0));
 
     if (existingLog) {
