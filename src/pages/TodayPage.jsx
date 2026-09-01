@@ -12,7 +12,7 @@ import { isSyncExcluded, excludeFromSync } from '../utils/syncPrefs';
 import { computeStreak } from '../utils/streaks';
 import { createPortal } from 'react-dom';
 import AiChatBubble from '../components/AiChatBubble';
-import { X, Check, RotateCcw, Trophy, BarChart3, StickyNote, Dumbbell, Zap, Moon, PartyPopper, Flame, ChevronDown, CalendarDays } from 'lucide-react';
+import { X, Check, RotateCcw, Trophy, BarChart3, StickyNote, Dumbbell, Zap, Moon, PartyPopper, Flame, ChevronDown, CalendarDays, SkipForward, MoreHorizontal } from 'lucide-react';
 
 const SHOW_AI_CHAT = false; // archived: unused feature, flip to re-enable
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -607,7 +607,7 @@ function CategoryHeader({ type }) {
   );
 }
 
-function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly, isCompleted, dateStr, logs, onShowToast, localOnly, variant = 'compact' }) {
+function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly, isCompleted, dateStr, logs, onShowToast, localOnly, variant = 'compact', onPromote }) {
   const isHero = variant === 'hero';
   const queryClient = useQueryClient();
   const { storage, storageKey } = useStorage();
@@ -624,6 +624,15 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesVal, setNotesVal] = useState(ex.notes || '');
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState({ top: 0, right: 0 });
+  const menuBtnRef = useRef(null);
+
+  function openActionsMenu() {
+    const rect = menuBtnRef.current.getBoundingClientRect();
+    setMenuAnchor({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+    setShowActionsMenu(true);
+  }
 
   useEffect(() => {
     setWeightVal(String(ex.weight ?? 0));
@@ -930,29 +939,130 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
     </div>
   );
 
-  const actionsRowEl = !readOnly && (
-    <div style={{ display: 'flex', alignItems: 'center', gap: isHero ? 8 : 4, flexWrap: 'wrap', justifyContent: isHero ? 'center' : 'flex-start' }}>
+  // Shared sets/reps (or duration) inline edit form — same fields, sized
+  // differently per variant. Previously hand-duplicated between hero and
+  // compact; that duplication is exactly what let the "Do Next" button land
+  // in dead hero-only code earlier, so it's now a single shared fragment
+  // like weightEditorEl/actionsRowEl/notesEditorEl already were.
+  const setsRepsEditorEl = editingSetsReps && (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', justifyContent: isHero ? 'center' : 'flex-start', marginTop: isHero ? 0 : 3 }}>
+      <input
+        type="number" min="1" max="99" value={setsVal} onChange={(e) => setSetsVal(e.target.value)} autoFocus
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            if (ex.duration > 0) setsRepsMutation.mutate({ sets: setsVal, duration: durationVal, durationUnit: durationUnitVal });
+            else setsRepsMutation.mutate({ sets: setsVal, reps: repsVal });
+          }
+          if (e.key === 'Escape') { setEditingSetsReps(false); setSetsVal(String(ex.sets ?? 3)); setRepsVal(String(ex.reps ?? 0)); setDurationVal(String(ex.duration ?? 0)); setDurationUnitVal(ex.durationUnit || 'sec'); }
+        }}
+        style={{ width: isHero ? 44 : 38, padding: isHero ? '5px 6px' : '3px 5px', borderRadius: 5, border: '1.5px solid var(--accent)', background: 'var(--bg3)', color: 'var(--text)', fontSize: isHero ? 14 : 12, fontFamily: 'var(--font-mono)', textAlign: 'center', outline: 'none' }}
+      />
+      <span style={{ fontSize: isHero ? 13 : 11, color: 'var(--text3)' }}>×</span>
+      {ex.duration > 0 ? (
+        <>
+          <input
+            type="number" min="1" max="999" value={durationVal} onChange={(e) => setDurationVal(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') setsRepsMutation.mutate({ sets: setsVal, duration: durationVal, durationUnit: durationUnitVal });
+              if (e.key === 'Escape') { setEditingSetsReps(false); setSetsVal(String(ex.sets ?? 3)); setDurationVal(String(ex.duration ?? 0)); setDurationUnitVal(ex.durationUnit || 'sec'); }
+            }}
+            style={{ width: isHero ? 50 : 44, padding: isHero ? '5px 6px' : '3px 5px', borderRadius: 5, border: '1.5px solid var(--accent)', background: 'var(--bg3)', color: 'var(--text)', fontSize: isHero ? 14 : 12, fontFamily: 'var(--font-mono)', textAlign: 'center', outline: 'none' }}
+          />
+          <select value={durationUnitVal} onChange={(e) => setDurationUnitVal(e.target.value)} style={{ padding: isHero ? '5px 6px' : '3px 5px', borderRadius: 5, border: '1.5px solid var(--accent)', background: 'var(--bg3)', color: 'var(--text)', fontSize: isHero ? 13 : 12, outline: 'none', cursor: 'pointer' }}>
+            <option value="sec">sec</option>
+            <option value="min">min</option>
+          </select>
+        </>
+      ) : (
+        <input
+          type="number" min="0" max="999" value={repsVal} onChange={(e) => setRepsVal(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') setsRepsMutation.mutate({ sets: setsVal, reps: repsVal });
+            if (e.key === 'Escape') { setEditingSetsReps(false); setSetsVal(String(ex.sets ?? 3)); setRepsVal(String(ex.reps ?? 0)); }
+          }}
+          style={{ width: isHero ? 44 : 38, padding: isHero ? '5px 6px' : '3px 5px', borderRadius: 5, border: '1.5px solid var(--accent)', background: 'var(--bg3)', color: 'var(--text)', fontSize: isHero ? 14 : 12, fontFamily: 'var(--font-mono)', textAlign: 'center', outline: 'none' }}
+        />
+      )}
       <button
-        onClick={() => setShowSwapModal(true)}
-        style={{ color: 'var(--text3)', fontSize: isHero ? 11 : 10, fontFamily: 'var(--font-mono)', cursor: 'pointer', padding: isHero ? '4px 8px' : '2px 5px', borderRadius: 4, border: '1.5px solid var(--border2)', background: 'var(--bg3)', display: 'inline-flex', alignItems: 'center', gap: 3 }}
-      >
-        <SwapIcon /> Swap
-      </button>
+        onClick={() => { if (ex.duration > 0) setsRepsMutation.mutate({ sets: setsVal, duration: durationVal, durationUnit: durationUnitVal }); else setsRepsMutation.mutate({ sets: setsVal, reps: repsVal }); }}
+        disabled={setsRepsMutation.isPending}
+        style={{ padding: isHero ? '4px 10px' : '2px 7px', borderRadius: 4, border: 'none', background: 'var(--accent)', color: '#0a0a0a', fontWeight: 900, fontSize: isHero ? 13 : 11, cursor: 'pointer', display: 'inline-flex' }}
+      ><Check size={12} /></button>
+      <button
+        onClick={() => { setEditingSetsReps(false); setSetsVal(String(ex.sets ?? 3)); setRepsVal(String(ex.reps ?? 0)); setDurationVal(String(ex.duration ?? 0)); setDurationUnitVal(ex.durationUnit || 'sec'); }}
+        style={{ padding: isHero ? '4px 8px' : '2px 6px', borderRadius: 4, border: '1px solid var(--border2)', background: 'transparent', color: 'var(--text3)', fontWeight: 700, fontSize: isHero ? 13 : 11, cursor: 'pointer', display: 'inline-flex' }}
+      ><X size={12} /></button>
+    </div>
+  );
+
+  // Secondary actions collapse into a single "⋯" menu (Swap/History/Note)
+  // instead of 3 always-visible chips — Do Next (compact-only) stays as its
+  // own directly-visible button since it's the one action about what to do
+  // right now. Once the exercise is checked off, the menu itself hides
+  // (Swap/Note are pointless on a finished set) and only a quiet History
+  // link remains — matching how Do Next already stepped aside on completion.
+  const actionsRowEl = !readOnly && (
+    effectiveChecked ? (
       <button
         onClick={() => setShowHistoryModal(true)}
-        style={{ color: 'var(--text3)', fontSize: isHero ? 11 : 10, fontFamily: 'var(--font-mono)', cursor: 'pointer', padding: isHero ? '4px 8px' : '2px 5px', borderRadius: 4, border: '1.5px solid var(--border2)', background: 'var(--bg3)', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+        style={{ color: 'var(--text3)', fontSize: isHero ? 11 : 10, fontFamily: 'var(--font-mono)', cursor: 'pointer', padding: isHero ? '4px 8px' : '2px 5px', borderRadius: 4, border: '1px solid var(--border)', background: 'transparent', display: 'inline-flex', alignItems: 'center', gap: 3 }}
         title="View exercise history"
       >
         <BarChart3 size={12} /> History
       </button>
-      <button
-        onClick={() => setEditingNotes(v => !v)}
-        style={{ color: ex.notes ? 'var(--accent)' : 'var(--text3)', fontSize: isHero ? 11 : 10, fontFamily: 'var(--font-mono)', cursor: 'pointer', padding: isHero ? '4px 8px' : '2px 5px', borderRadius: 4, border: ex.notes ? '1.5px solid rgba(232,255,90,0.3)' : '1.5px solid var(--border2)', background: ex.notes ? 'rgba(232,255,90,0.06)' : 'var(--bg3)', display: 'inline-flex', alignItems: 'center', gap: 3 }}
-        title="Add or edit notes"
-      >
-        <StickyNote size={12} /> Note
-      </button>
-    </div>
+    ) : (
+      <div style={{ display: 'flex', alignItems: 'center', gap: isHero ? 8 : 4, flexWrap: 'wrap', justifyContent: isHero ? 'center' : 'flex-start' }}>
+        {onPromote && (
+          <button
+            onClick={onPromote}
+            style={{ color: 'var(--accent)', fontSize: isHero ? 11 : 10, fontFamily: 'var(--font-mono)', cursor: 'pointer', padding: isHero ? '4px 8px' : '2px 5px', borderRadius: 4, border: '1.5px solid rgba(232,255,90,0.3)', background: 'rgba(232,255,90,0.06)', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+            title="Do this exercise next instead"
+          >
+            <SkipForward size={12} /> Do Next
+          </button>
+        )}
+        <button
+          ref={menuBtnRef}
+          onClick={openActionsMenu}
+          style={{ color: 'var(--text3)', fontSize: isHero ? 11 : 10, fontFamily: 'var(--font-mono)', cursor: 'pointer', padding: isHero ? '4px 8px' : '2px 5px', borderRadius: 4, border: '1.5px solid var(--border2)', background: 'var(--bg3)', display: 'inline-flex', alignItems: 'center' }}
+          title="More actions"
+        >
+          <MoreHorizontal size={12} />
+        </button>
+      </div>
+    )
+  );
+
+  const actionsMenuEl = showActionsMenu && createPortal(
+    <>
+      <div style={{ position: 'fixed', inset: 0, zIndex: 299 }} onClick={() => setShowActionsMenu(false)} />
+      <div style={{
+        position: 'fixed', top: menuAnchor.top, right: menuAnchor.right, zIndex: 300,
+        background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10,
+        overflow: 'hidden', minWidth: 160, boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+        animation: 'fadeIn 0.12s ease',
+      }}>
+        <button
+          onClick={() => { setShowActionsMenu(false); setShowSwapModal(true); }}
+          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'none', border: 'none', borderBottom: '1px solid var(--border)', cursor: 'pointer', color: 'var(--text)', fontSize: 13, fontWeight: 600, textAlign: 'left' }}
+        >
+          <SwapIcon /> Swap Exercise
+        </button>
+        <button
+          onClick={() => { setShowActionsMenu(false); setShowHistoryModal(true); }}
+          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'none', border: 'none', borderBottom: '1px solid var(--border)', cursor: 'pointer', color: 'var(--text)', fontSize: 13, fontWeight: 600, textAlign: 'left' }}
+        >
+          <BarChart3 size={14} /> View History
+        </button>
+        <button
+          onClick={() => { setShowActionsMenu(false); setEditingNotes((v) => !v); }}
+          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer', color: ex.notes ? 'var(--accent)' : 'var(--text)', fontSize: 13, fontWeight: 600, textAlign: 'left' }}
+        >
+          <StickyNote size={14} /> {ex.notes ? 'Edit Note' : 'Add Note'}
+        </button>
+      </div>
+    </>,
+    document.body
   );
 
   const notesEditorEl = editingNotes ? (
@@ -1032,12 +1142,12 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
           {(ex.isLastWeekWorkout || prInfo) && (
             <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
               {ex.isLastWeekWorkout && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 9, fontWeight: 900, letterSpacing: '0.04em', color: 'var(--accent)', background: 'rgba(232,255,90,0.1)', border: '1px solid var(--accent)', padding: '2px 7px', borderRadius: 10, textTransform: 'uppercase' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 9, fontWeight: 800, letterSpacing: '0.04em', color: 'var(--text3)', background: 'var(--bg3)', border: '1px solid var(--border2)', padding: '2px 7px', borderRadius: 10, textTransform: 'uppercase' }}>
                   <RotateCcw size={10} />{ex.isFromOtherDay ? ex.isFromOtherDay : 'Last Week'}
                 </span>
               )}
               {prInfo && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 800, letterSpacing: '0.04em', color: 'var(--accent)', background: 'rgba(232,255,90,0.1)', border: '1px solid rgba(232,255,90,0.25)', padding: '2px 7px', borderRadius: 10, textTransform: 'uppercase' }} title={`Previous PR: ${prInfo.prevWeight}${prInfo.prevUnit}`}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 800, letterSpacing: '0.04em', color: '#ffd700', background: 'rgba(255,215,0,0.1)', border: '1px solid rgba(255,215,0,0.3)', padding: '2px 7px', borderRadius: 10, textTransform: 'uppercase' }} title={`Previous PR: ${prInfo.prevWeight}${prInfo.prevUnit}`}>
                   <Trophy size={11} /> PR {prInfo.diff ? `(${prInfo.diff})` : ''}
                 </span>
               )}
@@ -1047,56 +1157,7 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
 
         {weightEditorEl}
 
-        {editingSetsReps ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <input
-              type="number" min="1" max="99" value={setsVal} onChange={(e) => setSetsVal(e.target.value)} autoFocus
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  if (ex.duration > 0) setsRepsMutation.mutate({ sets: setsVal, duration: durationVal, durationUnit: durationUnitVal });
-                  else setsRepsMutation.mutate({ sets: setsVal, reps: repsVal });
-                }
-                if (e.key === 'Escape') { setEditingSetsReps(false); setSetsVal(String(ex.sets ?? 3)); setRepsVal(String(ex.reps ?? 0)); setDurationVal(String(ex.duration ?? 0)); setDurationUnitVal(ex.durationUnit || 'sec'); }
-              }}
-              style={{ width: 44, padding: '5px 6px', borderRadius: 5, border: '1.5px solid var(--accent)', background: 'var(--bg3)', color: 'var(--text)', fontSize: 14, fontFamily: 'var(--font-mono)', textAlign: 'center', outline: 'none' }}
-            />
-            <span style={{ fontSize: 13, color: 'var(--text3)' }}>×</span>
-            {ex.duration > 0 ? (
-              <>
-                <input
-                  type="number" min="1" max="999" value={durationVal} onChange={(e) => setDurationVal(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') setsRepsMutation.mutate({ sets: setsVal, duration: durationVal, durationUnit: durationUnitVal });
-                    if (e.key === 'Escape') { setEditingSetsReps(false); setSetsVal(String(ex.sets ?? 3)); setDurationVal(String(ex.duration ?? 0)); setDurationUnitVal(ex.durationUnit || 'sec'); }
-                  }}
-                  style={{ width: 50, padding: '5px 6px', borderRadius: 5, border: '1.5px solid var(--accent)', background: 'var(--bg3)', color: 'var(--text)', fontSize: 14, fontFamily: 'var(--font-mono)', textAlign: 'center', outline: 'none' }}
-                />
-                <select value={durationUnitVal} onChange={(e) => setDurationUnitVal(e.target.value)} style={{ padding: '5px 6px', borderRadius: 5, border: '1.5px solid var(--accent)', background: 'var(--bg3)', color: 'var(--text)', fontSize: 13, outline: 'none', cursor: 'pointer' }}>
-                  <option value="sec">sec</option>
-                  <option value="min">min</option>
-                </select>
-              </>
-            ) : (
-              <input
-                type="number" min="0" max="999" value={repsVal} onChange={(e) => setRepsVal(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') setsRepsMutation.mutate({ sets: setsVal, reps: repsVal });
-                  if (e.key === 'Escape') { setEditingSetsReps(false); setSetsVal(String(ex.sets ?? 3)); setRepsVal(String(ex.reps ?? 0)); }
-                }}
-                style={{ width: 44, padding: '5px 6px', borderRadius: 5, border: '1.5px solid var(--accent)', background: 'var(--bg3)', color: 'var(--text)', fontSize: 14, fontFamily: 'var(--font-mono)', textAlign: 'center', outline: 'none' }}
-              />
-            )}
-            <button
-              onClick={() => { if (ex.duration > 0) setsRepsMutation.mutate({ sets: setsVal, duration: durationVal, durationUnit: durationUnitVal }); else setsRepsMutation.mutate({ sets: setsVal, reps: repsVal }); }}
-              disabled={setsRepsMutation.isPending}
-              style={{ padding: '4px 10px', borderRadius: 4, border: 'none', background: 'var(--accent)', color: '#0a0a0a', fontWeight: 900, fontSize: 13, cursor: 'pointer' }}
-            ><Check size={12} /></button>
-            <button
-              onClick={() => { setEditingSetsReps(false); setSetsVal(String(ex.sets ?? 3)); setRepsVal(String(ex.reps ?? 0)); setDurationVal(String(ex.duration ?? 0)); setDurationUnitVal(ex.durationUnit || 'sec'); }}
-              style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border2)', background: 'transparent', color: 'var(--text3)', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
-            ><X size={12} /></button>
-          </div>
-        ) : (
+        {editingSetsReps ? setsRepsEditorEl : (
           <div
             onClick={() => !readOnly && setEditingSetsReps(true)}
             title={readOnly ? '' : 'Tap to edit sets & reps/duration'}
@@ -1107,6 +1168,7 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
         )}
 
         {actionsRowEl}
+        {actionsMenuEl}
         {notesEditorEl}
 
         {ex.muscleTargets?.length > 0 && (
@@ -1184,10 +1246,10 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
           {ex.isLastWeekWorkout && (
             <span
               style={{
-                fontSize: 9, fontWeight: 900, letterSpacing: '0.04em',
-                color: 'var(--accent)',
-                background: 'rgba(232, 255, 90, 0.1)',
-                border: '1px solid var(--accent)',
+                fontSize: 9, fontWeight: 800, letterSpacing: '0.04em',
+                color: 'var(--text3)',
+                background: 'var(--bg3)',
+                border: '1px solid var(--border2)',
                 padding: '2px 7px', borderRadius: 10,
                 display: 'inline-flex', alignItems: 'center', gap: 3,
                 textTransform: 'uppercase',
@@ -1200,9 +1262,9 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
             <span
               style={{
                 fontSize: 10, fontWeight: 800, letterSpacing: '0.04em',
-                color: 'var(--accent)',
-                background: 'rgba(232, 255, 90, 0.1)',
-                border: '1px solid rgba(232, 255, 90, 0.25)',
+                color: '#ffd700',
+                background: 'rgba(255,215,0,0.1)',
+                border: '1px solid rgba(255,215,0,0.3)',
                 padding: '2px 7px', borderRadius: 10,
                 display: 'inline-flex', alignItems: 'center', gap: 3,
                 textTransform: 'uppercase',
@@ -1213,103 +1275,7 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
             </span>
           )}
         </div>
-        {editingSetsReps ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 3 }}>
-            <input
-              type="number" min="1" max="99"
-              value={setsVal}
-              onChange={(e) => setSetsVal(e.target.value)}
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  if (ex.duration > 0) {
-                    setsRepsMutation.mutate({ sets: setsVal, duration: durationVal, durationUnit: durationUnitVal });
-                  } else {
-                    setsRepsMutation.mutate({ sets: setsVal, reps: repsVal });
-                  }
-                }
-                if (e.key === 'Escape') {
-                  setEditingSetsReps(false);
-                  setSetsVal(String(ex.sets ?? 3));
-                  setRepsVal(String(ex.reps ?? 0));
-                  setDurationVal(String(ex.duration ?? 0));
-                  setDurationUnitVal(ex.durationUnit || 'sec');
-                }
-              }}
-              style={{ width: 38, padding: '3px 5px', borderRadius: 5, border: '1.5px solid var(--accent)', background: 'var(--bg3)', color: 'var(--text)', fontSize: 12, fontFamily: 'var(--font-mono)', textAlign: 'center', outline: 'none' }}
-            />
-            <span style={{ fontSize: 11, color: 'var(--text3)' }}>×</span>
-            {ex.duration > 0 ? (
-              <>
-                <input
-                  type="number" min="1" max="999"
-                  value={durationVal}
-                  onChange={(e) => setDurationVal(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      setsRepsMutation.mutate({ sets: setsVal, duration: durationVal, durationUnit: durationUnitVal });
-                    }
-                    if (e.key === 'Escape') {
-                      setEditingSetsReps(false);
-                      setSetsVal(String(ex.sets ?? 3));
-                      setDurationVal(String(ex.duration ?? 0));
-                      setDurationUnitVal(ex.durationUnit || 'sec');
-                    }
-                  }}
-                  style={{ width: 44, padding: '3px 5px', borderRadius: 5, border: '1.5px solid var(--accent)', background: 'var(--bg3)', color: 'var(--text)', fontSize: 12, fontFamily: 'var(--font-mono)', textAlign: 'center', outline: 'none' }}
-                />
-                <select
-                  value={durationUnitVal}
-                  onChange={(e) => setDurationUnitVal(e.target.value)}
-                  style={{ padding: '3px 5px', borderRadius: 5, border: '1.5px solid var(--accent)', background: 'var(--bg3)', color: 'var(--text)', fontSize: 12, outline: 'none', cursor: 'pointer' }}
-                >
-                  <option value="sec">sec</option>
-                  <option value="min">min</option>
-                </select>
-              </>
-            ) : (
-              <input
-                type="number" min="0" max="999"
-                value={repsVal}
-                onChange={(e) => setRepsVal(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') setsRepsMutation.mutate({ sets: setsVal, reps: repsVal });
-                  if (e.key === 'Escape') {
-                    setEditingSetsReps(false);
-                    setSetsVal(String(ex.sets ?? 3));
-                    setRepsVal(String(ex.reps ?? 0));
-                  }
-                }}
-                style={{ width: 38, padding: '3px 5px', borderRadius: 5, border: '1.5px solid var(--accent)', background: 'var(--bg3)', color: 'var(--text)', fontSize: 12, fontFamily: 'var(--font-mono)', textAlign: 'center', outline: 'none' }}
-              />
-            )}
-            <button
-              onClick={() => {
-                if (ex.duration > 0) {
-                  setsRepsMutation.mutate({ sets: setsVal, duration: durationVal, durationUnit: durationUnitVal });
-                } else {
-                  setsRepsMutation.mutate({ sets: setsVal, reps: repsVal });
-                }
-              }}
-              disabled={setsRepsMutation.isPending}
-              style={{ padding: '2px 7px', borderRadius: 4, border: 'none', background: 'var(--accent)', color: '#0a0a0a', fontWeight: 900, fontSize: 11, cursor: 'pointer', display: 'inline-flex' }}
-            >
-              <Check size={12} />
-            </button>
-            <button
-              onClick={() => {
-                setEditingSetsReps(false);
-                setSetsVal(String(ex.sets ?? 3));
-                setRepsVal(String(ex.reps ?? 0));
-                setDurationVal(String(ex.duration ?? 0));
-                setDurationUnitVal(ex.durationUnit || 'sec');
-              }}
-              style={{ padding: '2px 6px', borderRadius: 4, border: '1px solid var(--border2)', background: 'transparent', color: 'var(--text3)', fontWeight: 700, fontSize: 11, cursor: 'pointer', display: 'inline-flex' }}
-            >
-              <X size={12} />
-            </button>
-          </div>
-        ) : (
+        {editingSetsReps ? setsRepsEditorEl : (
           <div style={{ display: 'flex', alignItems: 'center', marginTop: 2, flexWrap: 'wrap', gap: 4 }}>
             <div
               onClick={() => !readOnly && setEditingSetsReps(true)}
@@ -1322,49 +1288,8 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
                 <span>{ex.sets} × {repsLabel}</span>
               )}
             </div>
-            {!readOnly && (
-              <>
-                <button
-                  onClick={() => setShowSwapModal(true)}
-                  style={{
-                    color: 'var(--text3)',
-                    fontSize: 10, fontFamily: 'var(--font-mono)', cursor: 'pointer',
-                    padding: '2px 5px', borderRadius: 4,
-                    border: '1.5px solid var(--border2)', background: 'var(--bg3)',
-                    display: 'inline-flex', alignItems: 'center', gap: 3
-                  }}
-                >
-                  <SwapIcon /> Swap
-                </button>
-                <button
-                  onClick={() => setShowHistoryModal(true)}
-                  style={{
-                    color: 'var(--text3)',
-                    fontSize: 10, fontFamily: 'var(--font-mono)', cursor: 'pointer',
-                    padding: '2px 5px', borderRadius: 4,
-                    border: '1.5px solid var(--border2)', background: 'var(--bg3)',
-                    display: 'inline-flex', alignItems: 'center', gap: 3
-                  }}
-                  title="View exercise history"
-                >
-                  <BarChart3 size={12} /> History
-                </button>
-                <button
-                  onClick={() => setEditingNotes(v => !v)}
-                  style={{
-                    color: ex.notes ? 'var(--accent)' : 'var(--text3)',
-                    fontSize: 10, fontFamily: 'var(--font-mono)', cursor: 'pointer',
-                    padding: '2px 5px', borderRadius: 4,
-                    border: ex.notes ? '1.5px solid rgba(232,255,90,0.3)' : '1.5px solid var(--border2)',
-                    background: ex.notes ? 'rgba(232,255,90,0.06)' : 'var(--bg3)',
-                    display: 'inline-flex', alignItems: 'center', gap: 3
-                  }}
-                  title="Add or edit notes"
-                >
-                  <StickyNote size={12} /> Note
-                </button>
-              </>
-            )}
+            {actionsRowEl}
+            {actionsMenuEl}
           </div>
         )}
         {editingNotes ? (
@@ -2218,6 +2143,11 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
   const [showConfirmFinish, setShowConfirmFinish] = useState(false);
   const [isRetaking, setIsRetaking] = useState(false);
   const [isAdvancing, setIsAdvancing] = useState(false);
+  // Session-only "do this one next" nudge — lets a queued exercise jump
+  // ahead of the current hero (e.g. equipment's taken) without losing or
+  // completing the skipped one. Resets on reload; doesn't touch the split's
+  // canonical exercise order.
+  const [heroOverrideId, setHeroOverrideId] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
 
   const getPastDateStr = (baseDate, daysOffset) => {
@@ -2388,7 +2318,10 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
   let heroEx = null;
   if (showHero) {
     const ordered = [...warmups, ...workouts, ...cooldowns];
-    heroEx = ordered.find((e) => !(isCompleted ? true : (e.lastCheckedDate === TODAY_STR ? e.checked : false))) || null;
+    const isUnchecked = (e) => !(isCompleted ? true : (e.lastCheckedDate === TODAY_STR ? e.checked : false));
+    heroEx = (heroOverrideId && ordered.find((e) => e._id === heroOverrideId && isUnchecked(e)))
+      || ordered.find(isUnchecked)
+      || null;
     if (heroEx) {
       warmups = warmups.filter((e) => e !== heroEx);
       workouts = workouts.filter((e) => e !== heroEx);
@@ -2398,6 +2331,16 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
 
   const heroSectionEl = showHero && (
     <div style={{ padding: '16px 16px 4px' }}>
+      {heroOverrideId && heroEx && heroEx._id === heroOverrideId && (
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10 }}>
+          <button
+            onClick={() => setHeroOverrideId(null)}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, color: 'var(--accent)', background: 'rgba(232,255,90,0.08)', border: '1px solid rgba(232,255,90,0.25)', borderRadius: 20, padding: '5px 12px', cursor: 'pointer' }}
+          >
+            <RotateCcw size={11} /> Doing this first · Reset order
+          </button>
+        </div>
+      )}
       {heroEx ? (
         <ExerciseRow variant="hero" key={heroEx._id} ex={heroEx} index={displayExercises.indexOf(heroEx)} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} dateStr={dateStr} logs={logs} onShowToast={onShowToast} localOnly={heroEx.isLastWeekWorkout} />
       ) : (
@@ -2418,7 +2361,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
         <div>
           <CategoryHeader type="warmup" />
           {warmups.map((ex, i) => (
-            <ExerciseRow key={ex._id || i} ex={ex} index={displayExercises.indexOf(ex)} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} dateStr={dateStr} logs={logs} onShowToast={onShowToast} localOnly={ex.isLastWeekWorkout} />
+            <ExerciseRow key={ex._id || i} ex={ex} index={displayExercises.indexOf(ex)} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} dateStr={dateStr} logs={logs} onShowToast={onShowToast} localOnly={ex.isLastWeekWorkout} onPromote={() => { setHeroOverrideId(ex._id); onShowToast && onShowToast(`Doing "${ex.name}" next`, "success", SkipForward); }} />
           ))}
         </div>
       )}
@@ -2426,7 +2369,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
         <div>
           <CategoryHeader type="workout" />
           {workouts.map((ex, i) => (
-            <ExerciseRow key={ex._id || i} ex={ex} index={displayExercises.indexOf(ex)} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} dateStr={dateStr} logs={logs} onShowToast={onShowToast} localOnly={ex.isLastWeekWorkout} />
+            <ExerciseRow key={ex._id || i} ex={ex} index={displayExercises.indexOf(ex)} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} dateStr={dateStr} logs={logs} onShowToast={onShowToast} localOnly={ex.isLastWeekWorkout} onPromote={() => { setHeroOverrideId(ex._id); onShowToast && onShowToast(`Doing "${ex.name}" next`, "success", SkipForward); }} />
           ))}
         </div>
       )}
@@ -2434,7 +2377,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
         <div>
           <CategoryHeader type="cooldown" />
           {cooldowns.map((ex, i) => (
-            <ExerciseRow key={ex._id || i} ex={ex} index={displayExercises.indexOf(ex)} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} dateStr={dateStr} logs={logs} onShowToast={onShowToast} localOnly={ex.isLastWeekWorkout} />
+            <ExerciseRow key={ex._id || i} ex={ex} index={displayExercises.indexOf(ex)} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} dateStr={dateStr} logs={logs} onShowToast={onShowToast} localOnly={ex.isLastWeekWorkout} onPromote={() => { setHeroOverrideId(ex._id); onShowToast && onShowToast(`Doing "${ex.name}" next`, "success", SkipForward); }} />
           ))}
         </div>
       )}
