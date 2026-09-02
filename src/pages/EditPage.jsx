@@ -1220,6 +1220,9 @@ function EditExerciseModal({ ex, splitId, dayId, splitDays, onConfirm, onClose, 
   });
   const [isDuration, setIsDuration] = useState(ex.duration > 0);
   const [suggestions, setSuggestions] = useState([]);
+  // form.name starts pre-filled with the existing exercise's name, so the
+  // suggestions effect below must not fire until the user actually edits it.
+  const nameTouchedRef = useRef(false);
   const [currentImageUrl, setCurrentImageUrl] = useState(ex.imageUrl || '');
   const [imgFetching, setImgFetching] = useState(false);
   const [imgUploading, setImgUploading] = useState(false);
@@ -1325,6 +1328,7 @@ function EditExerciseModal({ ex, splitId, dayId, splitDays, onConfirm, onClose, 
   }
 
   useEffect(() => {
+    if (!nameTouchedRef.current) return;
     const q = form.name.trim();
     if (q.length < 2) { setSuggestions([]); return; }
     const timer = setTimeout(async () => {
@@ -1477,7 +1481,7 @@ function EditExerciseModal({ ex, splitId, dayId, splitDays, onConfirm, onClose, 
             <input
               className="input"
               value={form.name}
-              onChange={(e) => setForm(f => ({ ...f, name: capitalizeWords(e.target.value) }))}
+              onChange={(e) => { nameTouchedRef.current = true; setForm(f => ({ ...f, name: capitalizeWords(e.target.value) })); }}
               onBlur={() => setTimeout(() => setSuggestions([]), 150)}
               placeholder="Exercise name"
               autoComplete="off"
