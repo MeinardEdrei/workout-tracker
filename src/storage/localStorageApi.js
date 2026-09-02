@@ -366,7 +366,7 @@ export function updateDay(splitId, dayId, data) {
   const day = split.days.find((d) => d._id === dayId);
   if (!day) return Promise.reject(new Error('Day not found'));
   snapshotVersion(split);
-  if (data.name !== undefined) day.name = data.name;
+  if (data.name !== undefined) { day.name = data.name; day.dayOrder = getDayOrder(data.name); }
   if (data.tag !== undefined) day.tag = data.tag;
   if (data.isRest !== undefined) day.isRest = data.isRest;
   writeSplits(splits);
