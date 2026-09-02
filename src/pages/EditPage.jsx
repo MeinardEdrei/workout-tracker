@@ -879,12 +879,12 @@ function AddExerciseModal({ splitDays, onConfirm, onClose }) {
           <div style={{ marginBottom: 16 }}>
             {(form.warmupRamp || []).map((step, i) => (
               <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
-                <input className="input" type="number" min="0" max="100" style={{ width: 64 }} placeholder="%" value={step.pct ?? ''} onChange={(e) => {
+                <input className="input" type="number" min="0" max="100" style={{ width: 64 }} placeholder="%" value={step.pct || ''} onChange={(e) => {
                   const next = form.warmupRamp.map((st, idx) => (idx === i ? { ...st, pct: +e.target.value || 0 } : st));
                   set('warmupRamp', next);
                 }} />
                 <span style={{ fontSize: 11, color: 'var(--text3)' }}>% ×</span>
-                <input className="input" type="number" min="0" style={{ width: 56 }} placeholder="reps" value={step.reps ?? ''} onChange={(e) => {
+                <input className="input" type="number" min="0" style={{ width: 56 }} placeholder="reps" value={step.reps || ''} onChange={(e) => {
                   const next = form.warmupRamp.map((st, idx) => (idx === i ? { ...st, reps: +e.target.value || 0 } : st));
                   set('warmupRamp', next);
                 }} />
@@ -1480,7 +1480,6 @@ function EditExerciseModal({ ex, splitId, dayId, splitDays, onConfirm, onClose, 
               onChange={(e) => setForm(f => ({ ...f, name: capitalizeWords(e.target.value) }))}
               onBlur={() => setTimeout(() => setSuggestions([]), 150)}
               placeholder="Exercise name"
-              autoFocus
               autoComplete="off"
               style={{ width: '100%', margin: 0 }}
             />
@@ -1599,11 +1598,11 @@ function EditExerciseModal({ ex, splitId, dayId, splitDays, onConfirm, onClose, 
             <div style={{ ...LABEL, marginBottom: 4 }}>Warm-up Ramp <span style={{ color: 'var(--text3)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></div>
             {(form.warmupRamp || []).map((step, i) => (
               <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
-                <input className="input" type="number" min="0" max="100" style={{ width: 64 }} placeholder="%" value={step.pct ?? ''} onChange={(e) => {
+                <input className="input" type="number" min="0" max="100" style={{ width: 64 }} placeholder="%" value={step.pct || ''} onChange={(e) => {
                   setForm(f => ({ ...f, warmupRamp: f.warmupRamp.map((st, idx) => (idx === i ? { ...st, pct: +e.target.value || 0 } : st)) }));
                 }} />
                 <span style={{ fontSize: 11, color: 'var(--text3)' }}>% ×</span>
-                <input className="input" type="number" min="0" style={{ width: 56 }} placeholder="reps" value={step.reps ?? ''} onChange={(e) => {
+                <input className="input" type="number" min="0" style={{ width: 56 }} placeholder="reps" value={step.reps || ''} onChange={(e) => {
                   setForm(f => ({ ...f, warmupRamp: f.warmupRamp.map((st, idx) => (idx === i ? { ...st, reps: +e.target.value || 0 } : st)) }));
                 }} />
                 <span style={{ fontSize: 11, color: 'var(--text3)' }}>reps</span>
@@ -2317,7 +2316,7 @@ function DayEditor({ day, split, onBack, onDayUpdated }) {
 
                       {workouts.length > 0 && (
                         <div style={{ marginBottom: 16 }}>
-                          <CategoryHeader type="workout" />
+                          {warmups.length > 0 && <CategoryHeader type="workout" />}
                           <SortableContext items={workouts.map((e) => e._id)} strategy={verticalListSortingStrategy}>
                             {workouts.map((ex) => (
                               <SortableExerciseEditRow

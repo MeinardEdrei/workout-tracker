@@ -2785,7 +2785,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
       )}
       {workouts.length > 0 && (
         <div>
-          <CategoryHeader type="workout" />
+          {warmups.length > 0 && <CategoryHeader type="workout" />}
           {workouts.map((ex, i) => (
             <ExerciseRow key={ex._id || i} ex={ex} index={displayExercises.indexOf(ex)} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} dateStr={dateStr} logs={logs} onShowToast={onShowToast} localOnly={ex.isLastWeekWorkout} onPromote={() => { setHeroOverrideId(ex._id); onShowToast && onShowToast(`Doing "${ex.name}" next`, "success", SkipForward); }} />
           ))}
