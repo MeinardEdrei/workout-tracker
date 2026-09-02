@@ -75,7 +75,11 @@ function formatSplitAsText(split) {
       const rStr = ex.duration > 0 ? `${ex.duration}${ex.durationUnit || 'sec'}` : (ex.untilFailure || !ex.reps || ex.reps === 0) ? 'Failure' : `${ex.reps} reps`;
       const wStr = ex.weight > 0 ? ` @ ${ex.weight} ${ex.weightUnit || 'kg'}` : '';
       const catPrefix = ex.category === 'warmup' ? '[Warm-up] ' : ex.category === 'cooldown' ? '[Cool-down] ' : '';
-      text += `• ${catPrefix}${ex.name} — ${ex.sets} sets × ${rStr}${wStr}\n`;
+      const muscleStr = ex.muscleTargets && ex.muscleTargets.length > 0 ? ` (${ex.muscleTargets.join(', ')})` : '';
+      text += `• ${catPrefix}${ex.name} — ${ex.sets} sets × ${rStr}${wStr}${muscleStr}\n`;
+      if (ex.notes) {
+        text += `  Note: ${ex.notes}\n`;
+      }
     });
     text += `\n`;
   });
