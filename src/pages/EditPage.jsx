@@ -1796,13 +1796,14 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
     const oldSets = ex.sets ?? 3;
     const newSets = +updatedForm.sets;
 
+    const isDurationBased = (updatedForm.duration || 0) > 0;
     const numReps = +updatedForm.reps;
-    const isFailure = updatedForm.untilFailure || numReps === 0;
+    const isFailure = !isDurationBased && (updatedForm.untilFailure || numReps === 0);
     const oldReps = ex.reps ?? 10;
-    const newReps = isFailure ? 0 : numReps;
+    const newReps = isDurationBased ? 0 : (isFailure ? 0 : numReps);
 
     const oldUntilFailure = !!ex.untilFailure;
-    const newUntilFailure = isFailure;
+    const newUntilFailure = isDurationBased ? false : isFailure;
 
     try {
       const updated = await storage.updateExercise(splitId, dayId, ex._id, {
