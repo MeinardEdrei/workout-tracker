@@ -215,6 +215,9 @@ export function importSplit(data) {
         imageSource: '',
         placeholderUsed: false,
         category: e.category || 'workout',
+        exerciseType: e.exerciseType || 'compound',
+        restSeconds: e.restSeconds ?? 0,
+        warmupRamp: e.warmupRamp || [],
         notes: e.notes || '',
         duration: e.duration ?? 0,
         durationUnit: e.durationUnit || 'sec',
@@ -448,6 +451,9 @@ export function createExercise(splitId, dayId, data) {
     imageSource: data.imageUrl ? 'auto' : '',
     placeholderUsed: data.placeholderUsed || false,
     category: data.category || 'workout',
+    exerciseType: data.exerciseType || 'compound',
+    restSeconds: data.restSeconds ?? 0,
+    warmupRamp: data.warmupRamp || [],
     duration: data.duration ?? 0,
     durationUnit: data.durationUnit || 'sec',
   };
@@ -465,11 +471,11 @@ export function updateExercise(splitId, dayId, exId, data) {
   if (!day) return Promise.reject(new Error('Day not found'));
   const ex = (day.exercises || []).find((e) => e._id === exId);
   if (!ex) return Promise.reject(new Error('Exercise not found'));
-  const structuralFields = ['name', 'sets', 'reps', 'weight', 'weightUnit', 'muscleTargets', 'untilFailure', 'imageUrl', 'imageSource', 'placeholderUsed', 'category', 'notes', 'duration', 'durationUnit'];
+  const structuralFields = ['name', 'sets', 'reps', 'weight', 'weightUnit', 'muscleTargets', 'untilFailure', 'imageUrl', 'imageSource', 'placeholderUsed', 'category', 'notes', 'duration', 'durationUnit', 'exerciseType', 'restSeconds', 'warmupRamp'];
   // Only real template/structure edits get a version snapshot (for revert) —
   // weight/notes/duration are routine in-workout tracking edits made many
   // times per session and don't need a full split-tree copy each time.
-  const snapshotTriggerFields = ['name', 'muscleTargets', 'untilFailure', 'imageUrl', 'imageSource', 'placeholderUsed', 'category'];
+  const snapshotTriggerFields = ['name', 'muscleTargets', 'untilFailure', 'imageUrl', 'imageSource', 'placeholderUsed', 'category', 'exerciseType'];
   if (snapshotTriggerFields.some((f) => data[f] !== undefined)) snapshotVersion(split);
   [...structuralFields, 'todaySetLogs', 'todaySetLogsDate'].forEach((f) => {
     if (data[f] !== undefined) ex[f] = data[f];

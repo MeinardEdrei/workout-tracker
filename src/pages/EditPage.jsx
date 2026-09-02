@@ -563,7 +563,7 @@ function AddDayModal({ existingDays = [], onConfirm, onClose }) {
 
 function AddExerciseModal({ splitDays, onConfirm, onClose }) {
   const { storage, storageKey } = useStorage();
-  const [form, setForm] = useState({ name: '', sets: 3, reps: 10, weight: 0, weightUnit: 'kg', muscleTargets: [], untilFailure: false, imageUrl: '', placeholderUsed: false, category: 'workout', duration: 0, durationUnit: 'sec' });
+  const [form, setForm] = useState({ name: '', sets: 3, reps: 10, weight: 0, weightUnit: 'kg', muscleTargets: [], untilFailure: false, imageUrl: '', placeholderUsed: false, category: 'workout', exerciseType: 'compound', restSeconds: 0, warmupRamp: [], duration: 0, durationUnit: 'sec' });
   const [isDuration, setIsDuration] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
 
@@ -591,6 +591,9 @@ function AddExerciseModal({ splitDays, onConfirm, onClose }) {
             weightUnit: ex.weightUnit || 'kg',
             untilFailure: ex.untilFailure || false,
             category: ex.category || 'workout',
+            exerciseType: ex.exerciseType || 'compound',
+            restSeconds: ex.restSeconds ?? 0,
+            warmupRamp: ex.warmupRamp || [],
             duration: ex.duration ?? 0,
             durationUnit: ex.durationUnit || 'sec',
             date: log.date || '',
@@ -650,6 +653,9 @@ function AddExerciseModal({ splitDays, onConfirm, onClose }) {
         imageUrl: match.imageUrl || s.imageUrl || '',
         placeholderUsed: match.placeholderUsed || false,
         category: match.category || 'workout',
+        exerciseType: match.exerciseType || 'compound',
+        restSeconds: match.restSeconds ?? 0,
+        warmupRamp: match.warmupRamp || [],
         duration: match.duration ?? 0,
         durationUnit: match.durationUnit || 'sec',
       });
@@ -666,6 +672,9 @@ function AddExerciseModal({ splitDays, onConfirm, onClose }) {
         imageUrl: s.imageUrl || '',
         placeholderUsed: s.placeholderUsed || false,
         category: s.category || 'workout',
+        exerciseType: s.exerciseType || 'compound',
+        restSeconds: s.restSeconds ?? 0,
+        warmupRamp: s.warmupRamp || [],
         duration: s.duration ?? 0,
         durationUnit: s.durationUnit || 'sec',
       });
@@ -855,6 +864,40 @@ function AddExerciseModal({ splitDays, onConfirm, onClose }) {
             <option value="warmup">Warm-up</option>
             <option value="cooldown">Cool Down</option>
           </select>
+
+          <div style={{ ...LABEL, marginBottom: 4 }}>Type</div>
+          <select className="select" style={{ width: '100%', marginBottom: 12 }} value={form.exerciseType} onChange={(e) => set('exerciseType', e.target.value)}>
+            <option value="compound">Compound</option>
+            <option value="isolation">Isolation</option>
+            <option value="core">Core</option>
+          </select>
+
+          <div style={{ ...LABEL, marginBottom: 4 }}>Rest (seconds)</div>
+          <input className="input" type="number" min="0" step="5" style={{ width: '100%', marginBottom: 16 }} placeholder="Default by type" value={form.restSeconds || ''} onChange={(e) => set('restSeconds', +e.target.value || 0)} />
+
+          <div style={{ ...LABEL, marginBottom: 4 }}>Warm-up Ramp <span style={{ color: 'var(--text3)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></div>
+          <div style={{ marginBottom: 16 }}>
+            {(form.warmupRamp || []).map((step, i) => (
+              <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
+                <input className="input" type="number" min="0" max="100" style={{ width: 64 }} placeholder="%" value={step.pct ?? ''} onChange={(e) => {
+                  const next = form.warmupRamp.map((st, idx) => (idx === i ? { ...st, pct: +e.target.value || 0 } : st));
+                  set('warmupRamp', next);
+                }} />
+                <span style={{ fontSize: 11, color: 'var(--text3)' }}>% ×</span>
+                <input className="input" type="number" min="0" style={{ width: 56 }} placeholder="reps" value={step.reps ?? ''} onChange={(e) => {
+                  const next = form.warmupRamp.map((st, idx) => (idx === i ? { ...st, reps: +e.target.value || 0 } : st));
+                  set('warmupRamp', next);
+                }} />
+                <span style={{ fontSize: 11, color: 'var(--text3)' }}>reps</span>
+                <button type="button" onClick={() => set('warmupRamp', form.warmupRamp.filter((_, idx) => idx !== i))} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: 13 }}>✕</button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => set('warmupRamp', [...(form.warmupRamp || []), { pct: 50, reps: 8 }])}
+              style={{ padding: '4px 10px', borderRadius: 6, border: '1px dashed var(--border2)', background: 'transparent', color: 'var(--text3)', fontSize: 11, fontWeight: 800, cursor: 'pointer' }}
+            >+ Add ramp step</button>
+          </div>
 
           <select className="select" style={{ width: '100%', marginBottom: 16 }} value={form.weightUnit} onChange={(e) => set('weightUnit', e.target.value)}>
             <option value="kg">kg</option>
@@ -1169,6 +1212,9 @@ function EditExerciseModal({ ex, splitId, dayId, splitDays, onConfirm, onClose, 
     muscleTargets: ex.muscleTargets || [],
     untilFailure: ex.untilFailure || false,
     category: ex.category || 'workout',
+    exerciseType: ex.exerciseType || 'compound',
+    restSeconds: ex.restSeconds ?? 0,
+    warmupRamp: ex.warmupRamp || [],
     duration: ex.duration ?? 0,
     durationUnit: ex.durationUnit || 'sec',
   });
@@ -1204,6 +1250,9 @@ function EditExerciseModal({ ex, splitId, dayId, splitDays, onConfirm, onClose, 
             weightUnit: ex.weightUnit || 'kg',
             untilFailure: ex.untilFailure || false,
             category: ex.category || 'workout',
+            exerciseType: ex.exerciseType || 'compound',
+            restSeconds: ex.restSeconds ?? 0,
+            warmupRamp: ex.warmupRamp || [],
             duration: ex.duration ?? 0,
             durationUnit: ex.durationUnit || 'sec',
             date: log.date || '',
@@ -1242,6 +1291,9 @@ function EditExerciseModal({ ex, splitId, dayId, splitDays, onConfirm, onClose, 
         muscleTargets: match.muscleTargets || [],
         untilFailure: !!match.untilFailure,
         category: match.category || 'workout',
+        exerciseType: match.exerciseType || 'compound',
+        restSeconds: match.restSeconds ?? 0,
+        warmupRamp: match.warmupRamp || [],
         duration: match.duration ?? 0,
         durationUnit: match.durationUnit || 'sec',
       });
@@ -1257,6 +1309,9 @@ function EditExerciseModal({ ex, splitId, dayId, splitDays, onConfirm, onClose, 
         muscleTargets: s.muscleTargets,
         untilFailure: s.untilFailure,
         category: s.category || 'workout',
+        exerciseType: s.exerciseType || 'compound',
+        restSeconds: s.restSeconds ?? 0,
+        warmupRamp: s.warmupRamp || [],
         duration: s.duration ?? 0,
         durationUnit: s.durationUnit || 'sec',
       });
@@ -1524,6 +1579,42 @@ function EditExerciseModal({ ex, splitId, dayId, splitDays, onConfirm, onClose, 
               <option value="warmup">Warm-up</option>
               <option value="cooldown">Cool Down</option>
             </select>
+          </div>
+
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ ...LABEL, marginBottom: 4 }}>Type</div>
+            <select className="select" style={{ width: '100%', margin: 0 }} value={form.exerciseType} onChange={(e) => setForm(f => ({ ...f, exerciseType: e.target.value }))}>
+              <option value="compound">Compound</option>
+              <option value="isolation">Isolation</option>
+              <option value="core">Core</option>
+            </select>
+          </div>
+
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ ...LABEL, marginBottom: 4 }}>Rest (seconds)</div>
+            <input className="input" type="number" min="0" step="5" style={{ width: '100%', margin: 0 }} placeholder="Default by type" value={form.restSeconds || ''} onChange={(e) => setForm(f => ({ ...f, restSeconds: +e.target.value || 0 }))} />
+          </div>
+
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ ...LABEL, marginBottom: 4 }}>Warm-up Ramp <span style={{ color: 'var(--text3)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></div>
+            {(form.warmupRamp || []).map((step, i) => (
+              <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
+                <input className="input" type="number" min="0" max="100" style={{ width: 64 }} placeholder="%" value={step.pct ?? ''} onChange={(e) => {
+                  setForm(f => ({ ...f, warmupRamp: f.warmupRamp.map((st, idx) => (idx === i ? { ...st, pct: +e.target.value || 0 } : st)) }));
+                }} />
+                <span style={{ fontSize: 11, color: 'var(--text3)' }}>% ×</span>
+                <input className="input" type="number" min="0" style={{ width: 56 }} placeholder="reps" value={step.reps ?? ''} onChange={(e) => {
+                  setForm(f => ({ ...f, warmupRamp: f.warmupRamp.map((st, idx) => (idx === i ? { ...st, reps: +e.target.value || 0 } : st)) }));
+                }} />
+                <span style={{ fontSize: 11, color: 'var(--text3)' }}>reps</span>
+                <button type="button" onClick={() => setForm(f => ({ ...f, warmupRamp: f.warmupRamp.filter((_, idx) => idx !== i) }))} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: 13 }}>✕</button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => setForm(f => ({ ...f, warmupRamp: [...(f.warmupRamp || []), { pct: 50, reps: 8 }] }))}
+              style={{ padding: '4px 10px', borderRadius: 6, border: '1px dashed var(--border2)', background: 'transparent', color: 'var(--text3)', fontSize: 11, fontWeight: 800, cursor: 'pointer' }}
+            >+ Add ramp step</button>
           </div>
 
           <div style={{ marginBottom: 12 }}>

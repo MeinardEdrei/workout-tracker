@@ -184,7 +184,7 @@ router.post('/:id/duplicate', async (req, res) => {
 
 const EXERCISE_IMPORT_FIELDS = [
   'name', 'sets', 'reps', 'untilFailure', 'weight', 'weightUnit', 'muscleTargets',
-  'category', 'notes', 'duration', 'durationUnit',
+  'category', 'notes', 'duration', 'durationUnit', 'exerciseType', 'restSeconds', 'warmupRamp',
 ];
 const DAY_IMPORT_FIELDS = ['name', 'tag', 'isRest'];
 
@@ -496,6 +496,8 @@ router.post('/public/:id/copy', async (req, res) => {
         order: e.order,
         muscleTargets: e.muscleTargets || [],
         category: e.category || 'workout',
+        exerciseType: e.exerciseType || 'compound',
+        restSeconds: e.restSeconds || 0,
       })),
     }));
     // Check if the user already has any active split. If not, make this copied one active.
@@ -568,6 +570,8 @@ router.post('/:id/reapply', async (req, res) => {
           imageUrl: saved.imageUrl ?? '',
           imageSource: saved.imageSource ?? '',
           category: e.category || 'workout',
+          exerciseType: e.exerciseType || 'compound',
+          restSeconds: e.restSeconds || 0,
         };
       }),
     }));
@@ -726,6 +730,9 @@ router.post('/:id/days/:dayId/exercises', async (req, res) => {
       imageSource: req.body.imageUrl ? 'auto' : '',
       placeholderUsed: req.body.placeholderUsed === true,
       category: req.body.category || 'workout',
+      exerciseType: req.body.exerciseType || 'compound',
+      restSeconds: req.body.restSeconds || 0,
+      warmupRamp: req.body.warmupRamp || [],
     });
     await split.save();
     res.status(201).json(day.exercises[day.exercises.length - 1]);
@@ -787,11 +794,11 @@ router.put('/:id/days/:dayId/exercises/:exId', async (req, res) => {
     if (!day) return res.status(404).json({ error: 'Day not found' });
     const ex = day.exercises.id(req.params.exId);
     if (!ex) return res.status(404).json({ error: 'Exercise not found' });
-    const structuralFields = ['name', 'sets', 'reps', 'weight', 'weightUnit', 'muscleTargets', 'untilFailure', 'imageUrl', 'imageSource', 'placeholderUsed', 'category', 'notes'];
+    const structuralFields = ['name', 'sets', 'reps', 'weight', 'weightUnit', 'muscleTargets', 'untilFailure', 'imageUrl', 'imageSource', 'placeholderUsed', 'category', 'notes', 'exerciseType', 'restSeconds', 'warmupRamp'];
     // Only real template/structure edits get a version snapshot (for revert)
     // — weight/notes/duration are routine in-workout tracking edits made many
     // times per session and don't need a full split-tree copy each time.
-    const snapshotTriggerFields = ['name', 'muscleTargets', 'untilFailure', 'imageUrl', 'imageSource', 'placeholderUsed', 'category'];
+    const snapshotTriggerFields = ['name', 'muscleTargets', 'untilFailure', 'imageUrl', 'imageSource', 'placeholderUsed', 'category', 'exerciseType'];
     if (snapshotTriggerFields.some((f) => req.body[f] !== undefined)) await snapshotVersion(split);
     const fields = [...structuralFields, 'todaySetLogs', 'todaySetLogsDate'];
     fields.forEach((f) => { if (req.body[f] !== undefined) ex[f] = req.body[f]; });

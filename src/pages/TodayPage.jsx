@@ -638,6 +638,7 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
   const [logRirVal, setLogRirVal] = useState(null);
   const [logWeightVal, setLogWeightVal] = useState(String(ex.weight ?? 0));
   const [logIsDropSet, setLogIsDropSet] = useState(false);
+  const [restRemaining, setRestRemaining] = useState(null);
 
   function openActionsMenu() {
     const rect = menuBtnRef.current.getBoundingClientRect();
@@ -673,6 +674,19 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
       }
     },
   });
+
+  const lastSessionInfo = useMemo(() => {
+    const key = (ex.name || '').trim().toLowerCase();
+    if (!key) return null;
+    const candidates = (logs || [])
+      .filter((l) => l.date !== dateStr && (l.exercises || []).some((e) => (e.name || '').trim().toLowerCase() === key))
+      .sort((a, b) => (a.date < b.date ? 1 : -1));
+    if (candidates.length === 0) return null;
+    const log = candidates[0];
+    const match = log.exercises.find((e) => (e.name || '').trim().toLowerCase() === key);
+    if (!match) return null;
+    return { date: log.date, setLogs: match.setLogs || [], reps: match.reps, weight: match.weight, weightUnit: match.weightUnit || 'kg' };
+  }, [logs, ex.name, dateStr]);
 
   const prInfo = useMemo(() => {
     const historicalPrs = getExercisePRs(logs, dateStr);
@@ -712,6 +726,21 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
   const effectiveChecked = isCompleted ? !ex.skipped : (ex.lastCheckedDate === TODAY_STR ? ex.checked : false);
   const effectiveSkipped = isCompleted ? !!ex.skipped : (ex.lastSkippedDate === TODAY_STR ? ex.skipped : false);
   const effectiveSetLogs = isCompleted ? [] : (ex.todaySetLogsDate === TODAY_STR ? (ex.todaySetLogs || []) : []);
+
+  const warmupEl = !readOnly && !effectiveChecked && effectiveSetLogs.length === 0 && (ex.warmupRamp || []).length > 0 && ex.weight > 0 && (
+    <div style={{ fontSize: isHero ? 11 : 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)', textAlign: 'center' }}>
+      Warm-up: {ex.warmupRamp.map((step) => `${step.pct}%×${step.reps} (${Math.round((step.pct / 100) * ex.weight * 2) / 2}${ex.weightUnit || 'kg'})`).join(', ')}
+    </div>
+  );
+
+  const lastSessionEl = !readOnly && !effectiveChecked && effectiveSetLogs.length === 0 && lastSessionInfo
+    && (lastSessionInfo.setLogs.length > 0 || lastSessionInfo.weight > 0) && (
+    <div style={{ fontSize: isHero ? 11 : 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)', textAlign: 'center' }}>
+      Last time: {lastSessionInfo.setLogs.length > 0
+        ? lastSessionInfo.setLogs.map((s) => `${s.reps}${s.weight > 0 ? `@${s.weight}${lastSessionInfo.weightUnit}` : ''}${s.rir != null ? `/${s.rir === 5 ? '5+' : s.rir}` : ''}`).join(', ')
+        : `${lastSessionInfo.reps || 0} reps${lastSessionInfo.weight > 0 ? ` @ ${lastSessionInfo.weight}${lastSessionInfo.weightUnit}` : ''}`}
+    </div>
+  );
 
   const toggleMutation = useMutation({
     mutationFn: () => {
@@ -1094,6 +1123,45 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
     closeSetLogger();
   }
 
+  const REST_DEFAULTS = { compound: 120, isolation: 90, core: 60 };
+
+  useEffect(() => {
+    if (restRemaining == null || restRemaining <= 0) return;
+    const timer = setTimeout(() => setRestRemaining((r) => r - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [restRemaining]);
+
+  function startRest() {
+    setRestRemaining(ex.restSeconds > 0 ? ex.restSeconds : (REST_DEFAULTS[ex.exerciseType] || REST_DEFAULTS.compound));
+  }
+
+  const restTimerEl = !readOnly && effectiveSetLogs.length > 0 && !loggingSet && (
+    restRemaining != null ? (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+        <span style={{ fontSize: isHero ? 20 : 14, fontWeight: 900, fontFamily: 'var(--font-mono)', color: restRemaining > 0 ? 'var(--accent)' : 'var(--text3)' }}>
+          {restRemaining > 0 ? `${String(Math.floor(restRemaining / 60)).padStart(2, '0')}:${String(restRemaining % 60).padStart(2, '0')}` : 'Rest done'}
+        </span>
+        <button
+          type="button"
+          onClick={() => setRestRemaining(null)}
+          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text3)', fontSize: 11, fontWeight: 800, fontFamily: 'var(--font-mono)' }}
+        >
+          {restRemaining > 0 ? 'Skip' : 'Dismiss'}
+        </button>
+      </div>
+    ) : (
+      <div style={{ display: 'flex', justifyContent: 'center' }}>
+        <button
+          type="button"
+          onClick={startRest}
+          style={{ padding: isHero ? '6px 14px' : '4px 10px', borderRadius: 6, cursor: 'pointer', border: '1px dashed var(--border2)', background: 'transparent', color: 'var(--text3)', fontSize: isHero ? 12 : 11, fontWeight: 800, fontFamily: 'var(--font-mono)' }}
+        >
+          Start Rest
+        </button>
+      </div>
+    )
+  );
+
   // The active reps+RIR entry form — shared by both variants, just sized
   // down for the compact queue row so it doesn't dominate a dense list.
   const setLogFormEl = (
@@ -1420,6 +1488,8 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
         </div>
 
         {weightEditorEl}
+        {warmupEl}
+        {lastSessionEl}
 
         {effectiveSkipped ? (
           <div
@@ -1440,6 +1510,7 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
             </div>
           )
         ) : editingSetsReps ? setsRepsEditorEl : setLoggerEl}
+        {restTimerEl}
 
         {actionsRowEl}
         {actionsMenuEl}
@@ -1573,6 +1644,8 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
             </span>
           )}
         </div>
+        {warmupEl}
+        {lastSessionEl}
         <div style={{ display: 'flex', alignItems: 'center', marginTop: 2, flexWrap: 'wrap', gap: 4 }}>
           {effectiveSkipped ? (
             <div
@@ -1593,6 +1666,7 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
               </div>
             )
           ) : editingSetsReps ? setsRepsEditorEl : setLoggerEl}
+          {restTimerEl}
           {actionsRowEl}
           {actionsMenuEl}
         </div>
