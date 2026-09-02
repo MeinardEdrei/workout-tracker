@@ -726,6 +726,9 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
   const effectiveChecked = isCompleted ? !ex.skipped : (ex.lastCheckedDate === TODAY_STR ? ex.checked : false);
   const effectiveSkipped = isCompleted ? !!ex.skipped : (ex.lastSkippedDate === TODAY_STR ? ex.skipped : false);
   const effectiveSetLogs = isCompleted ? [] : (ex.todaySetLogsDate === TODAY_STR ? (ex.todaySetLogs || []) : []);
+  // Distinguishes "the target-sets logger did this for you" from a manual
+  // checkbox tap, so overriding completion by hand still reads as deliberate.
+  const isAutoChecked = effectiveChecked && ex.sets > 0 && effectiveSetLogs.length >= ex.sets;
 
   const warmupEl = !readOnly && !effectiveChecked && effectiveSetLogs.length === 0 && (ex.warmupRamp || []).length > 0 && ex.weight > 0 && (
     <div style={{ fontSize: isHero ? 11 : 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)', textAlign: 'center' }}>
@@ -785,13 +788,23 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
     },
   });
 
+  // Target sets reached while logging via the set-by-set logger auto-completes
+  // the exercise — the app already knows you're done, a separate checkbox tap
+  // is redundant. The checkbox itself still works as a manual override.
+  function autoCompleteFields(nextSetLogs) {
+    if (!(ex.sets > 0)) return {};
+    const done = nextSetLogs.length >= ex.sets;
+    return { checked: done, lastCheckedDate: done ? TODAY_STR : ex.lastCheckedDate };
+  }
+
   const setLogsMutation = useMutation({
     mutationFn: (nextSetLogs) => {
-      if (localOnly) return Promise.resolve({ ...ex, todaySetLogs: nextSetLogs, todaySetLogsDate: TODAY_STR });
-      return storage.updateExercise(splitId, dayId, ex._id, { todaySetLogs: nextSetLogs, todaySetLogsDate: TODAY_STR });
+      const payload = { todaySetLogs: nextSetLogs, todaySetLogsDate: TODAY_STR, ...autoCompleteFields(nextSetLogs) };
+      if (localOnly) return Promise.resolve({ ...ex, ...payload });
+      return storage.updateExercise(splitId, dayId, ex._id, payload);
     },
     onMutate: (nextSetLogs) => {
-      onToggle({ ...ex, todaySetLogs: nextSetLogs, todaySetLogsDate: TODAY_STR });
+      onToggle({ ...ex, todaySetLogs: nextSetLogs, todaySetLogsDate: TODAY_STR, ...autoCompleteFields(nextSetLogs) });
     },
     onSuccess: (updated) => {
       onToggle(updated);
@@ -1114,16 +1127,22 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
     setLogIsDropSet(false);
   }
 
+  const REST_DEFAULTS = { compound: 120, isolation: 90, core: 60 };
+
   function confirmSetLog() {
     const entry = { reps: Math.max(0, +logRepsVal || 0), rir: logRirVal, weight: Math.max(0, +logWeightVal || 0), isDropSet: logIsDropSet };
-    const next = editingLogIndex != null
-      ? effectiveSetLogs.map((s, idx) => (idx === editingLogIndex ? entry : s))
-      : [...effectiveSetLogs, entry];
+    const isNewSet = editingLogIndex == null;
+    const next = isNewSet
+      ? [...effectiveSetLogs, entry]
+      : effectiveSetLogs.map((s, idx) => (idx === editingLogIndex ? entry : s));
     setLogsMutation.mutate(next);
     closeSetLogger();
+    // Auto-start rest right where the log button was — editing a past set
+    // isn't a fresh set, so it shouldn't restart the clock.
+    if (isNewSet) {
+      setRestRemaining(ex.restSeconds > 0 ? ex.restSeconds : (REST_DEFAULTS[ex.exerciseType] || REST_DEFAULTS.compound));
+    }
   }
-
-  const REST_DEFAULTS = { compound: 120, isolation: 90, core: 60 };
 
   useEffect(() => {
     if (restRemaining == null || restRemaining <= 0) return;
@@ -1131,35 +1150,21 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
     return () => clearTimeout(timer);
   }, [restRemaining]);
 
-  function startRest() {
-    setRestRemaining(ex.restSeconds > 0 ? ex.restSeconds : (REST_DEFAULTS[ex.exerciseType] || REST_DEFAULTS.compound));
-  }
-
-  const restTimerEl = !readOnly && effectiveSetLogs.length > 0 && !loggingSet && (
-    restRemaining != null ? (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-        <span style={{ fontSize: isHero ? 20 : 14, fontWeight: 900, fontFamily: 'var(--font-mono)', color: restRemaining > 0 ? 'var(--accent)' : 'var(--text3)' }}>
-          {restRemaining > 0 ? `${String(Math.floor(restRemaining / 60)).padStart(2, '0')}:${String(restRemaining % 60).padStart(2, '0')}` : 'Rest done'}
-        </span>
-        <button
-          type="button"
-          onClick={() => setRestRemaining(null)}
-          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text3)', fontSize: 11, fontWeight: 800, fontFamily: 'var(--font-mono)' }}
-        >
-          {restRemaining > 0 ? 'Skip' : 'Dismiss'}
-        </button>
-      </div>
-    ) : (
-      <div style={{ display: 'flex', justifyContent: 'center' }}>
-        <button
-          type="button"
-          onClick={startRest}
-          style={{ padding: isHero ? '6px 14px' : '4px 10px', borderRadius: 6, cursor: 'pointer', border: '1px dashed var(--border2)', background: 'transparent', color: 'var(--text3)', fontSize: isHero ? 12 : 11, fontWeight: 800, fontFamily: 'var(--font-mono)' }}
-        >
-          Start Rest
-        </button>
-      </div>
-    )
+  // Takes over the exact slot the "+ log set" trigger occupies — a rest
+  // clock you have to hunt for in a separate row defeats the point.
+  const restTimerEl = restRemaining != null && (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+      <span style={{ fontSize: isHero ? 20 : 14, fontWeight: 900, fontFamily: 'var(--font-mono)', color: restRemaining > 0 ? 'var(--accent)' : 'var(--text3)' }}>
+        {restRemaining > 0 ? `${String(Math.floor(restRemaining / 60)).padStart(2, '0')}:${String(restRemaining % 60).padStart(2, '0')}` : 'Rest done'}
+      </span>
+      <button
+        type="button"
+        onClick={() => setRestRemaining(null)}
+        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text3)', fontSize: 11, fontWeight: 800, fontFamily: 'var(--font-mono)' }}
+      >
+        {restRemaining > 0 ? 'Skip' : 'Dismiss'}
+      </button>
+    </div>
   );
 
   // The active reps+RIR entry form — shared by both variants, just sized
@@ -1251,19 +1256,21 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
 
       {!readOnly && (loggingSet ? setLogFormEl : (
         <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap' }}>
-          <button
-            type="button"
-            onClick={() => openSetLogger(null, null)}
-            style={{
-              padding: '8px 16px', borderRadius: 6, cursor: 'pointer',
-              border: targetSetsReached ? '1px dashed var(--border2)' : '1.5px solid var(--accent)',
-              background: targetSetsReached ? 'transparent' : 'rgba(232,255,90,0.08)',
-              color: targetSetsReached ? 'var(--text3)' : 'var(--accent)',
-              fontSize: 13, fontWeight: 800, fontFamily: 'var(--font-mono)',
-            }}
-          >
-            {targetSetsReached ? '+ Add Extra Set' : `Log Set ${nextSetNumber} · target ${repsLabel}`}
-          </button>
+          {restTimerEl || (
+            <button
+              type="button"
+              onClick={() => openSetLogger(null, null)}
+              style={{
+                padding: '8px 16px', borderRadius: 6, cursor: 'pointer',
+                border: targetSetsReached ? '1px dashed var(--border2)' : '1.5px solid var(--accent)',
+                background: targetSetsReached ? 'transparent' : 'rgba(232,255,90,0.08)',
+                color: targetSetsReached ? 'var(--text3)' : 'var(--accent)',
+                fontSize: 13, fontWeight: 800, fontFamily: 'var(--font-mono)',
+              }}
+            >
+              {targetSetsReached ? '+ Add Extra Set' : `Log Set ${nextSetNumber} · target ${repsLabel}`}
+            </button>
+          )}
           {effectiveSetLogs.length > 0 && (
             <button
               type="button"
@@ -1289,7 +1296,7 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
               {effectiveSetLogs.map((s) => `${s.reps}${s.weight > 0 ? `@${s.weight}` : ''}${s.rir != null ? `/${s.rir === 5 ? '5+' : s.rir}` : ''}${s.isDropSet ? '↓' : ''}`).join(', ')} reps
             </span>
           )}
-          {!readOnly && (
+          {!readOnly && (restTimerEl || (
             <button
               type="button"
               onClick={() => openSetLogger(null, null)}
@@ -1297,7 +1304,7 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
             >
               {targetSetsReached ? '+ extra set' : `+ log set ${nextSetNumber}`}
             </button>
-          )}
+          ))}
           {!readOnly && effectiveSetLogs.length > 0 && (
             <button
               type="button"
@@ -1510,7 +1517,6 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
             </div>
           )
         ) : editingSetsReps ? setsRepsEditorEl : setLoggerEl}
-        {restTimerEl}
 
         {actionsRowEl}
         {actionsMenuEl}
@@ -1583,11 +1589,11 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
           if (effectiveSkipped) { if (!skipMutation.isPending) skipMutation.mutate(); return; }
           if (!toggleMutation.isPending) toggleMutation.mutate();
         }}
-        title={effectiveSkipped ? 'Tap to undo skip' : undefined}
+        title={effectiveSkipped ? 'Tap to undo skip' : isAutoChecked ? 'Auto-completed — target sets logged. Tap to undo.' : undefined}
         style={{
           width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
-          border: `2px solid ${effectiveChecked ? 'var(--accent)' : 'var(--border2)'}`,
-          background: effectiveChecked ? 'var(--accent)' : 'transparent',
+          border: `2px solid ${isAutoChecked ? 'var(--good, #35d07f)' : effectiveChecked ? 'var(--accent)' : 'var(--border2)'}`,
+          background: isAutoChecked ? 'var(--good, #35d07f)' : effectiveChecked ? 'var(--accent)' : 'transparent',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           cursor: readOnly ? 'default' : 'pointer',
           transition: 'all 0.15s',
@@ -1666,7 +1672,6 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
               </div>
             )
           ) : editingSetsReps ? setsRepsEditorEl : setLoggerEl}
-          {restTimerEl}
           {actionsRowEl}
           {actionsMenuEl}
         </div>

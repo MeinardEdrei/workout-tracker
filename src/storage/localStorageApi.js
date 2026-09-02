@@ -477,7 +477,7 @@ export function updateExercise(splitId, dayId, exId, data) {
   // times per session and don't need a full split-tree copy each time.
   const snapshotTriggerFields = ['name', 'muscleTargets', 'untilFailure', 'imageUrl', 'imageSource', 'placeholderUsed', 'category', 'exerciseType'];
   if (snapshotTriggerFields.some((f) => data[f] !== undefined)) snapshotVersion(split);
-  [...structuralFields, 'todaySetLogs', 'todaySetLogsDate'].forEach((f) => {
+  [...structuralFields, 'todaySetLogs', 'todaySetLogsDate', 'checked', 'lastCheckedDate'].forEach((f) => {
     if (data[f] !== undefined) ex[f] = data[f];
   });
   writeSplits(splits);

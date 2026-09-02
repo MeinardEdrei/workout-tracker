@@ -800,7 +800,7 @@ router.put('/:id/days/:dayId/exercises/:exId', async (req, res) => {
     // times per session and don't need a full split-tree copy each time.
     const snapshotTriggerFields = ['name', 'muscleTargets', 'untilFailure', 'imageUrl', 'imageSource', 'placeholderUsed', 'category', 'exerciseType'];
     if (snapshotTriggerFields.some((f) => req.body[f] !== undefined)) await snapshotVersion(split);
-    const fields = [...structuralFields, 'todaySetLogs', 'todaySetLogsDate'];
+    const fields = [...structuralFields, 'todaySetLogs', 'todaySetLogsDate', 'checked', 'lastCheckedDate'];
     fields.forEach((f) => { if (req.body[f] !== undefined) ex[f] = req.body[f]; });
     if (req.body.untilFailure === true) ex.reps = null;
     await split.save();
