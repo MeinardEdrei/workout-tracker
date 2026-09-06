@@ -10,6 +10,7 @@ import { MusclePill } from '../components/MusclePill';
 import ExerciseThumbnail from '../components/ExerciseThumbnail';
 import { isSyncExcluded, excludeFromSync } from '../utils/syncPrefs';
 import { computeStreak } from '../utils/streaks';
+import { getActiveRestTimer, setActiveRestTimer, clearActiveRestTimer, secondsRemaining } from '../utils/restTimer';
 import { createPortal } from 'react-dom';
 import AiChatBubble from '../components/AiChatBubble';
 import { X, Check, RotateCcw, Trophy, BarChart3, StickyNote, Dumbbell, Zap, Moon, PartyPopper, Flame, ChevronDown, CalendarDays, SkipForward, MoreHorizontal, Ban } from 'lucide-react';
@@ -646,7 +647,14 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
   const [logRirVal, setLogRirVal] = useState(null);
   const [logWeightVal, setLogWeightVal] = useState(String(ex.weight ?? 0));
   const [logIsDropSet, setLogIsDropSet] = useState(false);
-  const [restRemaining, setRestRemaining] = useState(null);
+  // Wall-clock deadline, not a decrementing counter — see src/utils/restTimer.js.
+  // Initialized from localStorage so an active rest survives this row
+  // unmounting (page switch) and remounting (screen off / app backgrounded).
+  const [restEndsAt, setRestEndsAt] = useState(() => {
+    const rec = getActiveRestTimer();
+    return rec && rec.exerciseId === rawEx._id ? rec.restEndsAt : null;
+  });
+  const [restNow, setRestNow] = useState(Date.now());
 
   function openActionsMenu() {
     const rect = menuBtnRef.current.getBoundingClientRect();
@@ -1246,15 +1254,30 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
     // Auto-start rest right where the log button was — editing a past set
     // isn't a fresh set, so it shouldn't restart the clock.
     if (isNewSet) {
-      setRestRemaining(ex.restSeconds > 0 ? ex.restSeconds : (REST_DEFAULTS[ex.exerciseType] || REST_DEFAULTS.compound));
+      const seconds = ex.restSeconds > 0 ? ex.restSeconds : (REST_DEFAULTS[ex.exerciseType] || REST_DEFAULTS.compound);
+      const endsAt = Date.now() + seconds * 1000;
+      setActiveRestTimer({ splitId, dayId, exerciseId: rawEx._id, exerciseName: rawEx.name, restEndsAt: endsAt });
+      setRestEndsAt(endsAt);
+      setRestNow(Date.now());
     }
   }
 
+  // Ticks the visible countdown once a second while this row is mounted —
+  // purely cosmetic. The deadline itself (restEndsAt) is wall-clock based,
+  // so remaining time stays correct even if this tick loop was throttled or
+  // didn't run at all while the tab/app was hidden or the screen was off.
   useEffect(() => {
-    if (restRemaining == null || restRemaining <= 0) return;
-    const timer = setTimeout(() => setRestRemaining((r) => r - 1), 1000);
-    return () => clearTimeout(timer);
-  }, [restRemaining]);
+    if (restEndsAt == null) return;
+    const timer = setInterval(() => setRestNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [restEndsAt]);
+
+  const restRemaining = restEndsAt == null ? null : secondsRemaining(restEndsAt, restNow);
+
+  function stopRest() {
+    clearActiveRestTimer(rawEx._id);
+    setRestEndsAt(null);
+  }
 
   // Takes over the exact slot the "+ log set" trigger occupies — a rest
   // clock you have to hunt for in a separate row defeats the point.
@@ -1265,7 +1288,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
       </span>
       <button
         type="button"
-        onClick={() => setRestRemaining(null)}
+        onClick={stopRest}
         style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text3)', fontSize: 11, fontWeight: 800, fontFamily: 'var(--font-mono)' }}
       >
         {restRemaining > 0 ? 'Skip' : 'Dismiss'}

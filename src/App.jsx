@@ -15,8 +15,59 @@ import StatsPage from './pages/StatsPage';
 import AdminPage from './pages/AdminPage';
 import CalculatorPage from './pages/CalculatorPage';
 import ProfilePage from './pages/ProfilePage';
+import { getActiveRestTimer, clearActiveRestTimer, secondsRemaining } from './utils/restTimer';
 
 const API = import.meta.env.VITE_API_URL || '';
+
+// Rest timers are started from a specific exercise row on the Today page,
+// but that row (and its local state) unmounts the moment you switch tabs.
+// This banner lives at the app shell level — always mounted — so the timer
+// stays visible and accurate regardless of which page you're on.
+function ActiveRestBanner({ onJumpToToday }) {
+  const [rec, setRec] = useState(() => getActiveRestTimer());
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(Date.now());
+      setRec(getActiveRestTimer());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  if (!rec) return null;
+  const remaining = secondsRemaining(rec.restEndsAt, now);
+  // A "Rest done" banner nobody dismissed shouldn't haunt the UI forever.
+  if (remaining <= 0 && now - rec.restEndsAt > 5 * 60 * 1000) {
+    clearActiveRestTimer(rec.exerciseId);
+    return null;
+  }
+
+  return (
+    <div
+      onClick={onJumpToToday}
+      style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+        padding: '8px 16px', cursor: 'pointer',
+        background: 'rgba(232,255,90,0.06)', borderBottom: '1px solid rgba(232,255,90,0.2)',
+      }}
+    >
+      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', fontFamily: 'var(--font-mono)' }}>
+        Resting · {rec.exerciseName}
+      </span>
+      <span style={{ fontSize: 14, fontWeight: 900, fontFamily: 'var(--font-mono)', color: remaining > 0 ? 'var(--accent)' : 'var(--text3)' }}>
+        {remaining > 0 ? `${String(Math.floor(remaining / 60)).padStart(2, '0')}:${String(remaining % 60).padStart(2, '0')}` : 'Rest done'}
+      </span>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); clearActiveRestTimer(rec.exerciseId); setRec(null); }}
+        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text3)', fontSize: 11, fontWeight: 800, fontFamily: 'var(--font-mono)' }}
+      >
+        {remaining > 0 ? 'Skip' : 'Dismiss'}
+      </button>
+    </div>
+  );
+}
 
 const NAV = [
   { id: 'today', label: 'Today' },
@@ -576,6 +627,7 @@ export default function App() {
           </>
         )}
       </div>
+      {!showProfile && <ActiveRestBanner onJumpToToday={() => { setShowProfile(false); setTab('today'); }} />}
       <nav className="bottom-nav">
         {nav.map((n) => {
           const Icon = ICONS[n.id];
