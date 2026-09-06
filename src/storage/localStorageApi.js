@@ -72,7 +72,7 @@ function readLogs() {
     return [];
   }
 }
-function writeLogs(l) { localStorage.setItem(LOGS_KEY, JSON.stringify(l)); }
+function writeLogs(l) { localStorage.setItem(LOGS_KEY(), JSON.stringify(l)); }
 
 const CATEGORY_ORDER_MAP = { warmup: 0, workout: 1, cooldown: 2 };
 const getCategoryOrder = (cat) => CATEGORY_ORDER_MAP[cat] ?? 1;
