@@ -1226,8 +1226,13 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
 
   function openSetLogger(existingIndex, existingEntry, isDropSet = false) {
     const lastLoggedWeight = effectiveSetLogs.length > 0 ? effectiveSetLogs[effectiveSetLogs.length - 1].weight : undefined;
+    // Defaults the next set's reps input to what was actually just performed
+    // (e.g. logged 7 on set 1 of a 10-target) rather than always snapping
+    // back to the static target — the target stays visible separately via
+    // repsLabel/nextSetNumber, this only changes what's pre-filled to edit.
+    const lastLoggedReps = effectiveSetLogs.length > 0 ? effectiveSetLogs[effectiveSetLogs.length - 1].reps : undefined;
     setEditingLogIndex(existingIndex);
-    setLogRepsVal(String(existingEntry?.reps ?? ex.reps ?? 0));
+    setLogRepsVal(String(existingEntry?.reps ?? lastLoggedReps ?? ex.reps ?? 0));
     setLogRirVal(existingEntry?.rir ?? null);
     setLogWeightVal(String(existingEntry?.weight ?? lastLoggedWeight ?? ex.weight ?? 0));
     setLogIsDropSet(existingEntry?.isDropSet ?? isDropSet);
