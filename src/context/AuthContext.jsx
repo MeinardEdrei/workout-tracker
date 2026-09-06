@@ -66,17 +66,23 @@ export function AuthProvider({ children }) {
       return;
     }
 
-    // Validate token by fetching /api/auth/me
-    fetch(`${API}/api/auth/me`, {
-      headers: { Authorization: `Bearer ${storedToken}` },
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((u) => {
-        if (u) setUser(u);
-        else localStorage.removeItem('wt_token');
-      })
-      .catch(() => localStorage.removeItem('wt_token'))
-      .finally(() => setLoading(false));
+    // Validate token by fetching /api/auth/me. A single transient failure
+    // right after login (cold-start hiccup, brief network blip) shouldn't
+    // permanently clear a freshly-issued, otherwise-valid token — retry a
+    // couple times with backoff before giving up.
+    function validate(attempt = 0) {
+      return fetch(`${API}/api/auth/me`, { headers: { Authorization: `Bearer ${storedToken}` } })
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error('auth check failed'))))
+        .then((u) => setUser(u))
+        .catch((err) => {
+          if (attempt < 2) {
+            return new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1))).then(() => validate(attempt + 1));
+          }
+          localStorage.removeItem('wt_token');
+          throw err;
+        });
+    }
+    validate().catch(() => {}).finally(() => setLoading(false));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Listen for 401 events from the API layer

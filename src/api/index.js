@@ -1,5 +1,22 @@
 const BASE = import.meta.env.VITE_API_URL || '';
 
+// Right after login, many requests fire concurrently (splits, logs,
+// heartbeat, ...) all using the same token. A single one of them 401ing —
+// a flaky request, a cold-start hiccup — doesn't mean the session is
+// actually dead, so a bare 401 no longer nukes the whole session by itself.
+// Instead it's confirmed against /api/auth/me first, de-duplicated so N
+// concurrent 401s share one recheck instead of racing each other.
+let revalidating = null;
+function confirmSessionInvalid(token) {
+  if (!revalidating) {
+    revalidating = fetch(`${BASE}/api/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => !r.ok)
+      .catch(() => false) // network hiccup on the recheck itself isn't proof the session is dead
+      .finally(() => { revalidating = null; });
+  }
+  return revalidating;
+}
+
 async function req(method, path, body) {
   const opts = {
     method,
@@ -11,7 +28,7 @@ async function req(method, path, body) {
   const res = await fetch(`${BASE}${path}`, opts);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
-    if (res.status === 401) {
+    if (res.status === 401 && token && await confirmSessionInvalid(token)) {
       localStorage.removeItem('wt_token');
       window.dispatchEvent(new Event('auth:logout'));
     }
