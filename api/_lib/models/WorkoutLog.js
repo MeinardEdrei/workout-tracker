@@ -14,6 +14,10 @@ const LogExerciseSchema = new mongoose.Schema({
   muscleTargets: { type: [String], default: [] },
   setLogs: { type: [{ reps: Number, rir: Number, weight: Number, isDropSet: { type: Boolean, default: false } }], default: [] },
   skipped: { type: Boolean, default: false },
+  // Set when this entry was logged under a temporary "just for today" swap —
+  // holds the originally-planned exercise name so history/PRs for it aren't
+  // attributed to whatever the user actually performed that day.
+  swappedFrom: { type: String, default: '' },
 });
 
 const WorkoutLogSchema = new mongoose.Schema(

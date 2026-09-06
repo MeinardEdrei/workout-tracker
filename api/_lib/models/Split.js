@@ -28,6 +28,29 @@ const ExerciseSchema = new mongoose.Schema({
   // WorkoutLog.exercises[].setLogs (the permanent record) on Finish Workout.
   todaySetLogs: { type: [{ reps: Number, rir: Number, weight: Number, isDropSet: { type: Boolean, default: false } }], default: [] },
   todaySetLogsDate: { type: String, default: '' },
+  // Temporary "just for today" substitute (e.g. machine in use, swap to
+  // dumbbells) — same reset-by-date idiom as todaySetLogs, never touches
+  // the permanent name/sets/reps/weight fields above.
+  todaySwap: {
+    type: {
+      name: String,
+      muscleTargets: [String],
+      imageUrl: String,
+      sets: Number,
+      reps: Number,
+      untilFailure: Boolean,
+      weight: Number,
+      weightUnit: String,
+    },
+    default: null,
+  },
+  todaySwapDate: { type: String, default: '' },
+  // Persistent memory of the most recent temporary swap, so next session's
+  // Today page can offer "swap again?" without redoing the search.
+  lastSwapName: { type: String, default: '' },
+  lastSwapImageUrl: { type: String, default: '' },
+  lastSwapMuscleTargets: { type: [String], default: [] },
+  lastSwapDate: { type: String, default: '' },
 });
 
 const DaySchema = new mongoose.Schema({

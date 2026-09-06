@@ -612,10 +612,18 @@ function CategoryHeader({ type }) {
   );
 }
 
-function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly, isCompleted, dateStr, logs, onShowToast, localOnly, variant = 'compact', onPromote }) {
+function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, readOnly, isCompleted, dateStr, logs, onShowToast, localOnly, variant = 'compact', onPromote }) {
   const isHero = variant === 'hero';
   const queryClient = useQueryClient();
   const { storage, storageKey } = useStorage();
+
+  // "Just for today" swap (e.g. machine in use, swap to dumbbells) — every
+  // ex.* read below sees the swapped identity/targets merged over the real
+  // exercise, without touching the permanent template. Mutations that must
+  // persist against the real document use rawEx explicitly, never ex.
+  const effectiveSwap = !isCompleted && rawEx.todaySwapDate === TODAY_STR ? rawEx.todaySwap : null;
+  const ex = useMemo(() => (effectiveSwap ? { ...rawEx, ...effectiveSwap } : rawEx), [rawEx, effectiveSwap]);
+
   const [editingWeight, setEditingWeight] = useState(false);
   const [weightVal, setWeightVal] = useState(String(ex.weight ?? 0));
   const [weightUnit, setWeightUnit] = useState(ex.weightUnit || 'kg');
@@ -659,16 +667,16 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
   const notesMutation = useMutation({
     mutationFn: (notes) => {
       if (localOnly) return Promise.resolve({ notes });
-      return storage.updateExercise(splitId, dayId, ex._id, { notes });
+      return storage.updateExercise(splitId, dayId, rawEx._id, { notes });
     },
     // Update visible state on tap, not after the network round-trip —
     // otherwise every edit feels laggy regardless of how fast the server is.
     onMutate: (notes) => {
-      onToggle({ ...ex, notes });
+      onToggle({ ...rawEx, notes });
       setEditingNotes(false);
     },
     onSuccess: (data) => {
-      onToggle({ ...ex, notes: data.notes });
+      onToggle({ ...rawEx, notes: data.notes });
       if (!localOnly) {
         queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
       }
@@ -712,15 +720,56 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
   const swapMutation = useMutation({
     mutationFn: (updatedData) => {
       if (localOnly) return Promise.resolve(updatedData);
-      return storage.updateExercise(splitId, dayId, ex._id, updatedData);
+      return storage.updateExercise(splitId, dayId, rawEx._id, updatedData);
     },
     onSuccess: (data) => {
       if (localOnly) {
-        onToggle({ ...ex, ...data });
+        onToggle({ ...rawEx, ...data });
       } else {
         queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
       }
       setShowSwapModal(false);
+    },
+  });
+
+  // "Just for today" swap — writes into todaySwap instead of the permanent
+  // template fields swapMutation above touches. Also used to one-tap re-apply
+  // a remembered lastSwapName from a previous session.
+  const todaySwapMutation = useMutation({
+    mutationFn: (swapData) => {
+      const patch = { todaySwap: swapData, todaySwapDate: TODAY_STR };
+      if (localOnly) return Promise.resolve(patch);
+      return storage.updateExercise(splitId, dayId, rawEx._id, patch);
+    },
+    onMutate: (swapData) => {
+      onToggle({ ...rawEx, todaySwap: swapData, todaySwapDate: TODAY_STR });
+    },
+    onSuccess: (data) => {
+      onToggle({ ...rawEx, ...data });
+      if (!localOnly) {
+        queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
+      }
+      setShowSwapModal(false);
+    },
+  });
+
+  // Clears an active temporary swap — the underlying planned exercise
+  // returns immediately. Sets already logged under the swapped identity
+  // don't belong to the reverted exercise, so they're cleared too.
+  const undoSwapMutation = useMutation({
+    mutationFn: () => {
+      const patch = { todaySwap: null, todaySwapDate: '', todaySetLogs: [], todaySetLogsDate: '' };
+      if (localOnly) return Promise.resolve(patch);
+      return storage.updateExercise(splitId, dayId, rawEx._id, patch);
+    },
+    onMutate: () => {
+      onToggle({ ...rawEx, todaySwap: null, todaySwapDate: '', todaySetLogs: [], todaySetLogsDate: '' });
+    },
+    onSuccess: (data) => {
+      onToggle({ ...rawEx, ...data });
+      if (!localOnly) {
+        queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
+      }
     },
   });
   const effectiveChecked = isCompleted ? !ex.skipped : (ex.lastCheckedDate === TODAY_STR ? ex.checked : false);
@@ -745,17 +794,54 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
     </div>
   );
 
+  // "Just for today" swap indicator — the pill shows what this slot is
+  // really planned as, since ex.name below now reads the swapped identity.
+  const swappedPillEl = effectiveSwap && (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: isHero ? 10 : 9, fontWeight: 800, letterSpacing: '0.04em', color: 'var(--accent)', background: 'rgba(232,255,90,0.08)', border: '1px solid rgba(232,255,90,0.25)', padding: '2px 8px', borderRadius: 10, textTransform: 'uppercase' }}>
+      <SwapIcon /> Swapped from {rawEx.name}
+      {!readOnly && (
+        <button
+          type="button"
+          onClick={() => undoSwapMutation.mutate()}
+          style={{ background: 'none', border: 'none', padding: 0, marginLeft: 2, color: 'var(--accent)', textDecoration: 'underline', cursor: 'pointer', fontSize: 'inherit', fontWeight: 'inherit', fontFamily: 'inherit' }}
+        >Undo</button>
+      )}
+    </span>
+  );
+
+  // Remembered last swap, offered as a one-tap re-apply next time this slot
+  // comes up — only relevant when nothing's swapped in today already.
+  const lastSwapHintEl = !readOnly && !effectiveSwap && !effectiveChecked && rawEx.lastSwapName && (
+    <div style={{ fontSize: isHero ? 11 : 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)', textAlign: 'center' }}>
+      Last time: swapped to {rawEx.lastSwapName} —{' '}
+      <button
+        type="button"
+        onClick={() => todaySwapMutation.mutate({
+          name: rawEx.lastSwapName,
+          muscleTargets: rawEx.lastSwapMuscleTargets || [],
+          imageUrl: rawEx.lastSwapImageUrl || '',
+          sets: rawEx.sets,
+          reps: rawEx.reps,
+          untilFailure: rawEx.untilFailure,
+          weight: rawEx.weight,
+          weightUnit: rawEx.weightUnit,
+        })}
+        style={{ background: 'none', border: 'none', padding: 0, color: 'var(--accent)', textDecoration: 'underline', cursor: 'pointer', fontSize: 'inherit', fontWeight: 800, fontFamily: 'inherit' }}
+      >Swap again?</button>
+    </div>
+  );
+
   const toggleMutation = useMutation({
     mutationFn: () => {
       if (localOnly) {
         const nextChecked = !effectiveChecked;
-        return Promise.resolve({ ...ex, checked: nextChecked, lastCheckedDate: TODAY_STR });
+        return Promise.resolve({ ...rawEx, checked: nextChecked, lastCheckedDate: TODAY_STR });
       }
-      return storage.toggleExercise(splitId, dayId, ex._id);
+      return storage.toggleExercise(splitId, dayId, rawEx._id);
     },
     onMutate: () => {
       const nextChecked = !effectiveChecked;
-      onToggle({ ...ex, checked: nextChecked, lastCheckedDate: TODAY_STR, skipped: nextChecked ? false : ex.skipped });
+      onToggle({ ...rawEx, checked: nextChecked, lastCheckedDate: TODAY_STR, skipped: nextChecked ? false : rawEx.skipped });
     },
     onSuccess: (updated) => {
       onToggle(updated);
@@ -772,13 +858,13 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
     mutationFn: () => {
       if (localOnly) {
         const nextSkipped = !effectiveSkipped;
-        return Promise.resolve({ ...ex, skipped: nextSkipped, lastSkippedDate: TODAY_STR, checked: nextSkipped ? false : ex.checked });
+        return Promise.resolve({ ...rawEx, skipped: nextSkipped, lastSkippedDate: TODAY_STR, checked: nextSkipped ? false : rawEx.checked });
       }
-      return storage.toggleSkipExercise(splitId, dayId, ex._id);
+      return storage.toggleSkipExercise(splitId, dayId, rawEx._id);
     },
     onMutate: () => {
       const nextSkipped = !effectiveSkipped;
-      onToggle({ ...ex, skipped: nextSkipped, lastSkippedDate: TODAY_STR, checked: nextSkipped ? false : ex.checked });
+      onToggle({ ...rawEx, skipped: nextSkipped, lastSkippedDate: TODAY_STR, checked: nextSkipped ? false : rawEx.checked });
     },
     onSuccess: (updated) => {
       onToggle(updated);
@@ -800,11 +886,11 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
   const setLogsMutation = useMutation({
     mutationFn: (nextSetLogs) => {
       const payload = { todaySetLogs: nextSetLogs, todaySetLogsDate: TODAY_STR, ...autoCompleteFields(nextSetLogs) };
-      if (localOnly) return Promise.resolve({ ...ex, ...payload });
-      return storage.updateExercise(splitId, dayId, ex._id, payload);
+      if (localOnly) return Promise.resolve({ ...rawEx, ...payload });
+      return storage.updateExercise(splitId, dayId, rawEx._id, payload);
     },
     onMutate: (nextSetLogs) => {
-      onToggle({ ...ex, todaySetLogs: nextSetLogs, todaySetLogsDate: TODAY_STR, ...autoCompleteFields(nextSetLogs) });
+      onToggle({ ...rawEx, todaySetLogs: nextSetLogs, todaySetLogsDate: TODAY_STR, ...autoCompleteFields(nextSetLogs) });
     },
     onSuccess: (updated) => {
       onToggle(updated);
@@ -814,25 +900,35 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
     },
   });
 
+  // While a temporary swap is active, weight edits belong to the swap's own
+  // copy, not the permanently-planned exercise underneath it.
+  function weightPatch(weight, unit) {
+    return effectiveSwap
+      ? { todaySwap: { ...effectiveSwap, weight: +weight, weightUnit: unit }, todaySwapDate: TODAY_STR }
+      : { weight: +weight, weightUnit: unit };
+  }
+
   const weightMutation = useMutation({
     mutationFn: ({ weight, unit }) => {
-      if (localOnly) return Promise.resolve({ weight: +weight, weightUnit: unit });
-      return storage.updateExercise(splitId, dayId, ex._id, { weight: +weight, weightUnit: unit });
+      const patch = weightPatch(weight, unit);
+      if (localOnly) return Promise.resolve(patch);
+      return storage.updateExercise(splitId, dayId, rawEx._id, patch);
     },
     onMutate: ({ weight, unit }) => {
-      onToggle({ ...ex, weight: +weight, weightUnit: unit });
+      onToggle({ ...rawEx, ...weightPatch(weight, unit) });
       setEditingWeight(false);
     },
     onSuccess: (data) => {
-      onToggle({ ...ex, weight: data.weight, weightUnit: data.weightUnit });
+      onToggle({ ...rawEx, ...data });
       if (!localOnly) {
         queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
+        if (effectiveSwap) return; // temporary swap edits don't cascade to other days/splits
 
         const newW = data.weight;
         const oldW = ex.weight ?? 0;
         const newUnit = data.weightUnit;
         const oldUnit = ex.weightUnit || 'kg';
-        
+
         const oldWConverted = convertWeight(oldW, oldUnit, newUnit);
         if (Math.abs(newW - oldWConverted) < 0.01 || isSyncExcluded(ex.name)) return;
 
@@ -882,20 +978,30 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
     return payload;
   }
 
+  // Same swap-redirect as weightPatch above — sets/reps/duration edits made
+  // while swapped belong to the swap's own copy.
+  function setsRepsPatch(vals) {
+    const payload = buildSetsRepsPayload(vals);
+    return effectiveSwap
+      ? { todaySwap: { ...effectiveSwap, ...payload }, todaySwapDate: TODAY_STR }
+      : payload;
+  }
+
   const setsRepsMutation = useMutation({
     mutationFn: (vals) => {
-      const payload = buildSetsRepsPayload(vals);
-      if (localOnly) return Promise.resolve(payload);
-      return storage.updateExercise(splitId, dayId, ex._id, payload);
+      const patch = setsRepsPatch(vals);
+      if (localOnly) return Promise.resolve(patch);
+      return storage.updateExercise(splitId, dayId, rawEx._id, patch);
     },
     onMutate: (vals) => {
-      onToggle({ ...ex, ...buildSetsRepsPayload(vals) });
+      onToggle({ ...rawEx, ...setsRepsPatch(vals) });
       setEditingSetsReps(false);
     },
     onSuccess: (data, { sets, reps, duration, durationUnit }) => {
-      onToggle({ ...ex, ...data });
+      onToggle({ ...rawEx, ...data });
       if (!localOnly) {
         queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
+        if (effectiveSwap) return; // temporary swap edits don't cascade to other days/splits
 
         const newSets = +sets;
         const newReps = reps !== undefined ? +reps : 0;
@@ -1449,7 +1555,22 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
         <SwapExerciseModal
           splitDays={splitDays}
           currentExName={ex.name}
-          onConfirm={(updatedData) => swapMutation.mutate(updatedData)}
+          onConfirm={(updatedData, isPermanent) => {
+            if (isPermanent) {
+              swapMutation.mutate({ ...updatedData, todaySwap: null, todaySwapDate: '' });
+            } else {
+              todaySwapMutation.mutate({
+                name: updatedData.name,
+                muscleTargets: updatedData.muscleTargets,
+                imageUrl: updatedData.imageUrl,
+                sets: updatedData.sets,
+                reps: updatedData.reps,
+                untilFailure: updatedData.untilFailure,
+                weight: updatedData.weight,
+                weightUnit: updatedData.weightUnit,
+              });
+            }
+          }}
           onClose={() => setShowSwapModal(false)}
         />
       )}
@@ -1478,8 +1599,9 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
           }}>
             {ex.name}
           </div>
-          {(ex.isLastWeekWorkout || prInfo) && (
+          {(ex.isLastWeekWorkout || prInfo || swappedPillEl) && (
             <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+              {swappedPillEl}
               {ex.isLastWeekWorkout && (
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 9, fontWeight: 800, letterSpacing: '0.04em', color: 'var(--text3)', background: 'var(--bg3)', border: '1px solid var(--border2)', padding: '2px 7px', borderRadius: 10, textTransform: 'uppercase' }}>
                   <RotateCcw size={10} />{ex.isFromOtherDay ? ex.isFromOtherDay : 'Last Week'}
@@ -1497,6 +1619,7 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
         {weightEditorEl}
         {warmupEl}
         {lastSessionEl}
+        {lastSwapHintEl}
 
         {effectiveSkipped ? (
           <div
@@ -1618,6 +1741,7 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
           }}>
             {ex.name}
           </div>
+          {swappedPillEl}
           {ex.isLastWeekWorkout && (
             <span
               style={{
@@ -1652,6 +1776,7 @@ function ExerciseRow({ ex, index, splitId, dayId, splitDays, onToggle, readOnly,
         </div>
         {warmupEl}
         {lastSessionEl}
+        {lastSwapHintEl}
         <div style={{ display: 'flex', alignItems: 'center', marginTop: 2, flexWrap: 'wrap', gap: 4 }}>
           {effectiveSkipped ? (
             <div
@@ -2246,6 +2371,7 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
   const { storage, storageKey } = useStorage();
   const [form, setForm] = useState({ name: '', sets: 3, reps: 10, weight: 0, weightUnit: 'kg', muscleTargets: [], untilFailure: false });
   const [suggestions, setSuggestions] = useState([]);
+  const [isPermanent, setIsPermanent] = useState(false);
 
   const { data: logs = [] } = useQuery({
     queryKey: ['logs', storageKey],
@@ -2375,7 +2501,7 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
       weightUnit: finalWeightUnit,
       muscleTargets: finalMuscleTargets,
       imageUrl: form.imageUrl || (match ? match.imageUrl || '' : ''),
-    });
+    }, isPermanent);
   }
 
   return createPortal(
@@ -2474,6 +2600,16 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
             <option value="kg">kg</option>
             <option value="lbs">lbs</option>
           </select>
+
+          <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+            <button type="button" className={`btn ${!isPermanent ? 'btn-accent' : ''}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setIsPermanent(false)}>Just for today</button>
+            <button type="button" className={`btn ${isPermanent ? 'btn-accent' : ''}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setIsPermanent(true)}>Change permanently</button>
+          </div>
+          {!isPermanent && (
+            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: -10, marginBottom: 12 }}>
+              Only applies to today's session — {currentExName} stays in your plan for next time.
+            </div>
+          )}
 
           <div className="modal-actions" style={{ marginTop: 16 }}>
             <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
@@ -2689,16 +2825,34 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
         if (!checkedNow) {
           return { name: e.name, category: e.category || 'workout', muscleTargets: e.muscleTargets || [], skipped: true, sets: 0, reps: 0, weight: 0, setLogs: [] };
         }
+        // A "just for today" swap means what was actually performed differs
+        // from the plan — log it under the swapped identity, but keep a
+        // breadcrumb back to the planned exercise so its own history/PRs
+        // aren't attributed to whatever was substituted in.
+        const swap = e.todaySwapDate === TODAY_STR ? e.todaySwap : null;
+        const performed = swap ? { ...e, ...swap } : e;
         return {
-          name: e.name, sets: e.sets, reps: e.reps, weight: e.weight, weightUnit: e.weightUnit,
-          untilFailure: e.untilFailure, notes: e.notes || '', muscleTargets: e.muscleTargets || [],
+          name: performed.name, sets: performed.sets, reps: performed.reps, weight: performed.weight, weightUnit: performed.weightUnit,
+          untilFailure: performed.untilFailure, notes: e.notes || '', muscleTargets: performed.muscleTargets || [],
           category: e.category || 'workout',
           duration: e.duration ?? 0,
           durationUnit: e.durationUnit || 'sec',
           isLastWeekWorkout: e.isLastWeekWorkout || false,
-          setLogs: e.todaySetLogsDate === TODAY_STR ? (e.todaySetLogs || []) : []
+          setLogs: e.todaySetLogsDate === TODAY_STR ? (e.todaySetLogs || []) : [],
+          swappedFrom: swap ? e.name : '',
         };
       })
+    });
+    // Remember the swap so next session can offer a one-tap "swap again?"
+    exercises.forEach((e) => {
+      const swap = e.todaySwapDate === TODAY_STR ? e.todaySwap : null;
+      if (!swap) return;
+      storage.updateExercise(splitId, day._id, e._id, {
+        lastSwapName: swap.name,
+        lastSwapImageUrl: swap.imageUrl || '',
+        lastSwapMuscleTargets: swap.muscleTargets || [],
+        lastSwapDate: TODAY_STR,
+      }).catch(() => {});
     });
     setShowConfirmFinish(false);
   }
@@ -3447,14 +3601,17 @@ export default function TodayPage() {
             if (!checkedOnDate) {
               return { name: e.name, category: e.category || 'workout', muscleTargets: e.muscleTargets || [], skipped: true, sets: 0, reps: 0, weight: 0, setLogs: [] };
             }
+            const swap = e.todaySwapDate === dateStr ? e.todaySwap : null;
+            const performed = swap ? { ...e, ...swap } : e;
             return {
-              name: e.name,
-              sets: e.sets,
-              reps: e.reps,
-              weight: e.weight,
-              weightUnit: e.weightUnit,
+              name: performed.name,
+              sets: performed.sets,
+              reps: performed.reps,
+              weight: performed.weight,
+              weightUnit: performed.weightUnit,
               category: e.category || 'workout',
-              setLogs: e.todaySetLogsDate === dateStr ? (e.todaySetLogs || []) : []
+              setLogs: e.todaySetLogsDate === dateStr ? (e.todaySetLogs || []) : [],
+              swappedFrom: swap ? e.name : '',
             };
           })
         }).then(() => {
@@ -3462,6 +3619,16 @@ export default function TodayPage() {
             logsInvalidated = true;
             queryClient.invalidateQueries({ queryKey: ['logs'] });
           }
+          (day.exercises || []).forEach((e) => {
+            const swap = e.todaySwapDate === dateStr ? e.todaySwap : null;
+            if (!swap) return;
+            storage.updateExercise(splitId, day._id, e._id, {
+              lastSwapName: swap.name,
+              lastSwapImageUrl: swap.imageUrl || '',
+              lastSwapMuscleTargets: swap.muscleTargets || [],
+              lastSwapDate: dateStr,
+            }).catch(() => {});
+          });
         }).catch(err => {
           console.error("Auto-completion failed:", err);
           savingDatesRef.current.delete(dateStr);
