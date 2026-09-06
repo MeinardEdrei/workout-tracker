@@ -542,6 +542,9 @@ function computeProgressStatus(weightedSessionsInKg) {
 function ProgressionCard({ exercise }) {
   const [expanded, setExpanded] = useState(false);
   const [use1RM, setUse1RM] = useState(false);
+  // Which point is being scrubbed via touch/mouse drag on the chart —
+  // null means "show the latest point" (the default, no-interaction state).
+  const [scrubIndex, setScrubIndex] = useState(null);
   const sessions = exercise.sessions;
   // Only use sessions with actual weight for the chart — 0-weight sessions are rest/unlogged
   const weightedSessions = sessions.filter((s) => s.weight > 0);
@@ -589,23 +592,34 @@ function ProgressionCard({ exercise }) {
   let areaPath = '';
   let chartMin = 0;
   let chartMax = 0;
-  let lastPointPct = null;
+  let points = [];
   if (allConverted.length >= 3) {
     const vals = allConverted.map((s) => s.displayVal);
     chartMin = Math.min(...vals);
     chartMax = Math.max(...vals);
     const range = chartMax - chartMin || 1;
-    const points = allConverted.map((s, i) => {
+    points = allConverted.map((s, i) => {
       const x = (i / (allConverted.length - 1)) * 300;
       const y = 90 - ((s.displayVal - chartMin) / range) * 80;
       return [x, y];
     });
     linePath = points.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x},${y}`).join(' ');
     areaPath = `${linePath} L300,100 L0,100 Z`;
-    const [lx, ly] = points[points.length - 1];
-    lastPointPct = { left: (lx / 300) * 100, top: ly };
   }
   const chartUnit = last ? last.weightUnit : '';
+
+  // Defaults to the latest point when nothing's being touched/dragged.
+  const activeIndex = scrubIndex != null ? scrubIndex : points.length - 1;
+  const activePoint = points[activeIndex] || null;
+  const activeSession = allConverted[activeIndex] || null;
+  const activePointPct = activePoint ? { left: (activePoint[0] / 300) * 100, top: activePoint[1] } : null;
+
+  function scrubToClientX(el, clientX) {
+    if (points.length === 0) return;
+    const rect = el.getBoundingClientRect();
+    const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    setScrubIndex(Math.round(ratio * (points.length - 1)));
+  }
 
   return (
     <div style={{ marginBottom: 8, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--bg2)', overflow: 'hidden' }}>
@@ -678,14 +692,20 @@ function ProgressionCard({ exercise }) {
           {allConverted.length >= 3 && (
             <div style={{ padding: '14px 14px 4px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
-                <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                  {use1RM ? 'Est. 1RM' : 'Weight'} trend
+                <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: scrubIndex != null ? 'var(--accent)' : 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                  {scrubIndex != null && activeSession ? formatRelativeDate(activeSession.date) : `${use1RM ? 'Est. 1RM' : 'Weight'} trend`}
                 </div>
                 <div style={{ fontSize: 13, fontWeight: 900, fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>
-                  {Math.round(allConverted[allConverted.length - 1].displayVal * 10) / 10}{chartUnit}
+                  {activeSession ? Math.round(activeSession.displayVal * 10) / 10 : 0}{chartUnit}
                 </div>
               </div>
-              <div style={{ position: 'relative' }}>
+              <div
+                style={{ position: 'relative', touchAction: 'none', cursor: 'crosshair' }}
+                onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); scrubToClientX(e.currentTarget, e.clientX); }}
+                onPointerMove={(e) => { if (e.currentTarget.hasPointerCapture(e.pointerId)) scrubToClientX(e.currentTarget, e.clientX); }}
+                onPointerUp={(e) => { try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {} setScrubIndex(null); }}
+                onPointerCancel={() => setScrubIndex(null)}
+              >
                 <div style={{ position: 'absolute', top: 0, left: 0, fontSize: 8, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>{Math.round(chartMax * 10) / 10}{chartUnit}</div>
                 <div style={{ position: 'absolute', bottom: 0, left: 0, fontSize: 8, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>{Math.round(chartMin * 10) / 10}{chartUnit}</div>
                 <svg viewBox="0 0 300 100" preserveAspectRatio="none" style={{ width: '100%', height: 100, display: 'block' }}>
@@ -697,10 +717,13 @@ function ProgressionCard({ exercise }) {
                   </defs>
                   <path d={areaPath} fill={`url(#grad-${normKey(exercise.name)})`} />
                   <path d={linePath} fill="none" stroke="var(--accent)" strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
+                  {scrubIndex != null && activePoint && (
+                    <line x1={activePoint[0]} x2={activePoint[0]} y1="0" y2="100" stroke="var(--text3)" strokeWidth="1" strokeDasharray="3,3" vectorEffect="non-scaling-stroke" />
+                  )}
                 </svg>
-                {lastPointPct && (
+                {activePointPct && (
                   <div style={{
-                    position: 'absolute', left: `${lastPointPct.left}%`, top: lastPointPct.top,
+                    position: 'absolute', left: `${activePointPct.left}%`, top: activePointPct.top,
                     width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)',
                     transform: 'translate(-50%, -50%)', boxShadow: '0 0 0 3px rgba(232,255,90,0.2)',
                   }} />
@@ -1559,7 +1582,7 @@ export default function StatsPage() {
             style={{
               display: 'flex', overflowX: 'auto', scrollSnapType: 'x mandatory',
               WebkitOverflowScrolling: 'touch', height: trackHeight, overflowY: 'hidden',
-              transition: 'height 0.2s ease',
+              transition: 'height 0.2s ease', alignItems: 'flex-start',
             }}
           >
           <div
