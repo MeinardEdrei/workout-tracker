@@ -3,8 +3,8 @@ import { ArrowRight } from 'lucide-react';
 import { convertWeight } from '../utils/weight';
 
 export default function CalculatorPage() {
-  const [kgVal, setKgVal] = useState('60');
-  const [lbsVal, setLbsVal] = useState('132.3');
+  const [kgVal, setKgVal] = useState('');
+  const [lbsVal, setLbsVal] = useState('');
   const [refTab, setRefTab] = useState('plates'); // 'plates' or 'grid'
   const [kgFirst, setKgFirst] = useState(true);
 
