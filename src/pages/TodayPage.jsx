@@ -24,6 +24,16 @@ const MON_FIRST_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday',
 const TODAY_DOW = new Date().getDay();
 const TODAY_STR = new Date().toISOString().slice(0, 10);
 
+// Compat shim: before this date-keying fix shipped, progress was stamped
+// with real "today" regardless of which day it was actually for (doing a
+// future day early, or retaking a past one). Accepting that as a fallback
+// match keeps sessions already in flight at the moment of the update from
+// appearing to lose all their progress — without it, old stamps simply stop
+// matching the day's own date and read as if nothing was ever checked.
+function matchesDay(stampedDate, dateStr) {
+  return stampedDate === dateStr || stampedDate === TODAY_STR;
+}
+
 const WEIGHT_WHOLE_OPTIONS = Array.from({ length: 301 }, (_, i) => ({ value: i, label: String(i) }));
 const WEIGHT_DECIMAL_OPTIONS = [{ value: 0, label: '.0' }, { value: 5, label: '.5' }];
 const WEIGHT_UNIT_OPTIONS = [{ value: 'kg', label: 'kg' }, { value: 'lbs', label: 'lbs' }];
@@ -624,7 +634,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
   // ex.* read below sees the swapped identity/targets merged over the real
   // exercise, without touching the permanent template. Mutations that must
   // persist against the real document use rawEx explicitly, never ex.
-  const effectiveSwap = !isCompleted && rawEx.todaySwapDate === dateStr ? rawEx.todaySwap : null;
+  const effectiveSwap = !isCompleted && matchesDay(rawEx.todaySwapDate, dateStr) ? rawEx.todaySwap : null;
   const ex = useMemo(() => (effectiveSwap ? { ...rawEx, ...effectiveSwap } : rawEx), [rawEx, effectiveSwap]);
 
   const [editingWeight, setEditingWeight] = useState(false);
@@ -784,9 +794,9 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
       }
     },
   });
-  const effectiveChecked = isCompleted ? !ex.skipped : (ex.lastCheckedDate === dateStr ? ex.checked : false);
-  const effectiveSkipped = isCompleted ? !!ex.skipped : (ex.lastSkippedDate === dateStr ? ex.skipped : false);
-  const effectiveSetLogs = isCompleted ? [] : (ex.todaySetLogsDate === dateStr ? (ex.todaySetLogs || []) : []);
+  const effectiveChecked = isCompleted ? !ex.skipped : (matchesDay(ex.lastCheckedDate, dateStr) ? ex.checked : false);
+  const effectiveSkipped = isCompleted ? !!ex.skipped : (matchesDay(ex.lastSkippedDate, dateStr) ? ex.skipped : false);
+  const effectiveSetLogs = isCompleted ? [] : (matchesDay(ex.todaySetLogsDate, dateStr) ? (ex.todaySetLogs || []) : []);
   // Distinguishes "the target-sets logger did this for you" from a manual
   // checkbox tap, so overriding completion by hand still reads as deliberate.
   const isAutoChecked = effectiveChecked && ex.sets > 0 && effectiveSetLogs.length >= ex.sets;
@@ -2850,10 +2860,10 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
 
   const checkedCount = isCompleted
     ? displayExercises.filter((e) => !e.skipped).length
-    : displayExercises.filter((e) => e.lastCheckedDate === dateStr && e.checked).length;
+    : displayExercises.filter((e) => matchesDay(e.lastCheckedDate, dateStr) && e.checked).length;
   const total = isCompleted
     ? displayExercises.filter((e) => !e.skipped).length
-    : (day.exercises || []).filter((e) => !(e.lastSkippedDate === dateStr && e.skipped)).length;
+    : (day.exercises || []).filter((e) => !(matchesDay(e.lastSkippedDate, dateStr) && e.skipped)).length;
 
   const saveLogMutation = useMutation({
     mutationFn: (logData) => storage.saveLog(logData),
@@ -2884,7 +2894,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
     saveLogMutation.mutate({
       date: dateStr, splitName, dayName: day.name, dayTag: day.tag || '', durationSeconds,
       exercises: exercises.map((e) => {
-        const checkedNow = e.lastCheckedDate === dateStr && e.checked;
+        const checkedNow = matchesDay(e.lastCheckedDate, dateStr) && e.checked;
         if (!checkedNow) {
           return { name: e.name, category: e.category || 'workout', muscleTargets: e.muscleTargets || [], skipped: true, sets: 0, reps: 0, weight: 0, setLogs: [] };
         }
@@ -2892,7 +2902,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
         // from the plan — log it under the swapped identity, but keep a
         // breadcrumb back to the planned exercise so its own history/PRs
         // aren't attributed to whatever was substituted in.
-        const swap = e.todaySwapDate === dateStr ? e.todaySwap : null;
+        const swap = matchesDay(e.todaySwapDate, dateStr) ? e.todaySwap : null;
         const performed = swap ? { ...e, ...swap } : e;
         return {
           name: performed.name, sets: performed.sets, reps: performed.reps, weight: performed.weight, weightUnit: performed.weightUnit,
@@ -2901,14 +2911,14 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
           duration: e.duration ?? 0,
           durationUnit: e.durationUnit || 'sec',
           isLastWeekWorkout: e.isLastWeekWorkout || false,
-          setLogs: e.todaySetLogsDate === dateStr ? (e.todaySetLogs || []) : [],
+          setLogs: matchesDay(e.todaySetLogsDate, dateStr) ? (e.todaySetLogs || []) : [],
           swappedFrom: swap ? e.name : '',
         };
       })
     });
     // Remember the swap so next session can offer a one-tap "swap again?"
     exercises.forEach((e) => {
-      const swap = e.todaySwapDate === dateStr ? e.todaySwap : null;
+      const swap = matchesDay(e.todaySwapDate, dateStr) ? e.todaySwap : null;
       if (!swap) return;
       storage.updateExercise(splitId, day._id, e._id, {
         lastSwapName: swap.name,
@@ -2952,8 +2962,8 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
     // instead of leaving the same skipped one stuck as hero forever.
     const isUnchecked = (e) => {
       if (isCompleted) return false;
-      const checkedNow = e.lastCheckedDate === dateStr && e.checked;
-      const skippedNow = e.lastSkippedDate === dateStr && e.skipped;
+      const checkedNow = matchesDay(e.lastCheckedDate, dateStr) && e.checked;
+      const skippedNow = matchesDay(e.lastSkippedDate, dateStr) && e.skipped;
       return !checkedNow && !skippedNow;
     };
     heroEx = (heroOverrideId && ordered.find((e) => e._id === heroOverrideId && isUnchecked(e)))
