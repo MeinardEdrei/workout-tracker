@@ -832,6 +832,15 @@ function getExercisesVolumeAndUnit(exercises) {
   return { volume: Math.round(volumeInKg), unit: 'kg' };
 }
 
+function formatSessionDuration(seconds) {
+  if (!seconds || seconds <= 0) return null;
+  const mins = Math.round(seconds / 60);
+  if (mins < 60) return `${mins} min`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
 /* ─── Log history card ─── */
 function LogCard({ log, onDelete, hasPR }) {
   const [expanded, setExpanded] = useState(false);
@@ -869,7 +878,10 @@ function LogCard({ log, onDelete, hasPR }) {
             )}
           </div>
           {log.dayTag && <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 2 }}>{log.dayTag}</div>}
-          <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>{log.exercises.filter((e) => !e.skipped).length} exercises</div>
+          <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
+            {log.exercises.filter((e) => !e.skipped).length} exercises
+            {formatSessionDuration(log.durationSeconds) && ` · ${formatSessionDuration(log.durationSeconds)}`}
+          </div>
         </div>
 
         {/* Volume */}

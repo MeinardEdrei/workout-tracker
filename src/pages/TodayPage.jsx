@@ -11,6 +11,8 @@ import ExerciseThumbnail from '../components/ExerciseThumbnail';
 import { isSyncExcluded, excludeFromSync } from '../utils/syncPrefs';
 import { computeStreak } from '../utils/streaks';
 import { getActiveRestTimer, setActiveRestTimer, clearActiveRestTimer, secondsRemaining } from '../utils/restTimer';
+import { getDayFlags, setDayFlag } from '../utils/earlySession';
+import { ensureSessionStart, getSessionStart, clearSessionStart } from '../utils/sessionTiming';
 import { createPortal } from 'react-dom';
 import AiChatBubble from '../components/AiChatBubble';
 import { X, Check, RotateCcw, Trophy, BarChart3, StickyNote, Dumbbell, Zap, Moon, PartyPopper, Flame, ChevronDown, CalendarDays, SkipForward, MoreHorizontal, Ban } from 'lucide-react';
@@ -622,13 +624,15 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
   // ex.* read below sees the swapped identity/targets merged over the real
   // exercise, without touching the permanent template. Mutations that must
   // persist against the real document use rawEx explicitly, never ex.
-  const effectiveSwap = !isCompleted && rawEx.todaySwapDate === TODAY_STR ? rawEx.todaySwap : null;
+  const effectiveSwap = !isCompleted && rawEx.todaySwapDate === dateStr ? rawEx.todaySwap : null;
   const ex = useMemo(() => (effectiveSwap ? { ...rawEx, ...effectiveSwap } : rawEx), [rawEx, effectiveSwap]);
 
   const [editingWeight, setEditingWeight] = useState(false);
   const [weightVal, setWeightVal] = useState(String(ex.weight ?? 0));
   const [weightUnit, setWeightUnit] = useState(ex.weightUnit || 'kg');
   const [syncPrompt, setSyncPrompt] = useState(null);
+  const [heavierWeightPrompt, setHeavierWeightPrompt] = useState(null);
+  const heavierWeightPromptedRef = useRef(false);
   const [editingSetsReps, setEditingSetsReps] = useState(false);
   const [setsVal, setSetsVal] = useState(String(ex.sets ?? 3));
   const [repsVal, setRepsVal] = useState(String(ex.reps ?? 0));
@@ -745,12 +749,12 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
   // a remembered lastSwapName from a previous session.
   const todaySwapMutation = useMutation({
     mutationFn: (swapData) => {
-      const patch = { todaySwap: swapData, todaySwapDate: TODAY_STR };
+      const patch = { todaySwap: swapData, todaySwapDate: dateStr };
       if (localOnly) return Promise.resolve(patch);
       return storage.updateExercise(splitId, dayId, rawEx._id, patch);
     },
     onMutate: (swapData) => {
-      onToggle({ ...rawEx, todaySwap: swapData, todaySwapDate: TODAY_STR });
+      onToggle({ ...rawEx, todaySwap: swapData, todaySwapDate: dateStr });
     },
     onSuccess: (data) => {
       onToggle({ ...rawEx, ...data });
@@ -780,9 +784,9 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
       }
     },
   });
-  const effectiveChecked = isCompleted ? !ex.skipped : (ex.lastCheckedDate === TODAY_STR ? ex.checked : false);
-  const effectiveSkipped = isCompleted ? !!ex.skipped : (ex.lastSkippedDate === TODAY_STR ? ex.skipped : false);
-  const effectiveSetLogs = isCompleted ? [] : (ex.todaySetLogsDate === TODAY_STR ? (ex.todaySetLogs || []) : []);
+  const effectiveChecked = isCompleted ? !ex.skipped : (ex.lastCheckedDate === dateStr ? ex.checked : false);
+  const effectiveSkipped = isCompleted ? !!ex.skipped : (ex.lastSkippedDate === dateStr ? ex.skipped : false);
+  const effectiveSetLogs = isCompleted ? [] : (ex.todaySetLogsDate === dateStr ? (ex.todaySetLogs || []) : []);
   // Distinguishes "the target-sets logger did this for you" from a manual
   // checkbox tap, so overriding completion by hand still reads as deliberate.
   const isAutoChecked = effectiveChecked && ex.sets > 0 && effectiveSetLogs.length >= ex.sets;
@@ -839,17 +843,23 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
     </div>
   );
 
+  // Stamps lastCheckedDate/lastSkippedDate with THIS card's own dateStr — not
+  // necessarily real "today" (doing a future day early, or retaking a past
+  // one) — so progress stays correctly tied to the day it's actually for
+  // instead of silently going stale once the real calendar date moves on.
+  // Goes through the generic updateExercise endpoint (not the dedicated
+  // toggle/skip routes, which hardcode the server's own "today").
   const toggleMutation = useMutation({
     mutationFn: () => {
-      if (localOnly) {
-        const nextChecked = !effectiveChecked;
-        return Promise.resolve({ ...rawEx, checked: nextChecked, lastCheckedDate: TODAY_STR });
-      }
-      return storage.toggleExercise(splitId, dayId, rawEx._id);
+      const nextChecked = !effectiveChecked;
+      const patch = { checked: nextChecked, lastCheckedDate: dateStr, skipped: nextChecked ? false : rawEx.skipped };
+      if (localOnly) return Promise.resolve({ ...rawEx, ...patch });
+      return storage.updateExercise(splitId, dayId, rawEx._id, patch);
     },
     onMutate: () => {
       const nextChecked = !effectiveChecked;
-      onToggle({ ...rawEx, checked: nextChecked, lastCheckedDate: TODAY_STR, skipped: nextChecked ? false : rawEx.skipped });
+      if (nextChecked) ensureSessionStart(dayId);
+      onToggle({ ...rawEx, checked: nextChecked, lastCheckedDate: dateStr, skipped: nextChecked ? false : rawEx.skipped });
     },
     onSuccess: (updated) => {
       onToggle(updated);
@@ -864,15 +874,14 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
 
   const skipMutation = useMutation({
     mutationFn: () => {
-      if (localOnly) {
-        const nextSkipped = !effectiveSkipped;
-        return Promise.resolve({ ...rawEx, skipped: nextSkipped, lastSkippedDate: TODAY_STR, checked: nextSkipped ? false : rawEx.checked });
-      }
-      return storage.toggleSkipExercise(splitId, dayId, rawEx._id);
+      const nextSkipped = !effectiveSkipped;
+      const patch = { skipped: nextSkipped, lastSkippedDate: dateStr, checked: nextSkipped ? false : rawEx.checked };
+      if (localOnly) return Promise.resolve({ ...rawEx, ...patch });
+      return storage.updateExercise(splitId, dayId, rawEx._id, patch);
     },
     onMutate: () => {
       const nextSkipped = !effectiveSkipped;
-      onToggle({ ...rawEx, skipped: nextSkipped, lastSkippedDate: TODAY_STR, checked: nextSkipped ? false : rawEx.checked });
+      onToggle({ ...rawEx, skipped: nextSkipped, lastSkippedDate: dateStr, checked: nextSkipped ? false : rawEx.checked });
     },
     onSuccess: (updated) => {
       onToggle(updated);
@@ -888,17 +897,17 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
   function autoCompleteFields(nextSetLogs) {
     if (!(ex.sets > 0)) return {};
     const done = nextSetLogs.length >= ex.sets;
-    return { checked: done, lastCheckedDate: done ? TODAY_STR : ex.lastCheckedDate };
+    return { checked: done, lastCheckedDate: done ? dateStr : ex.lastCheckedDate };
   }
 
   const setLogsMutation = useMutation({
     mutationFn: (nextSetLogs) => {
-      const payload = { todaySetLogs: nextSetLogs, todaySetLogsDate: TODAY_STR, ...autoCompleteFields(nextSetLogs) };
+      const payload = { todaySetLogs: nextSetLogs, todaySetLogsDate: dateStr, ...autoCompleteFields(nextSetLogs) };
       if (localOnly) return Promise.resolve({ ...rawEx, ...payload });
       return storage.updateExercise(splitId, dayId, rawEx._id, payload);
     },
     onMutate: (nextSetLogs) => {
-      onToggle({ ...rawEx, todaySetLogs: nextSetLogs, todaySetLogsDate: TODAY_STR, ...autoCompleteFields(nextSetLogs) });
+      onToggle({ ...rawEx, todaySetLogs: nextSetLogs, todaySetLogsDate: dateStr, ...autoCompleteFields(nextSetLogs) });
     },
     onSuccess: (updated) => {
       onToggle(updated);
@@ -912,7 +921,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
   // copy, not the permanently-planned exercise underneath it.
   function weightPatch(weight, unit) {
     return effectiveSwap
-      ? { todaySwap: { ...effectiveSwap, weight: +weight, weightUnit: unit }, todaySwapDate: TODAY_STR }
+      ? { todaySwap: { ...effectiveSwap, weight: +weight, weightUnit: unit }, todaySwapDate: dateStr }
       : { weight: +weight, weightUnit: unit };
   }
 
@@ -991,7 +1000,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
   function setsRepsPatch(vals) {
     const payload = buildSetsRepsPayload(vals);
     return effectiveSwap
-      ? { todaySwap: { ...effectiveSwap, ...payload }, todaySwapDate: TODAY_STR }
+      ? { todaySwap: { ...effectiveSwap, ...payload }, todaySwapDate: dateStr }
       : payload;
   }
 
@@ -1251,6 +1260,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
   function confirmSetLog() {
     const entry = { reps: Math.max(0, +logRepsVal || 0), rir: logRirVal, weight: Math.max(0, +logWeightVal || 0), isDropSet: logIsDropSet };
     const isNewSet = editingLogIndex == null;
+    if (isNewSet) ensureSessionStart(dayId);
     const next = isNewSet
       ? [...effectiveSetLogs, entry]
       : effectiveSetLogs.map((s, idx) => (idx === editingLogIndex ? entry : s));
@@ -1264,6 +1274,13 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
       setActiveRestTimer({ splitId, dayId, exerciseId: rawEx._id, exerciseName: rawEx.name, restEndsAt: endsAt });
       setRestEndsAt(endsAt);
       setRestNow(Date.now());
+    }
+    // Logging heavier than the plan calls for is worth asking about — but
+    // only once per exercise per session, and never while a temporary swap
+    // is active (that weight belongs to the swap, not the permanent plan).
+    if (!entry.isDropSet && entry.weight > (ex.weight || 0) && !effectiveSwap && !heavierWeightPromptedRef.current) {
+      heavierWeightPromptedRef.current = true;
+      setHeavierWeightPrompt({ loggedWeight: entry.weight, targetWeight: ex.weight || 0 });
     }
   }
 
@@ -1574,6 +1591,14 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
           onSync={handleSync}
           onSkip={() => setSyncPrompt(null)}
           onExclude={() => { excludeFromSync(ex.name); setSyncPrompt(null); }}
+        />
+      )}
+      {heavierWeightPrompt && (
+        <ConfirmModal
+          message={`You logged ${heavierWeightPrompt.loggedWeight}${ex.weightUnit || 'kg'} on ${ex.name}, above your target of ${heavierWeightPrompt.targetWeight}${ex.weightUnit || 'kg'}. Update the target weight?`}
+          confirmLabel="Update Target"
+          onConfirm={() => { weightMutation.mutate({ weight: heavierWeightPrompt.loggedWeight, unit: ex.weightUnit || 'kg' }); setHeavierWeightPrompt(null); }}
+          onClose={() => setHeavierWeightPrompt(null)}
         />
       )}
       {showHistoryModal && (
@@ -2012,7 +2037,7 @@ function ActionPermissionModal({ pendingAction, onAllow, onDeny }) {
 }
 
 /* ─── Generic Confirmation Modal ─── */
-function ConfirmModal({ message, onConfirm, onClose }) {
+function ConfirmModal({ message, onConfirm, onClose, confirmLabel = 'Finish' }) {
   return createPortal(
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal">
@@ -2020,7 +2045,7 @@ function ConfirmModal({ message, onConfirm, onClose }) {
         <div style={{ color: 'var(--text2)', fontSize: 14, marginBottom: 16 }}>{message}</div>
         <div className="modal-actions">
           <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
-          <button className="btn btn-accent" onClick={onConfirm}>Finish</button>
+          <button className="btn btn-accent" onClick={onConfirm}>{confirmLabel}</button>
         </div>
       </div>
     </div>,
@@ -2689,8 +2714,13 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
   const shareCardRef = useRef(null);
   const [showConfirmFinish, setShowConfirmFinish] = useState(false);
   const [showConfirmSkipDay, setShowConfirmSkipDay] = useState(false);
-  const [isRetaking, setIsRetaking] = useState(false);
-  const [isAdvancing, setIsAdvancing] = useState(false);
+  // Persisted (not plain useState) so switching between pager/overview view
+  // — or navigating away and back — doesn't silently reset these, which
+  // looked like an unexplained auto-cancel of "Do Early"/"Retake".
+  const [isRetaking, setIsRetakingState] = useState(() => getDayFlags(day._id).isRetaking);
+  const [isAdvancing, setIsAdvancingState] = useState(() => getDayFlags(day._id).isAdvancing);
+  function setIsRetaking(v) { setDayFlag(day._id, 'isRetaking', v); setIsRetakingState(v); }
+  function setIsAdvancing(v) { setDayFlag(day._id, 'isAdvancing', v); setIsAdvancingState(v); }
   // Session-only "do this one next" nudge — lets a queued exercise jump
   // ahead of the current hero (e.g. equipment's taken) without losing or
   // completing the skipped one. Resets on reload; doesn't touch the split's
@@ -2820,10 +2850,10 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
 
   const checkedCount = isCompleted
     ? displayExercises.filter((e) => !e.skipped).length
-    : displayExercises.filter((e) => e.lastCheckedDate === TODAY_STR && e.checked).length;
+    : displayExercises.filter((e) => e.lastCheckedDate === dateStr && e.checked).length;
   const total = isCompleted
     ? displayExercises.filter((e) => !e.skipped).length
-    : (day.exercises || []).filter((e) => !(e.lastSkippedDate === TODAY_STR && e.skipped)).length;
+    : (day.exercises || []).filter((e) => !(e.lastSkippedDate === dateStr && e.skipped)).length;
 
   const saveLogMutation = useMutation({
     mutationFn: (logData) => storage.saveLog(logData),
@@ -2846,10 +2876,15 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
     // vanishing — same treatment whether it was explicitly skip-toggled or
     // simply left untouched. Numeric fields stay zeroed so volume/PR/
     // progression calcs (which already gate on weight > 0) exclude it for free.
+    const sessionStart = getSessionStart(day._id);
+    // A session left open for absurdly long (days) isn't a continuous
+    // workout anymore — don't record a misleadingly huge duration for it.
+    const rawDuration = sessionStart ? Math.round((Date.now() - sessionStart) / 1000) : 0;
+    const durationSeconds = rawDuration > 0 && rawDuration <= 6 * 3600 ? rawDuration : 0;
     saveLogMutation.mutate({
-      date: dateStr, splitName, dayName: day.name, dayTag: day.tag || '',
+      date: dateStr, splitName, dayName: day.name, dayTag: day.tag || '', durationSeconds,
       exercises: exercises.map((e) => {
-        const checkedNow = e.lastCheckedDate === TODAY_STR && e.checked;
+        const checkedNow = e.lastCheckedDate === dateStr && e.checked;
         if (!checkedNow) {
           return { name: e.name, category: e.category || 'workout', muscleTargets: e.muscleTargets || [], skipped: true, sets: 0, reps: 0, weight: 0, setLogs: [] };
         }
@@ -2857,7 +2892,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
         // from the plan — log it under the swapped identity, but keep a
         // breadcrumb back to the planned exercise so its own history/PRs
         // aren't attributed to whatever was substituted in.
-        const swap = e.todaySwapDate === TODAY_STR ? e.todaySwap : null;
+        const swap = e.todaySwapDate === dateStr ? e.todaySwap : null;
         const performed = swap ? { ...e, ...swap } : e;
         return {
           name: performed.name, sets: performed.sets, reps: performed.reps, weight: performed.weight, weightUnit: performed.weightUnit,
@@ -2866,22 +2901,23 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
           duration: e.duration ?? 0,
           durationUnit: e.durationUnit || 'sec',
           isLastWeekWorkout: e.isLastWeekWorkout || false,
-          setLogs: e.todaySetLogsDate === TODAY_STR ? (e.todaySetLogs || []) : [],
+          setLogs: e.todaySetLogsDate === dateStr ? (e.todaySetLogs || []) : [],
           swappedFrom: swap ? e.name : '',
         };
       })
     });
     // Remember the swap so next session can offer a one-tap "swap again?"
     exercises.forEach((e) => {
-      const swap = e.todaySwapDate === TODAY_STR ? e.todaySwap : null;
+      const swap = e.todaySwapDate === dateStr ? e.todaySwap : null;
       if (!swap) return;
       storage.updateExercise(splitId, day._id, e._id, {
         lastSwapName: swap.name,
         lastSwapImageUrl: swap.imageUrl || '',
         lastSwapMuscleTargets: swap.muscleTargets || [],
-        lastSwapDate: TODAY_STR,
+        lastSwapDate: dateStr,
       }).catch(() => {});
     });
+    clearSessionStart(day._id);
     setShowConfirmFinish(false);
   }
 
@@ -2890,6 +2926,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
       date: dateStr, splitName, dayName: day.name, dayTag: day.tag || '',
       exercises: [], skipped: true,
     });
+    clearSessionStart(day._id);
     setShowConfirmSkipDay(false);
   }
 
@@ -2915,8 +2952,8 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
     // instead of leaving the same skipped one stuck as hero forever.
     const isUnchecked = (e) => {
       if (isCompleted) return false;
-      const checkedNow = e.lastCheckedDate === TODAY_STR && e.checked;
-      const skippedNow = e.lastSkippedDate === TODAY_STR && e.skipped;
+      const checkedNow = e.lastCheckedDate === dateStr && e.checked;
+      const skippedNow = e.lastSkippedDate === dateStr && e.skipped;
       return !checkedNow && !skippedNow;
     };
     heroEx = (heroOverrideId && ordered.find((e) => e._id === heroOverrideId && isUnchecked(e)))

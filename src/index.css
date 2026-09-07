@@ -4,6 +4,10 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  /* Kills accidental double-tap-zoom during a workout (a very easy mis-tap
+     mid-set) without disabling pinch-zoom, which stays available for
+     accessibility. */
+  touch-action: manipulation;
 }
 
 :root {

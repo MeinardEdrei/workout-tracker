@@ -29,6 +29,9 @@ const WorkoutLogSchema = new mongoose.Schema(
     exercises: [LogExerciseSchema],
     totalVolume: { type: Number, default: 0 },
     skipped: { type: Boolean, default: false },
+    // Wall-clock time from the first logged action to Finish, in seconds —
+    // 0 means unknown (e.g. logs from before this field existed).
+    durationSeconds: { type: Number, default: 0 },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
   },
   { timestamps: true }
