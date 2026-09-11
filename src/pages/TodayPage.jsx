@@ -665,8 +665,8 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
   // Initialized from localStorage so an active rest survives this row
   // unmounting (page switch) and remounting (screen off / app backgrounded).
   const [restEndsAt, setRestEndsAt] = useState(() => {
-    const rec = getActiveRestTimer();
-    return rec && rec.exerciseId === rawEx._id ? rec.restEndsAt : null;
+    const rec = getActiveRestTimer(rawEx._id);
+    return rec ? rec.restEndsAt : null;
   });
   const [restNow, setRestNow] = useState(Date.now());
 
@@ -687,18 +687,26 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
   }, [ex]);
 
   const notesMutation = useMutation({
+    // While a "just for today" swap is active, the note belongs to the
+    // swapped-in exercise, not the permanent one underneath — write it into
+    // todaySwap.notes instead so it doesn't bleed into rawEx.notes.
     mutationFn: (notes) => {
-      if (localOnly) return Promise.resolve({ notes });
-      return storage.updateExercise(splitId, dayId, rawEx._id, { notes });
+      const patch = effectiveSwap ? { todaySwap: { ...rawEx.todaySwap, notes } } : { notes };
+      if (localOnly) return Promise.resolve(patch);
+      return storage.updateExercise(splitId, dayId, rawEx._id, patch);
     },
     // Update visible state on tap, not after the network round-trip —
     // otherwise every edit feels laggy regardless of how fast the server is.
     onMutate: (notes) => {
-      onToggle({ ...rawEx, notes });
+      if (effectiveSwap) {
+        onToggle({ ...rawEx, todaySwap: { ...rawEx.todaySwap, notes } });
+      } else {
+        onToggle({ ...rawEx, notes });
+      }
       setEditingNotes(false);
     },
     onSuccess: (data) => {
-      onToggle({ ...rawEx, notes: data.notes });
+      onToggle({ ...rawEx, ...data });
       if (!localOnly) {
         queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
       }
@@ -801,9 +809,17 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
   // checkbox tap, so overriding completion by hand still reads as deliberate.
   const isAutoChecked = effectiveChecked && ex.sets > 0 && effectiveSetLogs.length >= ex.sets;
 
-  const warmupEl = !readOnly && !effectiveChecked && effectiveSetLogs.length === 0 && (ex.warmupRamp || []).length > 0 && ex.weight > 0 && (
+  // Live weight-picker value while editing, so the warm-up preview tracks
+  // the wheel picker instead of showing the last-saved weight until confirmed.
+  const weightNum = Math.max(0, parseFloat(weightVal) || 0);
+  const weightWhole = Math.trunc(weightNum);
+  const weightDecimal = Math.round((weightNum - weightWhole) * 10) >= 5 ? 5 : 0;
+  const displayWeight = editingWeight ? weightNum : ex.weight;
+  const displayWeightUnit = editingWeight ? weightUnit : (ex.weightUnit || 'kg');
+
+  const warmupEl = !readOnly && !effectiveChecked && effectiveSetLogs.length === 0 && (ex.warmupRamp || []).length > 0 && displayWeight > 0 && (
     <div style={{ fontSize: isHero ? 11 : 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)', textAlign: 'center' }}>
-      Warm-up: {ex.warmupRamp.map((step) => `${step.pct}%×${step.reps} (${Math.round((step.pct / 100) * ex.weight * 2) / 2}${ex.weightUnit || 'kg'})`).join(', ')}
+      Warm-up: {ex.warmupRamp.map((step) => `${step.pct}%×${step.reps} (${Math.round((step.pct / 100) * displayWeight * 2) / 2}${displayWeightUnit})`).join(', ')}
     </div>
   );
 
@@ -868,7 +884,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
     },
     onMutate: () => {
       const nextChecked = !effectiveChecked;
-      if (nextChecked) ensureSessionStart(dayId);
+      if (nextChecked) ensureSessionStart(dayId, dateStr);
       onToggle({ ...rawEx, checked: nextChecked, lastCheckedDate: dateStr, skipped: nextChecked ? false : rawEx.skipped });
     },
     onSuccess: (updated) => {
@@ -1103,10 +1119,6 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
 
   const repsLabel = (ex.untilFailure || !ex.reps || ex.reps === 0) ? '∞' : ex.reps;
 
-  const weightNum = Math.max(0, parseFloat(weightVal) || 0);
-  const weightWhole = Math.trunc(weightNum);
-  const weightDecimal = Math.round((weightNum - weightWhole) * 10) >= 5 ? 5 : 0;
-
   const weightEditorEl = editingWeight ? (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 5, alignItems: isHero ? 'center' : 'flex-end', flexShrink: 0 }}>
       <WheelPickerWrapper className="wt-wheel-wrapper" style={{ width: isHero ? 200 : 160, height: isHero ? 130 : 100 }}>
@@ -1270,7 +1282,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
   function confirmSetLog() {
     const entry = { reps: Math.max(0, +logRepsVal || 0), rir: logRirVal, weight: Math.max(0, +logWeightVal || 0), isDropSet: logIsDropSet };
     const isNewSet = editingLogIndex == null;
-    if (isNewSet) ensureSessionStart(dayId);
+    if (isNewSet) ensureSessionStart(dayId, dateStr);
     const next = isNewSet
       ? [...effectiveSetLogs, entry]
       : effectiveSetLogs.map((s, idx) => (idx === editingLogIndex ? entry : s));
@@ -1620,7 +1632,9 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
           currentExName={ex.name}
           onConfirm={(updatedData, isPermanent) => {
             if (isPermanent) {
-              swapMutation.mutate({ ...updatedData, todaySwap: null, todaySwapDate: '' });
+              // Swapping to a different exercise identity — the old note
+              // belongs to whatever used to occupy this slot, not the new one.
+              swapMutation.mutate({ ...updatedData, todaySwap: null, todaySwapDate: '', notes: '' });
             } else {
               todaySwapMutation.mutate({
                 name: updatedData.name,
@@ -1631,6 +1645,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
                 untilFailure: updatedData.untilFailure,
                 weight: updatedData.weight,
                 weightUnit: updatedData.weightUnit,
+                notes: '',
               });
             }
           }}
@@ -2886,7 +2901,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
     // vanishing — same treatment whether it was explicitly skip-toggled or
     // simply left untouched. Numeric fields stay zeroed so volume/PR/
     // progression calcs (which already gate on weight > 0) exclude it for free.
-    const sessionStart = getSessionStart(day._id);
+    const sessionStart = getSessionStart(day._id, dateStr);
     // A session left open for absurdly long (days) isn't a continuous
     // workout anymore — don't record a misleadingly huge duration for it.
     const rawDuration = sessionStart ? Math.round((Date.now() - sessionStart) / 1000) : 0;
@@ -2906,7 +2921,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
         const performed = swap ? { ...e, ...swap } : e;
         return {
           name: performed.name, sets: performed.sets, reps: performed.reps, weight: performed.weight, weightUnit: performed.weightUnit,
-          untilFailure: performed.untilFailure, notes: e.notes || '', muscleTargets: performed.muscleTargets || [],
+          untilFailure: performed.untilFailure, notes: performed.notes || '', muscleTargets: performed.muscleTargets || [],
           category: e.category || 'workout',
           duration: e.duration ?? 0,
           durationUnit: e.durationUnit || 'sec',
@@ -2927,7 +2942,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
         lastSwapDate: dateStr,
       }).catch(() => {});
     });
-    clearSessionStart(day._id);
+    clearSessionStart(day._id, dateStr);
     setShowConfirmFinish(false);
   }
 
@@ -2936,7 +2951,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
       date: dateStr, splitName, dayName: day.name, dayTag: day.tag || '',
       exercises: [], skipped: true,
     });
-    clearSessionStart(day._id);
+    clearSessionStart(day._id, dateStr);
     setShowConfirmSkipDay(false);
   }
 

@@ -15,7 +15,7 @@ import StatsPage from './pages/StatsPage';
 import AdminPage from './pages/AdminPage';
 import CalculatorPage from './pages/CalculatorPage';
 import ProfilePage from './pages/ProfilePage';
-import { getActiveRestTimer, clearActiveRestTimer, secondsRemaining } from './utils/restTimer';
+import { getAllActiveRestTimers, clearActiveRestTimer, secondsRemaining } from './utils/restTimer';
 
 const API = import.meta.env.VITE_API_URL || '';
 
@@ -23,14 +23,20 @@ const API = import.meta.env.VITE_API_URL || '';
 // but that row (and its local state) unmounts the moment you switch tabs.
 // This banner lives at the app shell level — always mounted — so the timer
 // stays visible and accurate regardless of which page you're on.
+function soonestRestTimer() {
+  const all = getAllActiveRestTimers();
+  if (all.length === 0) return null;
+  return all.reduce((a, b) => (a.restEndsAt <= b.restEndsAt ? a : b));
+}
+
 function ActiveRestBanner({ onJumpToToday }) {
-  const [rec, setRec] = useState(() => getActiveRestTimer());
+  const [rec, setRec] = useState(() => soonestRestTimer());
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
     const timer = setInterval(() => {
       setNow(Date.now());
-      setRec(getActiveRestTimer());
+      setRec(soonestRestTimer());
     }, 1000);
     return () => clearInterval(timer);
   }, []);
