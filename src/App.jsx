@@ -15,14 +15,15 @@ import StatsPage from './pages/StatsPage';
 import AdminPage from './pages/AdminPage';
 import CalculatorPage from './pages/CalculatorPage';
 import ProfilePage from './pages/ProfilePage';
-import { getAllActiveRestTimers, clearActiveRestTimer, secondsRemaining } from './utils/restTimer';
+import { getAllActiveRestTimers, setActiveRestTimer, clearActiveRestTimer, secondsRemaining } from './utils/restTimer';
 
 const API = import.meta.env.VITE_API_URL || '';
 
 // Rest timers are started from a specific exercise row on the Today page,
-// but that row (and its local state) unmounts the moment you switch tabs.
-// This banner lives at the app shell level — always mounted — so the timer
-// stays visible and accurate regardless of which page you're on.
+// but that row (and its local state) unmounts the moment you switch tabs or
+// advance to the next exercise. This banner lives at the app shell level —
+// always mounted and fixed above the bottom nav — so the timer stays visible,
+// actionable, and accurate throughout the entire session.
 function soonestRestTimer() {
   const all = getAllActiveRestTimers();
   if (all.length === 0) return null;
@@ -34,11 +35,16 @@ function ActiveRestBanner({ onJumpToToday }) {
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
-    const timer = setInterval(() => {
+    const update = () => {
       setNow(Date.now());
       setRec(soonestRestTimer());
-    }, 1000);
-    return () => clearInterval(timer);
+    };
+    const timer = setInterval(update, 1000);
+    window.addEventListener('wt_rest_timer_change', update);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('wt_rest_timer_change', update);
+    };
   }, []);
 
   if (!rec) return null;
@@ -49,28 +55,71 @@ function ActiveRestBanner({ onJumpToToday }) {
     return null;
   }
 
+  const addTime = (e) => {
+    e.stopPropagation();
+    const newEndsAt = Math.max(Date.now(), rec.restEndsAt) + 30 * 1000;
+    setActiveRestTimer({ ...rec, restEndsAt: newEndsAt });
+    setRec({ ...rec, restEndsAt: newEndsAt });
+    setNow(Date.now());
+  };
+
   return (
     <div
       onClick={onJumpToToday}
       style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-        padding: '8px 16px', cursor: 'pointer',
-        background: 'rgba(232,255,90,0.06)', borderBottom: '1px solid rgba(232,255,90,0.2)',
+        position: 'fixed',
+        bottom: 'calc(var(--nav-height) + 10px)',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        width: 'calc(100% - 24px)',
+        maxWidth: 456,
+        zIndex: 120,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '10px 14px', cursor: 'pointer',
+        background: 'rgba(17, 17, 17, 0.95)',
+        backdropFilter: 'blur(10px)',
+        border: '1.5px solid var(--accent)',
+        borderRadius: 12,
+        boxShadow: '0 8px 32px rgba(0,0,0,0.7), 0 0 16px rgba(232,255,90,0.18)',
+        animation: 'fadeIn 0.2s ease',
       }}
     >
-      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', fontFamily: 'var(--font-mono)' }}>
-        Resting · {rec.exerciseName}
-      </span>
-      <span style={{ fontSize: 14, fontWeight: 900, fontFamily: 'var(--font-mono)', color: remaining > 0 ? 'var(--accent)' : 'var(--text3)' }}>
-        {remaining > 0 ? `${String(Math.floor(remaining / 60)).padStart(2, '0')}:${String(remaining % 60).padStart(2, '0')}` : 'Rest done'}
-      </span>
-      <button
-        type="button"
-        onClick={(e) => { e.stopPropagation(); clearActiveRestTimer(rec.exerciseId); setRec(null); }}
-        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text3)', fontSize: 11, fontWeight: 800, fontFamily: 'var(--font-mono)' }}
-      >
-        {remaining > 0 ? 'Skip' : 'Dismiss'}
-      </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: remaining > 0 ? 'var(--accent)' : 'var(--text3)', animation: remaining > 0 ? 'pulse 1.5s infinite' : 'none', flexShrink: 0 }} />
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            Resting · {rec.exerciseName}
+          </div>
+          <div style={{ fontSize: 16, fontWeight: 900, fontFamily: 'var(--font-mono)', color: remaining > 0 ? 'var(--accent)' : 'var(--text2)', lineHeight: 1.1 }}>
+            {remaining > 0 ? `${String(Math.floor(remaining / 60)).padStart(2, '0')}:${String(remaining % 60).padStart(2, '0')}` : 'Rest complete!'}
+          </div>
+        </div>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        {remaining > 0 && (
+          <button
+            type="button"
+            onClick={addTime}
+            style={{
+              background: 'rgba(232,255,90,0.12)', border: '1px solid rgba(232,255,90,0.3)',
+              borderRadius: 6, padding: '4px 8px', cursor: 'pointer',
+              color: 'var(--accent)', fontSize: 11, fontWeight: 800, fontFamily: 'var(--font-mono)'
+            }}
+          >
+            +30s
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); clearActiveRestTimer(rec.exerciseId); setRec(null); }}
+          style={{
+            background: 'none', border: '1px solid var(--border2)', borderRadius: 6,
+            padding: '4px 8px', cursor: 'pointer', color: 'var(--text2)', fontSize: 11, fontWeight: 800, fontFamily: 'var(--font-mono)'
+          }}
+        >
+          {remaining > 0 ? 'Skip' : 'Dismiss'}
+        </button>
+      </div>
     </div>
   );
 }

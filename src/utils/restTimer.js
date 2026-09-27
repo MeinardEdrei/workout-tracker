@@ -19,7 +19,12 @@ function readAll() {
     return {};
   }
 }
-function writeAll(v) { localStorage.setItem(KEY, JSON.stringify(v)); }
+function writeAll(v) {
+  localStorage.setItem(KEY, JSON.stringify(v));
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('wt_rest_timer_change'));
+  }
+}
 
 export function getActiveRestTimer(exerciseId) {
   if (exerciseId == null) return null;
