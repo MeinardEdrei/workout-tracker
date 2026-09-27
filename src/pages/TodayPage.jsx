@@ -224,6 +224,7 @@ function CompletionScreen({ log, onClose, onShare, sharing }) {
     ? log.totalVolume >= 1000 ? `${(log.totalVolume / 1000).toFixed(1)}k kg` : `${log.totalVolume} kg`
     : null;
   const totalSets = (log.exercises || []).reduce((acc, ex) => acc + Number(ex.sets || 0), 0);
+  const durationLabel = formatSessionDuration(log.durationSeconds);
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300, animation: 'fadeIn 0.2s ease', padding: 16 }}>
@@ -236,18 +237,24 @@ function CompletionScreen({ log, onClose, onShare, sharing }) {
 
         {/* Stats Dashboard */}
         <div style={{ display: 'flex', gap: 8 }}>
-          <div style={{ flex: 1, background: 'var(--bg3)', borderRadius: 10, padding: '10px 12px', border: '1px solid var(--border)', textAlign: 'center' }}>
+          <div style={{ flex: 1, background: 'var(--bg3)', borderRadius: 10, padding: '10px 8px', border: '1px solid var(--border)', textAlign: 'center' }}>
             <div style={{ fontSize: 9, color: 'var(--text3)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 2 }}>Exercises</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text)' }}>{log.exercises.filter((ex) => !ex.skipped).length}</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)' }}>{log.exercises.filter((ex) => !ex.skipped).length}</div>
           </div>
-          <div style={{ flex: 1, background: 'var(--bg3)', borderRadius: 10, padding: '10px 12px', border: '1px solid var(--border)', textAlign: 'center' }}>
+          <div style={{ flex: 1, background: 'var(--bg3)', borderRadius: 10, padding: '10px 8px', border: '1px solid var(--border)', textAlign: 'center' }}>
             <div style={{ fontSize: 9, color: 'var(--text3)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 2 }}>Sets</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text)' }}>{totalSets}</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)' }}>{totalSets}</div>
           </div>
           {vol && (
-            <div style={{ flex: 1, background: 'var(--bg3)', borderRadius: 10, padding: '10px 12px', border: '1px solid var(--border)', textAlign: 'center' }}>
+            <div style={{ flex: 1, background: 'var(--bg3)', borderRadius: 10, padding: '10px 8px', border: '1px solid var(--border)', textAlign: 'center' }}>
               <div style={{ fontSize: 9, color: 'var(--text3)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 2 }}>Volume</div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--accent)' }}>{vol}</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--accent)' }}>{vol}</div>
+            </div>
+          )}
+          {durationLabel && (
+            <div style={{ flex: 1, background: 'var(--bg3)', borderRadius: 10, padding: '10px 8px', border: '1px solid var(--border)', textAlign: 'center' }}>
+              <div style={{ fontSize: 9, color: 'var(--text3)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 2 }}>Time</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--accent)' }}>{durationLabel}</div>
             </div>
           )}
         </div>
@@ -862,7 +869,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
     && (lastSessionInfo.setLogs.length > 0 || lastSessionInfo.weight > 0) && (
     <div style={{ fontSize: isHero ? 11 : 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)', textAlign: 'center' }}>
       Last time: {lastSessionInfo.setLogs.length > 0
-        ? lastSessionInfo.setLogs.map((s) => `${s.reps}${s.weight > 0 ? `@${s.weight}${lastSessionInfo.weightUnit}` : ''}${s.rir != null ? `/${s.rir === 5 ? '5+' : s.rir}` : ''}`).join(', ')
+        ? lastSessionInfo.setLogs.map((s) => `${s.reps}${s.weight > 0 ? `@${s.weight}${lastSessionInfo.weightUnit}` : ''}${s.rir != null ? `/${s.rir === 5 ? '5+' : s.rir}` : ''}${s.isDropSet ? '↓' : ''}`).join(', ')
         : `${lastSessionInfo.reps || 0} reps${lastSessionInfo.weight > 0 ? ` @ ${lastSessionInfo.weight}${lastSessionInfo.weightUnit}` : ''}`}
     </div>
   );
@@ -1304,9 +1311,30 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
     setEditingLogIndex(existingIndex);
     setLogRepsVal(String(existingEntry?.reps ?? lastLoggedReps ?? ex.reps ?? 0));
     setLogRirVal(existingEntry?.rir ?? null);
-    setLogWeightVal(String(existingEntry?.weight ?? lastLoggedWeight ?? ex.weight ?? 0));
-    setLogIsDropSet(existingEntry?.isDropSet ?? isDropSet);
+    const initialWStr = String(existingEntry?.weight ?? lastLoggedWeight ?? ex.weight ?? 0);
+    setLogWeightVal(initialWStr);
+
+    const initialW = +initialWStr || 0;
+    const autoDrop = (isDropSet || existingEntry?.isDropSet) ||
+      (existingIndex == null && effectiveSetLogs.length > 0 && lastLoggedWeight != null && lastLoggedWeight > 0 && initialW < lastLoggedWeight);
+    setLogIsDropSet(!!autoDrop);
     setLoggingSet(true);
+  }
+
+  function adjustLogWeight(delta) {
+    const lastLoggedWeight = effectiveSetLogs.length > 0 ? effectiveSetLogs[effectiveSetLogs.length - 1].weight : undefined;
+    setLogWeightVal((v) => {
+      const nextW = Math.max(0, (+v || 0) + delta);
+      // Auto-detect drop set when weight drops below previous set
+      if (editingLogIndex == null && effectiveSetLogs.length > 0 && lastLoggedWeight != null && lastLoggedWeight > 0) {
+        if (nextW < lastLoggedWeight && nextW > 0) {
+          setLogIsDropSet(true);
+        } else if (nextW >= lastLoggedWeight) {
+          setLogIsDropSet(false);
+        }
+      }
+      return String(nextW);
+    });
   }
 
   function closeSetLogger() {
@@ -1383,13 +1411,32 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
   // down for the compact queue row so it doesn't dominate a dense list.
   const setLogFormEl = (
     <div style={{ display: 'flex', flexDirection: 'column', gap: isHero ? 8 : 6, width: '100%', padding: isHero ? '10px' : '6px 8px', borderRadius: 8, background: 'var(--bg3)', border: logIsDropSet ? '1px solid var(--accent)' : '1px solid var(--border2)' }}>
-      {logIsDropSet && (
-        <div style={{ fontSize: isHero ? 10 : 9, color: 'var(--accent)', fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', textAlign: 'center' }}>Drop Set</div>
-      )}
+      <button
+        type="button"
+        onClick={() => setLogIsDropSet((v) => !v)}
+        style={{
+          background: logIsDropSet ? 'rgba(232,255,90,0.15)' : 'transparent',
+          border: logIsDropSet ? '1px solid var(--accent)' : '1px dashed var(--border2)',
+          borderRadius: 6,
+          padding: '2px 8px',
+          alignSelf: 'center',
+          cursor: 'pointer',
+          display: 'flex', alignItems: 'center', gap: 4,
+          color: logIsDropSet ? 'var(--accent)' : 'var(--text3)',
+          fontSize: isHero ? 10 : 9,
+          fontWeight: 800,
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+        }}
+        title="Toggle Drop Set"
+      >
+        <span>↓ Drop Set</span>
+        {logIsDropSet && <span style={{ fontSize: 8, opacity: 0.8 }}>(active)</span>}
+      </button>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: isHero ? 10 : 6 }}>
-        <button type="button" onClick={() => setLogWeightVal((v) => String(Math.max(0, (+v || 0) - weightStep)))} style={{ width: isHero ? 36 : 26, height: isHero ? 36 : 26, borderRadius: isHero ? 8 : 6, border: '1px solid var(--border2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: isHero ? 18 : 13, fontWeight: 900, cursor: 'pointer' }}>−</button>
+        <button type="button" onClick={() => adjustLogWeight(-weightStep)} style={{ width: isHero ? 36 : 26, height: isHero ? 36 : 26, borderRadius: isHero ? 8 : 6, border: '1px solid var(--border2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: isHero ? 18 : 13, fontWeight: 900, cursor: 'pointer' }}>−</button>
         <div style={{ minWidth: isHero ? 50 : 34, textAlign: 'center', fontSize: isHero ? 20 : 14, fontWeight: 900, fontFamily: 'var(--font-mono)', color: 'var(--text)' }}>{logWeightVal}</div>
-        <button type="button" onClick={() => setLogWeightVal((v) => String((+v || 0) + weightStep))} style={{ width: isHero ? 36 : 26, height: isHero ? 36 : 26, borderRadius: isHero ? 8 : 6, border: '1px solid var(--border2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: isHero ? 18 : 13, fontWeight: 900, cursor: 'pointer' }}>+</button>
+        <button type="button" onClick={() => adjustLogWeight(weightStep)} style={{ width: isHero ? 36 : 26, height: isHero ? 36 : 26, borderRadius: isHero ? 8 : 6, border: '1px solid var(--border2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: isHero ? 18 : 13, fontWeight: 900, cursor: 'pointer' }}>+</button>
         <span style={{ fontSize: isHero ? 11 : 9, color: 'var(--text3)' }}>{ex.weightUnit || 'kg'}</span>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: isHero ? 10 : 6 }}>
@@ -2202,7 +2249,6 @@ function AddExerciseFromOtherDaysModal({ splitDays, logs, onConfirm, onClose }) 
             reps: ex.reps || 10,
             weight: ex.weight || 0,
             weightUnit: ex.weightUnit || 'kg',
-            notes: ex.notes || '',
             untilFailure: ex.untilFailure || false,
             category: ex.category || 'workout',
             duration: ex.duration ?? 0,
