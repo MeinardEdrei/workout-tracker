@@ -889,16 +889,20 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
       Last time: swapped to {rawEx.lastSwapName} —{' '}
       <button
         type="button"
-        onClick={() => todaySwapMutation.mutate({
-          name: rawEx.lastSwapName,
-          muscleTargets: rawEx.lastSwapMuscleTargets || [],
-          imageUrl: rawEx.lastSwapImageUrl || '',
-          sets: rawEx.sets,
-          reps: rawEx.reps,
-          untilFailure: rawEx.untilFailure,
-          weight: rawEx.weight,
-          weightUnit: rawEx.weightUnit,
-        })}
+        onClick={() => {
+          const match = findMatchingExercise(rawEx.lastSwapName, splitDays, logs);
+          todaySwapMutation.mutate({
+            name: rawEx.lastSwapName,
+            muscleTargets: rawEx.lastSwapMuscleTargets || [],
+            imageUrl: rawEx.lastSwapImageUrl || '',
+            sets: rawEx.sets,
+            reps: rawEx.reps,
+            untilFailure: rawEx.untilFailure,
+            weight: rawEx.weight,
+            weightUnit: rawEx.weightUnit,
+            notes: match?.notes || '',
+          });
+        }}
         style={{ background: 'none', border: 'none', padding: 0, color: 'var(--accent)', textDecoration: 'underline', cursor: 'pointer', fontSize: 'inherit', fontWeight: 800, fontFamily: 'inherit' }}
       >Swap again?</button>
     </div>
@@ -1666,10 +1670,9 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
           splitDays={splitDays}
           currentExName={ex.name}
           onConfirm={(updatedData, isPermanent) => {
+            const targetNotes = updatedData.notes !== undefined ? updatedData.notes : '';
             if (isPermanent) {
-              // Swapping to a different exercise identity — the old note
-              // belongs to whatever used to occupy this slot, not the new one.
-              swapMutation.mutate({ ...updatedData, todaySwap: null, todaySwapDate: '', notes: '' });
+              swapMutation.mutate({ ...updatedData, todaySwap: null, todaySwapDate: '', notes: targetNotes });
             } else {
               todaySwapMutation.mutate({
                 name: updatedData.name,
@@ -1680,7 +1683,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
                 untilFailure: updatedData.untilFailure,
                 weight: updatedData.weight,
                 weightUnit: updatedData.weightUnit,
-                notes: '',
+                notes: targetNotes,
               });
             }
           }}
@@ -2199,6 +2202,7 @@ function AddExerciseFromOtherDaysModal({ splitDays, logs, onConfirm, onClose }) 
             reps: ex.reps || 10,
             weight: ex.weight || 0,
             weightUnit: ex.weightUnit || 'kg',
+            notes: ex.notes || '',
             untilFailure: ex.untilFailure || false,
             category: ex.category || 'workout',
             duration: ex.duration ?? 0,
@@ -2536,7 +2540,7 @@ function AddExerciseFromOtherDaysModal({ splitDays, logs, onConfirm, onClose }) 
 
 function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
   const { storage, storageKey } = useStorage();
-  const [form, setForm] = useState({ name: '', sets: 3, reps: 10, weight: 0, weightUnit: 'kg', muscleTargets: [], untilFailure: false });
+  const [form, setForm] = useState({ name: '', sets: 3, reps: 10, weight: 0, weightUnit: 'kg', notes: '', muscleTargets: [], untilFailure: false });
   const [suggestions, setSuggestions] = useState([]);
   const [isPermanent, setIsPermanent] = useState(false);
 
@@ -2562,6 +2566,7 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
             reps: ex.reps || 10,
             weight: ex.weight || 0,
             weightUnit: ex.weightUnit || 'kg',
+            notes: ex.notes || '',
             untilFailure: ex.untilFailure || false,
             date: log.date || '',
             isCustom: true
@@ -2609,6 +2614,7 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
     const finalMuscleTargets = (match && match.muscleTargets && match.muscleTargets.length > 0)
       ? match.muscleTargets
       : (s.muscleTargets && s.muscleTargets.length > 0 ? s.muscleTargets : []);
+    const finalNotes = (match && match.notes !== undefined) ? match.notes : (s.notes || '');
     if (match) {
       setForm({
         name: s.name,
@@ -2616,6 +2622,7 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
         reps: match.reps ?? 10,
         weight: match.weight ?? 0,
         weightUnit: match.weightUnit || 'kg',
+        notes: finalNotes,
         muscleTargets: finalMuscleTargets,
         untilFailure: !!match.untilFailure,
         imageUrl: match.imageUrl || s.imageUrl || '',
@@ -2628,13 +2635,14 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
         reps: s.reps ?? 10,
         weight: s.weight,
         weightUnit: s.weightUnit,
+        notes: finalNotes,
         muscleTargets: s.muscleTargets && s.muscleTargets.length > 0 ? s.muscleTargets : [],
         untilFailure: s.untilFailure,
         imageUrl: s.imageUrl || '',
         placeholderUsed: s.placeholderUsed || false,
       });
     } else {
-      setForm(f => ({ ...f, name: s.name, imageUrl: s.imageUrl || '', placeholderUsed: false, muscleTargets: s.muscleTargets && s.muscleTargets.length > 0 ? s.muscleTargets : [] }));
+      setForm(f => ({ ...f, name: s.name, notes: finalNotes, imageUrl: s.imageUrl || '', placeholderUsed: false, muscleTargets: s.muscleTargets && s.muscleTargets.length > 0 ? s.muscleTargets : [] }));
     }
     setSuggestions([]);
   }
@@ -2657,6 +2665,7 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
 
     const numReps = +form.reps;
     const isFailure = form.untilFailure || numReps === 0;
+    const finalNotes = form.notes !== undefined ? form.notes : (match?.notes || '');
 
     onConfirm({
       ...form,
@@ -2666,6 +2675,7 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
       untilFailure: isFailure,
       weight: finalWeight,
       weightUnit: finalWeightUnit,
+      notes: finalNotes,
       muscleTargets: finalMuscleTargets,
       imageUrl: form.imageUrl || (match ? match.imageUrl || '' : ''),
     }, isPermanent);
@@ -2763,10 +2773,21 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
             <button type="button" className={`btn ${form.untilFailure ? 'btn-accent' : ''}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setForm(f => ({ ...f, untilFailure: true }))}>Until failure</button>
           </div>
 
-          <select className="select" style={{ width: '100%', marginBottom: 16 }} value={form.weightUnit} onChange={(e) => setForm(f => ({ ...f, weightUnit: e.target.value }))}>
+          <select className="select" style={{ width: '100%', marginBottom: 12 }} value={form.weightUnit} onChange={(e) => setForm(f => ({ ...f, weightUnit: e.target.value }))}>
             <option value="kg">kg</option>
             <option value="lbs">lbs</option>
           </select>
+
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>Note (optional)</div>
+            <input
+              className="input"
+              value={form.notes || ''}
+              onChange={(e) => setForm(f => ({ ...f, notes: e.target.value }))}
+              placeholder="e.g. seat 4, neutral grip..."
+              style={{ width: '100%', margin: 0 }}
+            />
+          </div>
 
           <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
             <button type="button" className={`btn ${!isPermanent ? 'btn-accent' : ''}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setIsPermanent(false)}>Just for today</button>
