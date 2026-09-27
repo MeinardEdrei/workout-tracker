@@ -12,10 +12,10 @@ import { isSyncExcluded, excludeFromSync } from '../utils/syncPrefs';
 import { computeStreak } from '../utils/streaks';
 import { getActiveRestTimer, setActiveRestTimer, clearActiveRestTimer, secondsRemaining } from '../utils/restTimer';
 import { getDayFlags, setDayFlag } from '../utils/earlySession';
-import { ensureSessionStart, getSessionStart, clearSessionStart } from '../utils/sessionTiming';
+import { ensureSessionStart, getSessionStart, clearSessionStart, formatSessionDuration, formatSessionElapsed } from '../utils/sessionTiming';
 import { createPortal } from 'react-dom';
 import AiChatBubble from '../components/AiChatBubble';
-import { X, Check, RotateCcw, Trophy, BarChart3, StickyNote, Dumbbell, Zap, Moon, PartyPopper, Flame, ChevronDown, CalendarDays, SkipForward, MoreHorizontal, Ban } from 'lucide-react';
+import { X, Check, RotateCcw, Trophy, BarChart3, StickyNote, Dumbbell, Zap, Moon, PartyPopper, Flame, ChevronDown, CalendarDays, SkipForward, MoreHorizontal, Ban, Clock } from 'lucide-react';
 import { WheelPicker, WheelPickerWrapper } from '@ncdai/react-wheel-picker';
 
 const SHOW_AI_CHAT = false; // archived: unused feature, flip to re-enable
@@ -2078,6 +2078,60 @@ function ConfirmModal({ message, onConfirm, onClose, confirmLabel = 'Finish' }) 
   );
 }
 
+/* ─── Finish Workout Modal with Session Duration Adjustment ─── */
+function FinishWorkoutModal({ message, initialDurationSeconds, onConfirm, onClose }) {
+  const [durationMins, setDurationMins] = useState(() => Math.max(1, Math.round((initialDurationSeconds || 0) / 60) || 45));
+
+  return createPortal(
+    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 380 }}>
+        <div className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Trophy size={18} style={{ color: 'var(--accent)' }} /> Finish Workout
+        </div>
+        <div style={{ color: 'var(--text2)', fontSize: 13, marginBottom: 16 }}>{message}</div>
+
+        <div style={{ background: 'var(--bg3)', borderRadius: 12, padding: '14px 16px', border: '1px solid var(--border)', marginBottom: 18 }}>
+          <div style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10, textAlign: 'center' }}>
+            Gym Session Duration
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
+            <button
+              type="button"
+              onClick={() => setDurationMins((m) => Math.max(1, m - 5))}
+              style={{ width: 38, height: 38, borderRadius: 8, border: '1px solid var(--border2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: 16, fontWeight: 900, cursor: 'pointer' }}
+              title="Minus 5 minutes"
+            >
+              −5
+            </button>
+            <div style={{ textAlign: 'center', minWidth: 100 }}>
+              <div style={{ fontSize: 26, fontWeight: 900, fontFamily: 'var(--font-mono)', color: 'var(--accent)', lineHeight: 1.1 }}>
+                {durationMins >= 60 ? `${Math.floor(durationMins / 60)}h ${durationMins % 60}m` : `${durationMins} min`}
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
+                {durationMins * 60} seconds
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setDurationMins((m) => m + 5)}
+              style={{ width: 38, height: 38, borderRadius: 8, border: '1px solid var(--border2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: 16, fontWeight: 900, cursor: 'pointer' }}
+              title="Add 5 minutes"
+            >
+              +5
+            </button>
+          </div>
+        </div>
+
+        <div className="modal-actions">
+          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn btn-accent" onClick={() => onConfirm(durationMins * 60)}>Finish & Save</button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 function SwapIcon() {
   return (
     <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -2753,6 +2807,20 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
   const [heroOverrideId, setHeroOverrideId] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
 
+  const [sessionNow, setSessionNow] = useState(Date.now());
+
+  useEffect(() => {
+    const update = () => {
+      setSessionNow(Date.now());
+    };
+    const t = setInterval(update, 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const sessionStart = getSessionStart(day._id, dateStr);
+  const rawSessionSeconds = sessionStart ? Math.max(0, Math.round((sessionNow - sessionStart) / 1000)) : 0;
+  const currentDurationSeconds = rawSessionSeconds > 0 && rawSessionSeconds <= 6 * 3600 ? rawSessionSeconds : 0;
+
   const getPastDateStr = (baseDate, daysOffset) => {
     const parts = baseDate.split('-');
     if (parts.length !== 3) return '';
@@ -2895,7 +2963,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
     onError: (e) => alert('Failed to save workout: ' + e.message),
   });
 
-  function handleFinish() {
+  function handleFinish(customDurationSeconds = null) {
     // Anything not checked off gets recorded as skipped instead of silently
     // dropped, so history reflects "didn't do this" rather than just
     // vanishing — same treatment whether it was explicitly skip-toggled or
@@ -2905,7 +2973,8 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
     // A session left open for absurdly long (days) isn't a continuous
     // workout anymore — don't record a misleadingly huge duration for it.
     const rawDuration = sessionStart ? Math.round((Date.now() - sessionStart) / 1000) : 0;
-    const durationSeconds = rawDuration > 0 && rawDuration <= 6 * 3600 ? rawDuration : 0;
+    const computedDuration = rawDuration > 0 && rawDuration <= 6 * 3600 ? rawDuration : 0;
+    const durationSeconds = customDurationSeconds != null ? customDurationSeconds : computedDuration;
     saveLogMutation.mutate({
       date: dateStr, splitName, dayName: day.name, dayTag: day.tag || '', durationSeconds,
       exercises: exercises.map((e) => {
@@ -3185,6 +3254,21 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
   // requires scrolling past every exercise to reach it.
   const finishBarEl = (isToday || isRetaking || isAdvancing) && !isCompleted && (
     <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
+      {currentDurationSeconds > 0 && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 6,
+          fontSize: 11,
+          fontFamily: 'var(--font-mono)',
+          color: 'var(--text3)',
+          marginBottom: 2,
+        }}>
+          <Clock size={12} style={{ color: 'var(--accent)' }} />
+          <span>Session: <strong style={{ color: 'var(--text)' }}>{formatSessionElapsed(currentDurationSeconds)}</strong></span>
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 8 }}>
         {checkedCount > 0 ? (
           <button className="btn btn-accent" style={{ flex: 1, fontSize: 14, padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }} onClick={() => setShowConfirmFinish(true)} disabled={saveLogMutation.isPending}>
@@ -3383,13 +3467,14 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
       {completedLog && <DailyShareCard log={completedLog} cardRef={shareCardRef} />}
       {completedLog && <CompletionScreen log={completedLog} onClose={() => setCompletedLog(null)} onShare={handleShare} sharing={sharing} />}
       {showConfirmFinish && (
-        <ConfirmModal
+        <FinishWorkoutModal
           message={
             exercises.length - checkedCount > 0
-              ? `Finish this workout? ${checkedCount} of ${total} done — the other ${exercises.length - checkedCount} will be marked skipped.`
-              : `Finish this workout? You have completed ${checkedCount} of ${total} exercises.`
+              ? `${checkedCount} of ${total} exercises completed — the remaining ${exercises.length - checkedCount} will be marked skipped.`
+              : `You have completed all ${checkedCount} of ${total} exercises!`
           }
-          onConfirm={handleFinish}
+          initialDurationSeconds={currentDurationSeconds}
+          onConfirm={(customDuration) => handleFinish(customDuration)}
           onClose={() => setShowConfirmFinish(false)}
         />
       )}

@@ -1,7 +1,6 @@
-// DailyShareCard.jsx
-// Rendered off-screen, captured by html2canvas
 import BodyMap from './BodyMap';
 import { Dumbbell } from 'lucide-react';
+import { formatSessionDuration } from '../utils/sessionTiming';
 
 export default function DailyShareCard({ log, cardRef }) {
   if (!log) return null;
@@ -10,6 +9,8 @@ export default function DailyShareCard({ log, cardRef }) {
   const dateLabel = date.toLocaleDateString('en-US', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
   });
+
+  const durationLabel = formatSessionDuration(log.durationSeconds);
 
   const vol = log.totalVolume > 0
     ? log.totalVolume >= 1000
@@ -112,17 +113,23 @@ export default function DailyShareCard({ log, cardRef }) {
         </div>
         <div style={{
           flex: 1,
-          padding: '16px 24px',
-          borderRight: vol ? '1px solid #181820' : 'none',
+          padding: '16px 20px',
+          borderRight: (vol || durationLabel) ? '1px solid #181820' : 'none',
           textAlign: 'center'
         }}>
           <div style={{ fontSize: 10, color: '#525262', fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 4 }}>Sets</div>
           <div style={{ fontSize: 28, fontWeight: 900, color: '#e2e2e8' }}>{totalSets}</div>
         </div>
         {vol && (
-          <div style={{ flex: 1, padding: '16px 24px', textAlign: 'center' }}>
+          <div style={{ flex: 1, padding: '16px 20px', borderRight: durationLabel ? '1px solid #181820' : 'none', textAlign: 'center' }}>
             <div style={{ fontSize: 10, color: '#525262', fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 4 }}>Volume</div>
             <div style={{ fontSize: 28, fontWeight: 900, color: '#e8ff5a' }}>{vol}</div>
+          </div>
+        )}
+        {durationLabel && (
+          <div style={{ flex: 1, padding: '16px 20px', textAlign: 'center' }}>
+            <div style={{ fontSize: 10, color: '#525262', fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 4 }}>Time</div>
+            <div style={{ fontSize: 28, fontWeight: 900, color: '#e8ff5a' }}>{durationLabel}</div>
           </div>
         )}
       </div>

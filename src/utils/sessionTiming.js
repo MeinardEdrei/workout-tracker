@@ -26,8 +26,37 @@ export function getSessionStart(dayId, dateStr) {
   return readStarts()[keyFor(dayId, dateStr)] || null;
 }
 
+export function setSessionStart(dayId, dateStr, timestamp) {
+  const starts = readStarts();
+  const key = keyFor(dayId, dateStr);
+  starts[key] = timestamp;
+  writeStarts(starts);
+  return starts[key];
+}
+
 export function clearSessionStart(dayId, dateStr) {
   const starts = readStarts();
   delete starts[keyFor(dayId, dateStr)];
   writeStarts(starts);
+}
+
+export function formatSessionDuration(seconds) {
+  if (!seconds || seconds <= 0) return null;
+  const mins = Math.round(seconds / 60);
+  if (mins < 60) return `${mins} min`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
+export function formatSessionElapsed(seconds) {
+  if (!seconds || seconds <= 0) return '00:00';
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  if (mins >= 60) {
+    const hours = Math.floor(mins / 60);
+    const remMins = mins % 60;
+    return `${hours}:${String(remMins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  }
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
