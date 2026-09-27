@@ -809,17 +809,52 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
   // checkbox tap, so overriding completion by hand still reads as deliberate.
   const isAutoChecked = effectiveChecked && ex.sets > 0 && effectiveSetLogs.length >= ex.sets;
 
-  // Live weight-picker value while editing, so the warm-up preview tracks
-  // the wheel picker instead of showing the last-saved weight until confirmed.
+  // Live weight-picker value while editing, or active logger weight, so the warm-up preview
+  // dynamically tracks weight changes instead of showing stale weights.
   const weightNum = Math.max(0, parseFloat(weightVal) || 0);
   const weightWhole = Math.trunc(weightNum);
   const weightDecimal = Math.round((weightNum - weightWhole) * 10) >= 5 ? 5 : 0;
-  const displayWeight = editingWeight ? weightNum : ex.weight;
-  const displayWeightUnit = editingWeight ? weightUnit : (ex.weightUnit || 'kg');
+  const activeWarmupWeight = editingWeight
+    ? weightNum
+    : (loggingSet && +logWeightVal > 0 ? +logWeightVal : (ex.weight || 0));
+  const activeWarmupUnit = editingWeight ? weightUnit : (ex.weightUnit || 'kg');
 
-  const warmupEl = !readOnly && !effectiveChecked && effectiveSetLogs.length === 0 && (ex.warmupRamp || []).length > 0 && displayWeight > 0 && (
-    <div style={{ fontSize: isHero ? 11 : 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)', textAlign: 'center' }}>
-      Warm-up: {ex.warmupRamp.map((step) => `${step.pct}%×${step.reps} (${Math.round((step.pct / 100) * displayWeight * 2) / 2}${displayWeightUnit})`).join(', ')}
+  const warmupEl = !readOnly && !effectiveChecked && (ex.warmupRamp || []).length > 0 && activeWarmupWeight > 0 && (
+    <div style={{ fontSize: isHero ? 11 : 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)', textAlign: 'center', margin: '2px 0' }}>
+      <span style={{ textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700, marginRight: 5 }}>Warm-up:</span>
+      <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 4, justifyContent: 'center' }}>
+        {ex.warmupRamp.map((step, idx) => {
+          const stepWeight = Math.round(((step.pct || 0) / 100) * activeWarmupWeight * 2) / 2;
+          return (
+            <button
+              key={idx}
+              type="button"
+              onClick={() => {
+                if (readOnly) return;
+                setEditingLogIndex(null);
+                setLogWeightVal(String(stepWeight));
+                setLogRepsVal(String(step.reps || 8));
+                setLogRirVal(null);
+                setLogIsDropSet(false);
+                setLoggingSet(true);
+              }}
+              title="Tap to load warm-up weight and reps into logger"
+              style={{
+                background: 'rgba(255,255,255,0.04)',
+                border: '1px solid var(--border2)',
+                borderRadius: 4,
+                padding: '2px 6px',
+                color: 'var(--text2)',
+                fontSize: 'inherit',
+                fontFamily: 'inherit',
+                cursor: 'pointer',
+              }}
+            >
+              {step.pct}%×{step.reps} <strong style={{ color: 'var(--accent)' }}>({stepWeight}{activeWarmupUnit})</strong>
+            </button>
+          );
+        })}
+      </span>
     </div>
   );
 

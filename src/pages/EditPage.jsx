@@ -889,6 +889,11 @@ function AddExerciseModal({ splitDays, onConfirm, onClose }) {
                   set('warmupRamp', next);
                 }} />
                 <span style={{ fontSize: 11, color: 'var(--text3)' }}>reps</span>
+                {(form.weight || 0) > 0 && (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>
+                    → {Math.round(((step.pct || 0) / 100) * (form.weight || 0) * 2) / 2}{form.weightUnit || 'kg'}
+                  </span>
+                )}
                 <button type="button" onClick={() => set('warmupRamp', form.warmupRamp.filter((_, idx) => idx !== i))} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: 13 }}>✕</button>
               </div>
             ))}
@@ -1610,6 +1615,11 @@ function EditExerciseModal({ ex, splitId, dayId, splitDays, onConfirm, onClose, 
                   setForm(f => ({ ...f, warmupRamp: f.warmupRamp.map((st, idx) => (idx === i ? { ...st, reps: +e.target.value || 0 } : st)) }));
                 }} />
                 <span style={{ fontSize: 11, color: 'var(--text3)' }}>reps</span>
+                {(form.weight || 0) > 0 && (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>
+                    → {Math.round(((step.pct || 0) / 100) * (form.weight || 0) * 2) / 2}{form.weightUnit || 'kg'}
+                  </span>
+                )}
                 <button type="button" onClick={() => setForm(f => ({ ...f, warmupRamp: f.warmupRamp.filter((_, idx) => idx !== i) }))} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: 13 }}>✕</button>
               </div>
             ))}
