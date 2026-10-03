@@ -644,12 +644,17 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
   const effectiveSwap = !isCompleted && matchesDay(rawEx.todaySwapDate, dateStr) ? rawEx.todaySwap : null;
   const ex = useMemo(() => (effectiveSwap ? { ...rawEx, ...effectiveSwap } : rawEx), [rawEx, effectiveSwap]);
 
+  const rowRef = useRef(null);
+  const [highlighted, setHighlighted] = useState(false);
+
   const [editingWeight, setEditingWeight] = useState(false);
   const [weightVal, setWeightVal] = useState(String(ex.weight ?? 0));
   const [weightUnit, setWeightUnit] = useState(ex.weightUnit || 'kg');
   const [syncPrompt, setSyncPrompt] = useState(null);
   const [heavierWeightPrompt, setHeavierWeightPrompt] = useState(null);
   const heavierWeightPromptedRef = useRef(false);
+  const [higherRepsPrompt, setHigherRepsPrompt] = useState(null);
+  const higherRepsPromptedRef = useRef(false);
   const [editingSetsReps, setEditingSetsReps] = useState(false);
   const [setsVal, setSetsVal] = useState(String(ex.sets ?? 3));
   const [repsVal, setRepsVal] = useState(String(ex.reps ?? 0));
@@ -676,6 +681,27 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
     return rec ? rec.restEndsAt : null;
   });
   const [restNow, setRestNow] = useState(Date.now());
+
+  useEffect(() => {
+    const handleFocus = (e) => {
+      if (e.detail?.exerciseId === rawEx._id && rowRef.current) {
+        rowRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setHighlighted(true);
+        setTimeout(() => setHighlighted(false), 2000);
+      }
+    };
+    window.addEventListener('wt_focus_exercise', handleFocus);
+    return () => window.removeEventListener('wt_focus_exercise', handleFocus);
+  }, [rawEx._id]);
+
+  useEffect(() => {
+    const updateRest = () => {
+      const rec = getActiveRestTimer(rawEx._id);
+      setRestEndsAt(rec ? rec.restEndsAt : null);
+    };
+    window.addEventListener('wt_rest_timer_change', updateRest);
+    return () => window.removeEventListener('wt_rest_timer_change', updateRest);
+  }, [rawEx._id]);
 
   function openActionsMenu() {
     const rect = menuBtnRef.current.getBoundingClientRect();
@@ -1742,15 +1768,21 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
 
   if (isHero) {
     return (
-      <div style={{
-        display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center',
-        gap: 'clamp(8px, 2vh, 14px)',
-        padding: 'clamp(14px, 3.2vh, 28px) 18px', borderRadius: 20, border: '1.5px solid var(--accent)',
-        background: 'var(--bg2)', boxShadow: '0 8px 32px rgba(232,255,90,0.1)',
-        opacity: toggleMutation.isPending ? 0.6 : 1, transition: 'opacity 0.15s',
-        maxWidth: 420, margin: '0 auto', width: '100%', maxHeight: '100%', boxSizing: 'border-box',
-        overflowY: 'auto',
-      }}>
+      <div
+        ref={rowRef}
+        id={`exercise-row-${rawEx._id}`}
+        style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center',
+          gap: 'clamp(8px, 2vh, 14px)',
+          padding: 'clamp(14px, 3.2vh, 28px) 18px', borderRadius: 20,
+          border: highlighted ? '2px solid var(--accent)' : '1.5px solid var(--accent)',
+          background: 'var(--bg2)',
+          boxShadow: highlighted ? '0 0 24px rgba(232,255,90,0.45)' : '0 8px 32px rgba(232,255,90,0.1)',
+          opacity: toggleMutation.isPending ? 0.6 : 1, transition: 'all 0.25s ease',
+          maxWidth: 420, margin: '0 auto', width: '100%', maxHeight: '100%', boxSizing: 'border-box',
+          overflowY: 'auto',
+        }}
+      >
         <ExerciseThumbnail imageUrl={ex.imageUrl} name={ex.name} size="clamp(88px, 18vh, 160px)" />
 
         <div>
@@ -1859,13 +1891,17 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
   }
 
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 10,
-      padding: '12px 16px', borderBottom: '1px solid var(--border)',
-      opacity: (toggleMutation.isPending) ? 0.5 : 1,
-      transition: 'opacity 0.15s',
-      background: effectiveChecked ? 'rgba(255,255,255,0.01)' : 'transparent',
-    }}>
+    <div
+      ref={rowRef}
+      id={`exercise-row-${rawEx._id}`}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        padding: '12px 16px', borderBottom: '1px solid var(--border)',
+        opacity: (toggleMutation.isPending) ? 0.5 : 1,
+        transition: 'all 0.25s ease',
+        background: highlighted ? 'rgba(232,255,90,0.1)' : effectiveChecked ? 'rgba(255,255,255,0.01)' : 'transparent',
+      }}
+    >
       {/* Circular checkbox — doubles as "tap to undo" when skipped, so there's
           one consistent tap target instead of a dead checkbox next to a
           separate "Skipped" text affordance. */}
@@ -3182,44 +3218,6 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
           >
             <RotateCcw size={11} /> Doing this first · Reset order
           </button>
-        </div>
-      )}
-      {activeRestRec && secondsRemaining(activeRestRec.restEndsAt, sessionNow) > 0 && activeRestRec.exerciseId !== heroEx?._id && (
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 10,
-          padding: '8px 12px',
-          marginBottom: 10,
-          borderRadius: 8,
-          background: 'rgba(232, 255, 90, 0.08)',
-          border: '1px solid rgba(232, 255, 90, 0.25)',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
-            <Clock size={13} style={{ color: 'var(--accent)', flexShrink: 0 }} />
-            <span style={{ fontSize: 11, color: 'var(--text2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              Resting ({activeRestRec.exerciseName || 'Previous exercise'}):
-            </span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 800, color: 'var(--accent)' }}>
-              {Math.floor(secondsRemaining(activeRestRec.restEndsAt, sessionNow) / 60)}:
-              {String(secondsRemaining(activeRestRec.restEndsAt, sessionNow) % 60).padStart(2, '0')}
-            </span>
-            <button
-              onClick={() => setActiveRestTimer({ ...activeRestRec, restEndsAt: activeRestRec.restEndsAt + 30000 })}
-              style={{ background: 'none', border: '1px solid rgba(232,255,90,0.3)', borderRadius: 4, color: 'var(--accent)', fontSize: 10, fontWeight: 700, padding: '2px 5px', cursor: 'pointer' }}
-            >
-              +30s
-            </button>
-            <button
-              onClick={() => clearActiveRestTimer(activeRestRec.exerciseId)}
-              style={{ background: 'none', border: 'none', color: 'var(--text3)', fontSize: 10, cursor: 'pointer', padding: '2px 4px' }}
-            >
-              Skip
-            </button>
-          </div>
         </div>
       )}
       {heroEx ? (

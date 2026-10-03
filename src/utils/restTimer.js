@@ -51,6 +51,41 @@ export function clearActiveRestTimer(exerciseId) {
   writeAll(all);
 }
 
+export function clearAllActiveRestTimers() {
+  writeAll({});
+}
+
+export function getPrimaryActiveRestTimer(now = Date.now()) {
+  const all = readAll();
+  const list = Object.values(all).filter((rec) => rec && typeof rec.restEndsAt === 'number');
+  if (list.length === 0) return null;
+
+  // Auto-purge timers that ended more than 60 seconds ago
+  const valid = [];
+  let purgedAny = false;
+  for (const rec of list) {
+    if (now - rec.restEndsAt > 60 * 1000) {
+      delete all[rec.exerciseId];
+      purgedAny = true;
+    } else {
+      valid.push(rec);
+    }
+  }
+  if (purgedAny) {
+    writeAll(all);
+  }
+  if (valid.length === 0) return null;
+
+  // Prioritize active (unexpired) timers first
+  const active = valid.filter((r) => r.restEndsAt > now);
+  if (active.length > 0) {
+    return active.reduce((a, b) => (a.restEndsAt <= b.restEndsAt ? a : b));
+  }
+
+  // Otherwise, return the most recently completed timer
+  return valid.reduce((a, b) => (a.restEndsAt >= b.restEndsAt ? a : b));
+}
+
 export function secondsRemaining(restEndsAt, now = Date.now()) {
   return Math.max(0, Math.round((restEndsAt - now) / 1000));
 }

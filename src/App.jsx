@@ -15,29 +15,59 @@ import StatsPage from './pages/StatsPage';
 import AdminPage from './pages/AdminPage';
 import CalculatorPage from './pages/CalculatorPage';
 import ProfilePage from './pages/ProfilePage';
-import { getAllActiveRestTimers, setActiveRestTimer, clearActiveRestTimer, secondsRemaining } from './utils/restTimer';
+import { getPrimaryActiveRestTimer, setActiveRestTimer, clearActiveRestTimer, clearAllActiveRestTimers, secondsRemaining } from './utils/restTimer';
 
 const API = import.meta.env.VITE_API_URL || '';
 
-// Rest timers are started from a specific exercise row on the Today page,
-// but that row (and its local state) unmounts the moment you switch tabs or
-// advance to the next exercise. This banner lives at the app shell level —
-// always mounted and fixed above the bottom nav — so the timer stays visible,
-// actionable, and accurate throughout the entire session.
-function soonestRestTimer() {
-  const all = getAllActiveRestTimers();
-  if (all.length === 0) return null;
-  return all.reduce((a, b) => (a.restEndsAt <= b.restEndsAt ? a : b));
+function playRestChime() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
+    const now = ctx.currentTime;
+    // Two-tone pleasant notification chime: D5 (587Hz) then A5 (880Hz)
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.type = 'sine';
+    osc1.frequency.setValueAtTime(587.33, now);
+    gain1.gain.setValueAtTime(0.18, now);
+    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+    osc1.connect(gain1);
+    gain1.connect(ctx.destination);
+    osc1.start(now);
+    osc1.stop(now + 0.35);
+
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(880, now + 0.14);
+    gain2.gain.setValueAtTime(0.22, now + 0.14);
+    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    osc2.start(now + 0.14);
+    osc2.stop(now + 0.65);
+  } catch {}
+  if (typeof navigator !== 'undefined' && navigator.vibrate) {
+    try { navigator.vibrate([120, 80, 200]); } catch {}
+  }
 }
 
+// Primary rest timer banner fixed above the bottom nav.
+// Acts as the single source of truth for active rest across all views.
 function ActiveRestBanner({ onJumpToToday }) {
-  const [rec, setRec] = useState(() => soonestRestTimer());
+  const [rec, setRec] = useState(() => getPrimaryActiveRestTimer());
   const [now, setNow] = useState(Date.now());
+  const chimedEndsAtRef = useRef(null);
 
   useEffect(() => {
     const update = () => {
-      setNow(Date.now());
-      setRec(soonestRestTimer());
+      const currentNow = Date.now();
+      setNow(currentNow);
+      setRec(getPrimaryActiveRestTimer(currentNow));
     };
     const timer = setInterval(update, 1000);
     window.addEventListener('wt_rest_timer_change', update);
@@ -47,25 +77,56 @@ function ActiveRestBanner({ onJumpToToday }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!rec) return;
+    const remaining = secondsRemaining(rec.restEndsAt, now);
+    if (remaining <= 0 && chimedEndsAtRef.current !== rec.restEndsAt) {
+      chimedEndsAtRef.current = rec.restEndsAt;
+      playRestChime();
+    }
+  }, [rec, now]);
+
   if (!rec) return null;
   const remaining = secondsRemaining(rec.restEndsAt, now);
-  // A "Rest done" banner nobody dismissed shouldn't haunt the UI forever.
-  if (remaining <= 0 && now - rec.restEndsAt > 5 * 60 * 1000) {
-    clearActiveRestTimer(rec.exerciseId);
-    return null;
-  }
 
   const addTime = (e) => {
     e.stopPropagation();
     const newEndsAt = Math.max(Date.now(), rec.restEndsAt) + 30 * 1000;
+    chimedEndsAtRef.current = null;
     setActiveRestTimer({ ...rec, restEndsAt: newEndsAt });
     setRec({ ...rec, restEndsAt: newEndsAt });
     setNow(Date.now());
   };
 
+  const subtractTime = (e) => {
+    e.stopPropagation();
+    const currentNow = Date.now();
+    const newEndsAt = Math.max(currentNow, rec.restEndsAt - 15 * 1000);
+    setActiveRestTimer({ ...rec, restEndsAt: newEndsAt });
+    setRec({ ...rec, restEndsAt: newEndsAt });
+    setNow(currentNow);
+  };
+
+  const handleDismiss = (e) => {
+    e.stopPropagation();
+    if (rec.exerciseId) {
+      clearActiveRestTimer(rec.exerciseId);
+    } else {
+      clearAllActiveRestTimers();
+    }
+    setRec(null);
+  };
+
+  const handleBannerClick = () => {
+    onJumpToToday();
+    if (rec.exerciseId && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('wt_focus_exercise', { detail: { exerciseId: rec.exerciseId } }));
+    }
+  };
+
   return (
     <div
-      onClick={onJumpToToday}
+      onClick={handleBannerClick}
       style={{
         position: 'fixed',
         bottom: 'calc(var(--nav-height) + 10px)',
@@ -78,43 +139,70 @@ function ActiveRestBanner({ onJumpToToday }) {
         padding: '10px 14px', cursor: 'pointer',
         background: 'rgba(17, 17, 17, 0.95)',
         backdropFilter: 'blur(10px)',
-        border: '1.5px solid var(--accent)',
+        border: remaining > 0 ? '1.5px solid var(--accent)' : '1.5px solid #4ade80',
         borderRadius: 12,
-        boxShadow: '0 8px 32px rgba(0,0,0,0.7), 0 0 16px rgba(232,255,90,0.18)',
+        boxShadow: remaining > 0
+          ? '0 8px 32px rgba(0,0,0,0.7), 0 0 16px rgba(232,255,90,0.18)'
+          : '0 8px 32px rgba(0,0,0,0.7), 0 0 16px rgba(74,222,128,0.25)',
         animation: 'fadeIn 0.2s ease',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
-        <span style={{ width: 8, height: 8, borderRadius: '50%', background: remaining > 0 ? 'var(--accent)' : 'var(--text3)', animation: remaining > 0 ? 'pulse 1.5s infinite' : 'none', flexShrink: 0 }} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
+        <span style={{
+          width: 9, height: 9, borderRadius: '50%',
+          background: remaining > 0 ? 'var(--accent)' : '#4ade80',
+          animation: remaining > 0 ? 'pulse 1.5s infinite' : 'none',
+          boxShadow: remaining > 0 ? '0 0 8px var(--accent)' : '0 0 8px #4ade80',
+          flexShrink: 0
+        }} />
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            Resting · {rec.exerciseName}
+            {remaining > 0 ? `Resting · ${rec.exerciseName || 'Exercise'}` : `Rest complete · ${rec.exerciseName || 'Exercise'}`}
           </div>
-          <div style={{ fontSize: 16, fontWeight: 900, fontFamily: 'var(--font-mono)', color: remaining > 0 ? 'var(--accent)' : 'var(--text2)', lineHeight: 1.1 }}>
-            {remaining > 0 ? `${String(Math.floor(remaining / 60)).padStart(2, '0')}:${String(remaining % 60).padStart(2, '0')}` : 'Rest complete!'}
+          <div style={{
+            fontSize: 17, fontWeight: 900, fontFamily: 'var(--font-mono)',
+            color: remaining > 0 ? 'var(--accent)' : '#4ade80', lineHeight: 1.1
+          }}>
+            {remaining > 0 ? `${String(Math.floor(remaining / 60)).padStart(2, '0')}:${String(remaining % 60).padStart(2, '0')}` : 'Ready for next set!'}
           </div>
         </div>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-        {remaining > 0 && (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+        {remaining > 15 && (
           <button
             type="button"
-            onClick={addTime}
+            onClick={subtractTime}
+            title="Subtract 15 seconds"
             style={{
-              background: 'rgba(232,255,90,0.12)', border: '1px solid rgba(232,255,90,0.3)',
-              borderRadius: 6, padding: '4px 8px', cursor: 'pointer',
-              color: 'var(--accent)', fontSize: 11, fontWeight: 800, fontFamily: 'var(--font-mono)'
+              background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border2)',
+              borderRadius: 6, padding: '5px 7px', cursor: 'pointer',
+              color: 'var(--text2)', fontSize: 11, fontWeight: 800, fontFamily: 'var(--font-mono)'
             }}
           >
-            +30s
+            -15s
           </button>
         )}
         <button
           type="button"
-          onClick={(e) => { e.stopPropagation(); clearActiveRestTimer(rec.exerciseId); setRec(null); }}
+          onClick={addTime}
+          title="Add 30 seconds"
           style={{
-            background: 'none', border: '1px solid var(--border2)', borderRadius: 6,
-            padding: '4px 8px', cursor: 'pointer', color: 'var(--text2)', fontSize: 11, fontWeight: 800, fontFamily: 'var(--font-mono)'
+            background: 'rgba(232,255,90,0.12)', border: '1px solid rgba(232,255,90,0.35)',
+            borderRadius: 6, padding: '5px 8px', cursor: 'pointer',
+            color: 'var(--accent)', fontSize: 11, fontWeight: 800, fontFamily: 'var(--font-mono)'
+          }}
+        >
+          +30s
+        </button>
+        <button
+          type="button"
+          onClick={handleDismiss}
+          style={{
+            background: remaining > 0 ? 'none' : 'rgba(74,222,128,0.15)',
+            border: remaining > 0 ? '1px solid var(--border2)' : '1px solid #4ade80',
+            borderRadius: 6, padding: '5px 9px', cursor: 'pointer',
+            color: remaining > 0 ? 'var(--text2)' : '#4ade80',
+            fontSize: 11, fontWeight: 800, fontFamily: 'var(--font-mono)'
           }}
         >
           {remaining > 0 ? 'Skip' : 'Dismiss'}
