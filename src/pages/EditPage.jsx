@@ -265,6 +265,66 @@ function findMatchingExercise(name, splitDays, pastExercises) {
   return null;
 }
 
+function getLastExercisePerformance(name, logs, splitDays) {
+  if (!name) return null;
+  const targetName = name.trim().toLowerCase();
+
+  // 1. Look in logs (most recent first)
+  if (logs && logs.length > 0) {
+    const sortedLogs = [...logs].sort((a, b) => (b.date > a.date ? 1 : -1));
+    for (const log of sortedLogs) {
+      const match = (log.exercises || []).find((e) => (e.name || '').trim().toLowerCase() === targetName);
+      if (match) {
+        let weight = match.weight || 0;
+        let reps = match.reps || 10;
+        if (match.setLogs && match.setLogs.length > 0) {
+          const setsWithWeight = match.setLogs.filter((s) => s.weight > 0);
+          if (setsWithWeight.length > 0) {
+            weight = setsWithWeight[setsWithWeight.length - 1].weight;
+          }
+          const setsWithReps = match.setLogs.filter((s) => s.reps > 0);
+          if (setsWithReps.length > 0) {
+            reps = setsWithReps[0].reps;
+          }
+        }
+        return {
+          name: match.name,
+          weight,
+          weightUnit: match.weightUnit || 'kg',
+          reps,
+          sets: match.sets || 3,
+          untilFailure: !!match.untilFailure,
+          muscleTargets: match.muscleTargets || [],
+          imageUrl: match.imageUrl || '',
+          notes: match.notes || '',
+        };
+      }
+    }
+  }
+
+  // 2. Look in split template days
+  if (splitDays) {
+    for (const d of splitDays) {
+      const found = (d.exercises || []).find(e => e.name && e.name.trim().toLowerCase() === targetName);
+      if (found) {
+        return {
+          name: found.name,
+          weight: found.weight || 0,
+          weightUnit: found.weightUnit || 'kg',
+          reps: found.reps || 10,
+          sets: found.sets || 3,
+          untilFailure: !!found.untilFailure,
+          muscleTargets: found.muscleTargets || [],
+          imageUrl: found.imageUrl || '',
+          notes: found.notes || '',
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
 function WeightSyncModal({ 
   exName, 
   oldWeight, oldUnit, newWeight, newUnit, 
@@ -951,19 +1011,32 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
   const pastExercises = useMemo(() => {
     const list = [];
     const seen = new Set();
-    (logs || []).forEach((log) => {
+    const sortedLogs = [...(logs || [])].sort((a, b) => (b.date > a.date ? 1 : -1));
+    sortedLogs.forEach((log) => {
       (log.exercises || []).forEach((ex) => {
         if (!ex.name) return;
         const lowerName = ex.name.trim().toLowerCase();
         if (!seen.has(lowerName)) {
           seen.add(lowerName);
+          let resolvedWeight = ex.weight || 0;
+          let resolvedReps = ex.reps || 10;
+          if (ex.setLogs && ex.setLogs.length > 0) {
+            const setsWithWeight = ex.setLogs.filter((s) => s.weight > 0);
+            if (setsWithWeight.length > 0) {
+              resolvedWeight = setsWithWeight[setsWithWeight.length - 1].weight;
+            }
+            const setsWithReps = ex.setLogs.filter((s) => s.reps > 0);
+            if (setsWithReps.length > 0) {
+              resolvedReps = setsWithReps[0].reps;
+            }
+          }
           list.push({
             name: ex.name.trim(),
             imageUrl: ex.imageUrl || '',
             muscleTargets: ex.muscleTargets || [],
             sets: ex.sets || 3,
-            reps: ex.reps || 10,
-            weight: ex.weight || 0,
+            reps: resolvedReps,
+            weight: resolvedWeight,
             weightUnit: ex.weightUnit || 'kg',
             untilFailure: ex.untilFailure || false,
             duration: ex.duration ?? 0,
@@ -1011,39 +1084,65 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
 
   function handleSelectSuggestion(s) {
     const match = findMatchingExercise(s.name, splitDays, pastExercises);
+    const perf = getLastExercisePerformance(s.name, logs, splitDays);
+    const finalMuscleTargets = (match && match.muscleTargets && match.muscleTargets.length > 0)
+      ? match.muscleTargets
+      : (perf?.muscleTargets?.length ? perf.muscleTargets : (s.muscleTargets && s.muscleTargets.length > 0 ? s.muscleTargets : []));
+
+    const resolvedWeight = (match && match.weight > 0)
+      ? match.weight
+      : (perf?.weight > 0 ? perf.weight : (s.weight > 0 ? s.weight : 0));
+    const resolvedUnit = match?.weightUnit || perf?.weightUnit || s.weightUnit || 'kg';
+    const resolvedReps = match?.reps ?? perf?.reps ?? s.reps ?? 10;
+    const resolvedSets = match?.sets ?? perf?.sets ?? s.sets ?? 3;
+    const resolvedDuration = match?.duration ?? perf?.duration ?? s.duration ?? 0;
+    const resolvedDurationUnit = match?.durationUnit || perf?.durationUnit || s.durationUnit || 'sec';
+
     if (match) {
       setForm({
         name: s.name,
-        sets: match.sets ?? 3,
-        reps: match.reps ?? 10,
-        weight: match.weight ?? 0,
-        weightUnit: match.weightUnit || 'kg',
-        muscleTargets: match.muscleTargets || [],
+        sets: resolvedSets,
+        reps: resolvedReps,
+        weight: resolvedWeight,
+        weightUnit: resolvedUnit,
+        muscleTargets: finalMuscleTargets,
         untilFailure: !!match.untilFailure,
         imageUrl: match.imageUrl || s.imageUrl || '',
         placeholderUsed: match.placeholderUsed || false,
-        duration: match.duration ?? 0,
-        durationUnit: match.durationUnit || 'sec',
+        duration: resolvedDuration,
+        durationUnit: resolvedDurationUnit,
       });
-      setIsDuration(match.duration > 0);
+      setIsDuration(resolvedDuration > 0);
     } else if (s.isCustom) {
       setForm({
         name: s.name,
-        sets: s.sets,
-        reps: s.reps ?? 10,
-        weight: s.weight,
-        weightUnit: s.weightUnit,
-        muscleTargets: s.muscleTargets,
+        sets: resolvedSets,
+        reps: resolvedReps,
+        weight: resolvedWeight,
+        weightUnit: resolvedUnit,
+        muscleTargets: finalMuscleTargets,
         untilFailure: s.untilFailure,
         imageUrl: s.imageUrl || '',
         placeholderUsed: s.placeholderUsed || false,
-        duration: s.duration ?? 0,
-        durationUnit: s.durationUnit || 'sec',
+        duration: resolvedDuration,
+        durationUnit: resolvedDurationUnit,
       });
-      setIsDuration(s.duration > 0);
+      setIsDuration(resolvedDuration > 0);
     } else {
-      setForm(f => ({ ...f, name: s.name, imageUrl: s.imageUrl || '', placeholderUsed: false }));
-      setIsDuration(false);
+      setForm(f => ({
+        ...f,
+        name: s.name,
+        sets: resolvedSets,
+        reps: resolvedReps,
+        weight: resolvedWeight,
+        weightUnit: resolvedUnit,
+        muscleTargets: finalMuscleTargets,
+        imageUrl: s.imageUrl || perf?.imageUrl || '',
+        placeholderUsed: false,
+        duration: resolvedDuration,
+        durationUnit: resolvedDurationUnit,
+      }));
+      setIsDuration(resolvedDuration > 0);
     }
     setSuggestions([]);
   }
@@ -1053,24 +1152,27 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
     if (!form.name.trim()) return;
     const name = form.name.trim();
     const match = findMatchingExercise(name, splitDays, pastExercises);
+    const perf = getLastExercisePerformance(name, logs, splitDays);
 
     const finalMuscleTargets = (form.muscleTargets && form.muscleTargets.length > 0)
       ? form.muscleTargets
-      : (match ? match.muscleTargets || [] : []);
+      : (match ? match.muscleTargets || [] : (perf?.muscleTargets || []));
 
-    const finalWeight = (form.weight !== undefined && form.weight !== 0)
+    const finalWeight = (form.weight !== undefined && +form.weight !== 0)
       ? +form.weight
-      : (match ? match.weight ?? 0 : 0);
+      : (match && match.weight > 0 ? match.weight : (perf?.weight ?? 0));
 
-    const finalWeightUnit = form.weightUnit || (match ? match.weightUnit || 'kg' : 'kg');
+    const finalWeightUnit = form.weightUnit || match?.weightUnit || perf?.weightUnit || 'kg';
 
-    const numReps = +form.reps;
+    const numReps = (form.reps !== undefined && +form.reps !== 0)
+      ? +form.reps
+      : (match?.reps ?? perf?.reps ?? 10);
     const isFailure = form.untilFailure || numReps === 0;
 
     onConfirm({
       ...form,
       name,
-      sets: +form.sets,
+      sets: +form.sets || 3,
       reps: isDuration ? 0 : (isFailure ? 0 : numReps),
       untilFailure: isDuration ? false : isFailure,
       duration: isDuration ? (+form.duration || 60) : 0,
@@ -1078,7 +1180,7 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
       weight: finalWeight,
       weightUnit: finalWeightUnit,
       muscleTargets: finalMuscleTargets,
-      imageUrl: form.imageUrl || (match ? match.imageUrl || '' : ''),
+      imageUrl: form.imageUrl || match?.imageUrl || perf?.imageUrl || '',
     });
   }
 
