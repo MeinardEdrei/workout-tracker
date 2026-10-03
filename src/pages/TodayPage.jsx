@@ -977,10 +977,62 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
 
   const lastSessionEl = !readOnly && !effectiveChecked && effectiveSetLogs.length === 0 && lastSessionInfo
     && (lastSessionInfo.setLogs.length > 0 || lastSessionInfo.weight > 0) && (
-    <div style={{ fontSize: isHero ? 11 : 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)', textAlign: 'center' }}>
-      Last time: {lastSessionInfo.setLogs.length > 0
-        ? lastSessionInfo.setLogs.map((s) => `${s.reps}${s.weight > 0 ? `@${s.weight}${lastSessionInfo.weightUnit}` : ''}${s.rir != null ? `/${s.rir === 5 ? '5+' : s.rir}` : ''}${s.isDropSet ? '↓' : ''}`).join(', ')
-        : `${lastSessionInfo.reps || 0} reps${lastSessionInfo.weight > 0 ? ` @ ${lastSessionInfo.weight}${lastSessionInfo.weightUnit}` : ''}`}
+    <div style={{ fontSize: isHero ? 11 : 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', gap: 4 }}>
+      <span style={{ marginRight: 2 }}>Last time:</span>
+      {lastSessionInfo.setLogs.length > 0 ? (
+        lastSessionInfo.setLogs.map((s, idx) => (
+          <button
+            key={idx}
+            type="button"
+            onClick={() => {
+              if (readOnly) return;
+              setEditingLogIndex(null);
+              setLogWeightVal(String(s.weight ?? 0));
+              setLogRepsVal(String(s.reps ?? 10));
+              setLogRirVal(s.rir != null ? s.rir : null);
+              setLogIsDropSet(!!s.isDropSet);
+              setLoggingSet(true);
+            }}
+            title="Tap to load this set's reps & weight into logger"
+            style={{
+              background: 'rgba(255,255,255,0.04)',
+              border: '1px solid var(--border2)',
+              borderRadius: 4,
+              padding: '1px 5px',
+              color: 'var(--text2)',
+              fontSize: 'inherit',
+              fontFamily: 'inherit',
+              cursor: 'pointer',
+            }}
+          >
+            {s.reps}{s.weight > 0 ? `@${s.weight}${lastSessionInfo.weightUnit}` : ''}{s.rir != null ? `/${s.rir === 5 ? '5+' : s.rir}` : ''}{s.isDropSet ? '↓' : ''}
+          </button>
+        ))
+      ) : (
+        <button
+          type="button"
+          onClick={() => {
+            if (readOnly) return;
+            setEditingLogIndex(null);
+            setLogWeightVal(String(lastSessionInfo.weight ?? 0));
+            setLogRepsVal(String(lastSessionInfo.reps ?? 10));
+            setLoggingSet(true);
+          }}
+          title="Tap to load previous reps & weight into logger"
+          style={{
+            background: 'rgba(255,255,255,0.04)',
+            border: '1px solid var(--border2)',
+            borderRadius: 4,
+            padding: '1px 5px',
+            color: 'var(--text2)',
+            fontSize: 'inherit',
+            fontFamily: 'inherit',
+            cursor: 'pointer',
+          }}
+        >
+          {lastSessionInfo.reps || 0} reps{lastSessionInfo.weight > 0 ? ` @ ${lastSessionInfo.weight}${lastSessionInfo.weightUnit}` : ''}
+        </button>
+      )}
     </div>
   );
 
@@ -1000,28 +1052,39 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
   );
 
   // Remembered last swap, offered as a one-tap re-apply next time this slot
-  // comes up — only relevant when nothing's swapped in today already.
-  const lastSwapHintEl = !readOnly && !effectiveSwap && !effectiveChecked && rawEx.lastSwapName && (
-    <div style={{ fontSize: isHero ? 11 : 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)', textAlign: 'center' }}>
-      Last time: swapped to {rawEx.lastSwapName} —{' '}
+  // comes up — only relevant when nothing's swapped in today already and not already swapped to itself.
+  const isSameAsCurrent = (rawEx.lastSwapName || '').trim().toLowerCase() === (rawEx.name || '').trim().toLowerCase();
+  const lastSwapHintEl = !readOnly && !effectiveSwap && !effectiveChecked && rawEx.lastSwapName && !isSameAsCurrent && (
+    <div style={{ fontSize: isHero ? 11 : 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+      <span>Last time: swapped to {rawEx.lastSwapName} —</span>
       <button
         type="button"
         onClick={() => {
-          const match = findMatchingExercise(rawEx.lastSwapName, splitDays, logs);
+          const perf = getLastExercisePerformance(rawEx.lastSwapName, logs, splitDays);
           todaySwapMutation.mutate({
             name: rawEx.lastSwapName,
-            muscleTargets: rawEx.lastSwapMuscleTargets || [],
-            imageUrl: rawEx.lastSwapImageUrl || '',
-            sets: rawEx.sets,
-            reps: rawEx.reps,
-            untilFailure: rawEx.untilFailure,
-            weight: rawEx.weight,
-            weightUnit: rawEx.weightUnit,
-            notes: match?.notes || '',
+            muscleTargets: perf?.muscleTargets?.length ? perf.muscleTargets : (rawEx.lastSwapMuscleTargets || []),
+            imageUrl: perf?.imageUrl || rawEx.lastSwapImageUrl || '',
+            sets: perf?.sets || rawEx.sets,
+            reps: perf?.reps || rawEx.reps,
+            untilFailure: perf?.untilFailure ?? rawEx.untilFailure,
+            weight: perf?.weight ?? 0,
+            weightUnit: perf?.weightUnit || rawEx.weightUnit || 'kg',
+            notes: perf?.notes || '',
           });
         }}
         style={{ background: 'none', border: 'none', padding: 0, color: 'var(--accent)', textDecoration: 'underline', cursor: 'pointer', fontSize: 'inherit', fontWeight: 800, fontFamily: 'inherit' }}
-      >Swap again?</button>
+      >
+        Swap again?
+      </button>
+      <button
+        type="button"
+        onClick={() => dismissSwapPromptMutation.mutate()}
+        title="Dismiss swap suggestion"
+        style={{ background: 'none', border: 'none', padding: '0 3px', color: 'var(--text3)', cursor: 'pointer', fontSize: 12, lineHeight: 1 }}
+      >
+        ✕
+      </button>
     </div>
   );
 
@@ -1482,8 +1545,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
       : effectiveSetLogs.map((s, idx) => (idx === editingLogIndex ? entry : s));
     setLogsMutation.mutate(next);
     closeSetLogger();
-    // Auto-start rest right where the log button was — editing a past set
-    // isn't a fresh set, so it shouldn't restart the clock.
+    // Auto-start rest timer
     if (isNewSet) {
       const seconds = ex.restSeconds > 0 ? ex.restSeconds : (REST_DEFAULTS[ex.exerciseType] || REST_DEFAULTS.compound);
       const endsAt = Date.now() + seconds * 1000;
@@ -1491,19 +1553,19 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
       setRestEndsAt(endsAt);
       setRestNow(Date.now());
     }
-    // Logging heavier than the plan calls for is worth asking about — but
-    // only once per exercise per session, and never while a temporary swap
-    // is active (that weight belongs to the swap, not the permanent plan).
+    // Prompt if logged weight is heavier than target
     if (!entry.isDropSet && entry.weight > (ex.weight || 0) && !effectiveSwap && !heavierWeightPromptedRef.current) {
       heavierWeightPromptedRef.current = true;
       setHeavierWeightPrompt({ loggedWeight: entry.weight, targetWeight: ex.weight || 0 });
     }
+    // Prompt if logged reps significantly exceed target (e.g. 60 vs 10 reps on calves)
+    if (!entry.isDropSet && entry.reps > (ex.reps || 0) && !effectiveSwap && !higherRepsPromptedRef.current) {
+      higherRepsPromptedRef.current = true;
+      setHigherRepsPrompt({ loggedReps: entry.reps, targetReps: ex.reps || 0 });
+    }
   }
 
-  // Ticks the visible countdown once a second while this row is mounted —
-  // purely cosmetic. The deadline itself (restEndsAt) is wall-clock based,
-  // so remaining time stays correct even if this tick loop was throttled or
-  // didn't run at all while the tab/app was hidden or the screen was off.
+  // Ticks the visible countdown once a second while this row is mounted
   useEffect(() => {
     if (restEndsAt == null) return;
     const timer = setInterval(() => setRestNow(Date.now()), 1000);
@@ -1512,30 +1574,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
 
   const restRemaining = restEndsAt == null ? null : secondsRemaining(restEndsAt, restNow);
 
-  function stopRest() {
-    clearActiveRestTimer(rawEx._id);
-    setRestEndsAt(null);
-  }
-
-  // Takes over the exact slot the "+ log set" trigger occupies — a rest
-  // clock you have to hunt for in a separate row defeats the point.
-  const restTimerEl = restRemaining != null && (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-      <span style={{ fontSize: isHero ? 20 : 14, fontWeight: 900, fontFamily: 'var(--font-mono)', color: restRemaining > 0 ? 'var(--accent)' : 'var(--text3)' }}>
-        {restRemaining > 0 ? `${String(Math.floor(restRemaining / 60)).padStart(2, '0')}:${String(restRemaining % 60).padStart(2, '0')}` : 'Rest done'}
-      </span>
-      <button
-        type="button"
-        onClick={stopRest}
-        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text3)', fontSize: 11, fontWeight: 800, fontFamily: 'var(--font-mono)' }}
-      >
-        {restRemaining > 0 ? 'Skip' : 'Dismiss'}
-      </button>
-    </div>
-  );
-
-  // The active reps+RIR entry form — shared by both variants, just sized
-  // down for the compact queue row so it doesn't dominate a dense list.
+  // The active reps+weight+RIR entry form
   const setLogFormEl = (
     <div style={{ display: 'flex', flexDirection: 'column', gap: isHero ? 8 : 6, width: '100%', padding: isHero ? '10px' : '6px 8px', borderRadius: 8, background: 'var(--bg3)', border: logIsDropSet ? '1px solid var(--accent)' : '1px solid var(--border2)' }}>
       <button
@@ -1560,16 +1599,40 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
         <span>↓ Drop Set</span>
         {logIsDropSet && <span style={{ fontSize: 8, opacity: 0.8 }}>(active)</span>}
       </button>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: isHero ? 10 : 6 }}>
-        <button type="button" onClick={() => adjustLogWeight(-weightStep)} style={{ width: isHero ? 36 : 26, height: isHero ? 36 : 26, borderRadius: isHero ? 8 : 6, border: '1px solid var(--border2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: isHero ? 18 : 13, fontWeight: 900, cursor: 'pointer' }}>−</button>
-        <div style={{ minWidth: isHero ? 50 : 34, textAlign: 'center', fontSize: isHero ? 20 : 14, fontWeight: 900, fontFamily: 'var(--font-mono)', color: 'var(--text)' }}>{logWeightVal}</div>
-        <button type="button" onClick={() => adjustLogWeight(weightStep)} style={{ width: isHero ? 36 : 26, height: isHero ? 36 : 26, borderRadius: isHero ? 8 : 6, border: '1px solid var(--border2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: isHero ? 18 : 13, fontWeight: 900, cursor: 'pointer' }}>+</button>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: isHero ? 8 : 4 }}>
+        <button type="button" onClick={() => adjustLogWeight(-weightStep)} style={{ width: isHero ? 34 : 26, height: isHero ? 34 : 26, borderRadius: isHero ? 8 : 6, border: '1px solid var(--border2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: isHero ? 18 : 13, fontWeight: 900, cursor: 'pointer' }}>−</button>
+        <input
+          type="number"
+          min="0"
+          step="0.5"
+          value={logWeightVal}
+          onChange={(e) => setLogWeightVal(e.target.value)}
+          onFocus={(e) => e.target.select()}
+          style={{ width: isHero ? 64 : 46, height: isHero ? 34 : 26, textAlign: 'center', fontSize: isHero ? 18 : 14, fontWeight: 900, fontFamily: 'var(--font-mono)', color: 'var(--text)', background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: isHero ? 8 : 6, padding: '0 4px' }}
+        />
+        <button type="button" onClick={() => adjustLogWeight(weightStep)} style={{ width: isHero ? 34 : 26, height: isHero ? 34 : 26, borderRadius: isHero ? 8 : 6, border: '1px solid var(--border2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: isHero ? 18 : 13, fontWeight: 900, cursor: 'pointer' }}>+</button>
         <span style={{ fontSize: isHero ? 11 : 9, color: 'var(--text3)' }}>{ex.weightUnit || 'kg'}</span>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: isHero ? 10 : 6 }}>
-        <button type="button" onClick={() => setLogRepsVal((v) => String(Math.max(0, (+v || 0) - 1)))} style={{ width: isHero ? 36 : 26, height: isHero ? 36 : 26, borderRadius: isHero ? 8 : 6, border: '1px solid var(--border2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: isHero ? 18 : 13, fontWeight: 900, cursor: 'pointer' }}>−</button>
-        <div style={{ minWidth: isHero ? 44 : 28, textAlign: 'center', fontSize: isHero ? 20 : 14, fontWeight: 900, fontFamily: 'var(--font-mono)', color: 'var(--text)' }}>{logRepsVal}</div>
-        <button type="button" onClick={() => setLogRepsVal((v) => String((+v || 0) + 1))} style={{ width: isHero ? 36 : 26, height: isHero ? 36 : 26, borderRadius: isHero ? 8 : 6, border: '1px solid var(--border2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: isHero ? 18 : 13, fontWeight: 900, cursor: 'pointer' }}>+</button>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: isHero ? 8 : 4 }}>
+        <button type="button" onClick={() => setLogRepsVal((v) => String(Math.max(0, (+v || 0) - 1)))} style={{ width: isHero ? 34 : 26, height: isHero ? 34 : 26, borderRadius: isHero ? 8 : 6, border: '1px solid var(--border2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: isHero ? 18 : 13, fontWeight: 900, cursor: 'pointer' }}>−</button>
+        <input
+          type="number"
+          min="0"
+          step="1"
+          value={logRepsVal}
+          onChange={(e) => setLogRepsVal(e.target.value)}
+          onFocus={(e) => e.target.select()}
+          style={{ width: isHero ? 56 : 42, height: isHero ? 34 : 26, textAlign: 'center', fontSize: isHero ? 18 : 14, fontWeight: 900, fontFamily: 'var(--font-mono)', color: 'var(--text)', background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: isHero ? 8 : 6, padding: '0 4px' }}
+        />
+        <button type="button" onClick={() => setLogRepsVal((v) => String((+v || 0) + 1))} style={{ width: isHero ? 34 : 26, height: isHero ? 34 : 26, borderRadius: isHero ? 8 : 6, border: '1px solid var(--border2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: isHero ? 18 : 13, fontWeight: 900, cursor: 'pointer' }}>+</button>
+        <button
+          type="button"
+          onClick={() => setLogRepsVal((v) => String((+v || 0) + 5))}
+          title="Add 5 reps"
+          style={{ height: isHero ? 34 : 26, padding: '0 6px', borderRadius: isHero ? 8 : 6, border: '1px solid var(--border2)', background: 'var(--bg2)', color: 'var(--accent)', fontSize: isHero ? 11 : 9, fontWeight: 900, fontFamily: 'var(--font-mono)', cursor: 'pointer' }}
+        >
+          +5
+        </button>
         <span style={{ fontSize: isHero ? 11 : 9, color: 'var(--text3)' }}>reps</span>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
@@ -1642,21 +1705,19 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
 
       {!readOnly && (loggingSet ? setLogFormEl : (
         <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap' }}>
-          {restTimerEl || (
-            <button
-              type="button"
-              onClick={() => openSetLogger(null, null)}
-              style={{
-                padding: '8px 16px', borderRadius: 6, cursor: 'pointer',
-                border: targetSetsReached ? '1px dashed var(--border2)' : '1.5px solid var(--accent)',
-                background: targetSetsReached ? 'transparent' : 'rgba(232,255,90,0.08)',
-                color: targetSetsReached ? 'var(--text3)' : 'var(--accent)',
-                fontSize: 13, fontWeight: 800, fontFamily: 'var(--font-mono)',
-              }}
-            >
-              {targetSetsReached ? '+ Add Extra Set' : `Log Set ${nextSetNumber} · target ${repsLabel}`}
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => openSetLogger(null, null)}
+            style={{
+              padding: '8px 16px', borderRadius: 6, cursor: 'pointer',
+              border: targetSetsReached ? '1px dashed var(--border2)' : '1.5px solid var(--accent)',
+              background: targetSetsReached ? 'transparent' : 'rgba(232,255,90,0.08)',
+              color: targetSetsReached ? 'var(--text3)' : 'var(--accent)',
+              fontSize: 13, fontWeight: 800, fontFamily: 'var(--font-mono)',
+            }}
+          >
+            {targetSetsReached ? '+ Add Extra Set' : `Log Set ${nextSetNumber} · target ${repsLabel}`}
+          </button>
           {effectiveSetLogs.length > 0 && (
             <button
               type="button"
@@ -1670,10 +1731,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
       ))}
     </div>
   ) : (
-    // Compact queue row: no bordered cards, no per-set edit/delete — just a
-    // quiet inline summary + text-style triggers, matching the visual weight
-    // of everything else in the row. Editing individual past sets is a hero
-    // (focus-view) action; compact is glance-and-log only.
+    // Compact queue row
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', width: '100%' }}>
       {!loggingSet && (
         <>
@@ -1682,7 +1740,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
               {effectiveSetLogs.map((s) => `${s.reps}${s.weight > 0 ? `@${s.weight}` : ''}${s.rir != null ? `/${s.rir === 5 ? '5+' : s.rir}` : ''}${s.isDropSet ? '↓' : ''}`).join(', ')} reps
             </span>
           )}
-          {!readOnly && (restTimerEl || (
+          {!readOnly && (
             <button
               type="button"
               onClick={() => openSetLogger(null, null)}
@@ -1690,7 +1748,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
             >
               {targetSetsReached ? '+ extra set' : `+ log set ${nextSetNumber}`}
             </button>
-          ))}
+          )}
           {!readOnly && effectiveSetLogs.length > 0 && (
             <button
               type="button"
@@ -1834,6 +1892,17 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
           confirmLabel="Update Target"
           onConfirm={() => { weightMutation.mutate({ weight: heavierWeightPrompt.loggedWeight, unit: ex.weightUnit || 'kg' }); setHeavierWeightPrompt(null); }}
           onClose={() => setHeavierWeightPrompt(null)}
+        />
+      )}
+      {higherRepsPrompt && (
+        <ConfirmModal
+          message={`You logged ${higherRepsPrompt.loggedReps} reps on ${ex.name}, above your target of ${higherRepsPrompt.targetReps} reps. Update the target reps?`}
+          confirmLabel="Update Target"
+          onConfirm={() => {
+            setsRepsMutation.mutate({ sets: ex.sets ?? 3, reps: higherRepsPrompt.loggedReps });
+            setHigherRepsPrompt(null);
+          }}
+          onClose={() => setHigherRepsPrompt(null)}
         />
       )}
       {showHistoryModal && (
