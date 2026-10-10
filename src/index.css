@@ -454,6 +454,18 @@ html, body, #root {
   animation: scrollHintBounce 1.6s ease-in-out infinite;
 }
 
+/* ── Focus workout ─────────────────────────────────────────────────────── */
+/* The full-screen logger owns the screen: no tab bar, and its own rest
+   takeover replaces the floating rest banner (which stays mounted so the
+   end-of-rest chime and vibration still fire). The update prompt waits until
+   focus mode closes rather than covering the Log button. */
+body.focus-mode .bottom-nav,
+body.focus-mode .active-rest-banner,
+body.focus-mode .update-banner {
+  /* !important: the banners set display inline */
+  display: none !important;
+}
+
 /* ── Keyboard focus ─────────────────────────────────────────────────────── */
 /* Last in the file so it wins over component rules that set outline: none. */
 :focus-visible {

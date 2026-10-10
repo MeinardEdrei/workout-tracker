@@ -10,6 +10,8 @@ import { MusclePill } from '../components/MusclePill';
 import ExerciseThumbnail from '../components/ExerciseThumbnail';
 import RepeatButton from '../components/RepeatButton';
 import { tick } from '../utils/haptics';
+import BottomSheet, { SheetRow } from '../components/BottomSheet';
+import { useBackClose } from '../hooks/useBackClose';
 import { isSyncExcluded, excludeFromSync } from '../utils/syncPrefs';
 import { computeStreak } from '../utils/streaks';
 import { getActiveRestTimer, getAllActiveRestTimers, setActiveRestTimer, clearActiveRestTimer, secondsRemaining } from '../utils/restTimer';
@@ -524,8 +526,12 @@ function CategoryHeader({ type }) {
   );
 }
 
-function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, readOnly, isCompleted, dateStr, logs, onShowToast, localOnly, variant = 'compact', onPromote }) {
+function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, readOnly, isCompleted, dateStr, logs, onShowToast, localOnly, variant = 'compact', onPromote, focusPosition, restSlot }) {
   const isHero = variant === 'hero';
+  // 'focus' = the full-screen workout logger (FocusWorkout); it reuses all of
+  // this row's state and mutations with a thumb-zone layout.
+  const isFocus = variant === 'focus';
+  const [showFocusOptions, setShowFocusOptions] = useState(false);
   const queryClient = useQueryClient();
   const { storage, storageKey } = useStorage();
 
@@ -1398,6 +1404,14 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
     setLogIsDropSet(false);
   }
 
+  // Focus mode keeps the logger open, prefilled for the next set, so logging
+  // is one tap. Re-runs after each logged set and when the exercise changes.
+  useEffect(() => {
+    if (isFocus && !readOnly && !loggingSet && !effectiveSkipped && !(ex.duration > 0) && !editingSetsReps) {
+      openSetLogger(null, null);
+    }
+  }, [isFocus, readOnly, loggingSet, effectiveSkipped, effectiveSetLogs.length, rawEx._id, editingSetsReps]);
+
   const REST_DEFAULTS = { compound: 120, isolation: 90, core: 60 };
 
   function confirmSetLog() {
@@ -1516,11 +1530,11 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
         ))}
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
-        <button
+        {(!isFocus || editingLogIndex != null) && <button
           type="button"
           onClick={closeSetLogger}
           style={{ width: 96, height: 56, borderRadius: 'var(--r-lg)', border: 'none', background: 'var(--bg3)', color: 'var(--text)', fontWeight: 700, fontSize: 'var(--fs-md)', letterSpacing: '0.06em', textTransform: 'uppercase', cursor: 'pointer' }}
-        >Cancel</button>
+        >Cancel</button>}
         <button
           type="button"
           onClick={() => { tick(); confirmSetLog(); }}
@@ -1798,6 +1812,120 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
       )}
     </>
   );
+
+  if (isFocus) {
+    const targetSets = ex.sets || 0;
+    const lastSets = lastSessionInfo?.setLogs || [];
+    const rowCount = Math.max(targetSets, effectiveSetLogs.length + (targetSetsReached ? 0 : 1), lastSets.length);
+    const unit = ex.weightUnit || 'kg';
+    const fmtSet = (s) => (s ? `${s.weight > 0 ? `${s.weight} × ` : ''}${s.reps}` : '—');
+    const labelStyle = { fontSize: 'var(--fs-sm)', fontWeight: 700, color: 'var(--text2)', letterSpacing: '0.12em', textTransform: 'uppercase' };
+    const optionRows = [
+      { icon: ArrowLeftRight, label: 'Swap exercise', run: () => setShowSwapModal(true) },
+      { icon: BarChart3, label: 'History', run: () => setShowHistoryModal(true) },
+      { icon: StickyNote, label: ex.notes ? 'Edit note' : 'Add note', run: () => setEditingNotes(true) },
+      ...(!(ex.duration > 0) ? [{ icon: RotateCcw, label: 'Edit target sets / reps', run: () => setEditingSetsReps(true) }] : []),
+      { icon: Check, label: effectiveChecked ? 'Mark not done' : 'Mark done', run: () => toggleMutation.mutate(!effectiveChecked) },
+      { icon: Ban, label: effectiveSkipped ? 'Undo skip' : 'Skip exercise', run: () => skipMutation.mutate(!effectiveSkipped) },
+    ];
+
+    return (
+      <div ref={rowRef} id={`exercise-row-${rawEx._id}`} style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        <section aria-label="Current exercise" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 16px 8px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <span style={{ ...labelStyle, color: ex.category === 'warmup' ? 'var(--yellow)' : 'var(--text2)' }}>
+                {ex.category === 'warmup' ? 'Warm-up · ' : ''}{focusPosition ? `Exercise ${focusPosition.index} of ${focusPosition.total}` : ''}
+              </span>
+              {prInfo && (
+                <span style={{ ...labelStyle, color: 'var(--red)', display: 'inline-flex', alignItems: 'center', gap: 4 }} title={`Previous best ${prInfo.prevWeight}${prInfo.prevUnit}`}>
+                  <Trophy size={13} aria-hidden="true" /> PR {prInfo.diff || ''}
+                </span>
+              )}
+            </div>
+            <h1 style={{ margin: 0, fontSize: 32, fontWeight: 700, lineHeight: 1, letterSpacing: '0.01em', textTransform: 'uppercase' }}>{ex.name}</h1>
+            {(swappedPillEl || ex.isLastWeekWorkout) && (
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{swappedPillEl}</div>
+            )}
+            {targetSets > 0 && !(ex.duration > 0) && (
+              <div aria-label={`${effectiveSetLogs.length} of ${targetSets} sets logged`} style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                {Array.from({ length: Math.max(targetSets, effectiveSetLogs.length) }, (_, i) => (
+                  <span key={i} style={{ width: 24, height: 8, borderRadius: 4, background: i < effectiveSetLogs.length ? 'var(--green)' : i === effectiveSetLogs.length ? 'var(--accent)' : 'var(--bg4)' }} />
+                ))}
+                <span style={{ fontSize: 'var(--fs-md)', fontWeight: 600, color: 'var(--text2)', marginLeft: 4 }}>
+                  {targetSetsReached ? 'Target sets done' : `Set ${nextSetNumber} of ${targetSets}`}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {lastSwapHintEl}
+          {warmupEl}
+          {ex.notes && !editingNotes && (
+            <p style={{ margin: 0, fontSize: 'var(--fs-md)', color: 'var(--text2)', display: 'flex', gap: 6 }}><StickyNote size={15} style={{ flexShrink: 0, marginTop: 2 }} aria-hidden="true" />{ex.notes}</p>
+          )}
+          {notesEditorEl}
+
+          {!(ex.duration > 0) && rowCount > 0 && (
+            <div style={{ background: 'var(--bg2)', borderRadius: 'var(--r-lg)', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={labelStyle}>This time</span>
+                <span style={labelStyle}>Last time</span>
+              </div>
+              {Array.from({ length: rowCount }, (_, i) => {
+                const done = effectiveSetLogs[i];
+                const isNext = i === effectiveSetLogs.length && !targetSetsReached;
+                return (
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontFamily: 'var(--font-mono)', fontSize: 17 }}>
+                    {done ? (
+                      <button type="button" onClick={() => !readOnly && openSetLogger(i, done)} aria-label={`Edit set ${i + 1}`} style={{ background: 'none', border: 'none', padding: '4px 0', color: 'var(--text)', fontFamily: 'inherit', fontSize: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                        {i + 1} · {fmtSet(done)}
+                        {done.rir != null && <span style={{ fontSize: 13, color: 'var(--text2)' }}>RIR {done.rir === 5 ? '5+' : done.rir}</span>}
+                        {done.isDropSet && <span style={{ fontSize: 13, color: 'var(--text2)' }}>drop</span>}
+                      </button>
+                    ) : (
+                      <span style={{ color: isNext ? 'var(--accent)' : 'var(--text3)' }}>{i + 1} · {isNext ? 'now' : '—'}</span>
+                    )}
+                    <span style={{ color: 'var(--text2)' }}>{fmtSet(lastSets[i])}</span>
+                  </div>
+                );
+              })}
+              <span style={{ fontSize: 13, color: 'var(--text2)' }}>Weights in {unit}</span>
+            </div>
+          )}
+        </section>
+
+        <section aria-label="Log" style={{ padding: '8px 16px calc(16px + var(--safe-bottom))', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {restSlot || (effectiveSkipped ? (
+            <button type="button" className="btn btn-ghost" style={{ minHeight: 64, fontSize: 18 }} onClick={() => skipMutation.mutate(false)}>
+              <Ban size={18} aria-hidden="true" /> Skipped — undo
+            </button>
+          ) : ex.duration > 0 ? (
+            <>
+              <div style={{ textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: 28 }}>{ex.sets} × {ex.duration}{ex.durationUnit || 'sec'}</div>
+              <button type="button" className="btn btn-accent" style={{ minHeight: 64, fontSize: 20 }} onClick={() => { tick(); toggleMutation.mutate(!effectiveChecked); }}>
+                {effectiveChecked ? 'Mark not done' : 'Mark done'}
+              </button>
+            </>
+          ) : editingSetsReps ? setsRepsEditorEl : setLogFormEl)}
+          {!restSlot && !readOnly && (
+            <button type="button" onClick={() => setShowFocusOptions(true)} style={{ alignSelf: 'center', minHeight: 44, padding: '0 16px', background: 'none', border: 'none', color: 'var(--text2)', fontSize: 'var(--fs-md)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+              <MoreHorizontal size={18} aria-hidden="true" /> Exercise options
+            </button>
+          )}
+        </section>
+
+        {showFocusOptions && (
+          <BottomSheet title={ex.name} onClose={() => setShowFocusOptions(false)}>
+            {optionRows.map((o) => (
+              <SheetRow key={o.label} icon={o.icon} label={o.label} onClick={() => { setShowFocusOptions(false); o.run(); }} />
+            ))}
+          </BottomSheet>
+        )}
+        {modalsEl}
+      </div>
+    );
+  }
 
   if (isHero) {
     return (
@@ -2827,6 +2955,80 @@ function RestDayCard({ dayName, implicit }) {
   );
 }
 
+/* ─── Focus workout: full-screen logger over the Today page ─── */
+function fmtClock(totalSeconds) {
+  const s = Math.max(0, Math.round(totalSeconds));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+function FocusWorkout({ title, elapsedSeconds, steps, currentId, onMinimize, onFinish, finishDisabled, onJump, onAddExercise, children }) {
+  const [showUpNext, setShowUpNext] = useState(false);
+  useBackClose(true, onMinimize);
+  useEffect(() => {
+    document.body.classList.add('focus-mode');
+    return () => document.body.classList.remove('focus-mode');
+  }, []);
+  const doneCount = steps.filter((st) => st.status === 'done').length;
+
+  return (
+    <div role="dialog" aria-modal="true" aria-label={`${title} workout`} style={{ position: 'fixed', inset: 0, zIndex: 150, background: 'var(--bg)', display: 'flex', justifyContent: 'center' }}>
+      <div style={{ width: '100%', maxWidth: 480, display: 'flex', flexDirection: 'column', paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+        <header style={{ height: 64, padding: '0 16px', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+          <button type="button" aria-label="Minimize workout" onClick={onMinimize} style={{ width: 44, height: 44, borderRadius: 22, background: 'var(--bg2)', border: 'none', color: 'var(--text)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+            <ChevronDown size={20} />
+          </button>
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <span style={{ fontSize: 'var(--fs-sm)', fontWeight: 700, color: 'var(--text2)', letterSpacing: '0.12em', textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{title}</span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 17 }}>{elapsedSeconds > 0 ? formatSessionElapsed(elapsedSeconds) : '0:00'}</span>
+          </div>
+          <button type="button" onClick={onFinish} disabled={finishDisabled} style={{ height: 44, padding: '0 16px', borderRadius: 22, background: 'var(--bg2)', border: 'none', color: finishDisabled ? 'var(--text3)' : 'var(--text)', fontSize: 'var(--fs-md)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', cursor: finishDisabled ? 'default' : 'pointer' }}>
+            Finish
+          </button>
+        </header>
+
+        <button type="button" onClick={() => setShowUpNext(true)} aria-label={`${doneCount} of ${steps.length} exercises done — show all exercises`} style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.max(steps.length, 1)}, minmax(0, 1fr))`, gap: 4, padding: '10px 16px', background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0 }}>
+          {steps.map((st) => (
+            <span key={st.id} style={{ height: 4, borderRadius: 2, background: st.id === currentId ? 'var(--accent)' : st.status === 'done' ? 'var(--green)' : st.status === 'skipped' ? 'var(--iron)' : 'var(--bg4)' }} />
+          ))}
+        </button>
+
+        {children}
+      </div>
+
+      {showUpNext && (
+        <BottomSheet title={title} onClose={() => setShowUpNext(false)}>
+          <p style={{ margin: '0 4px 4px', fontSize: 'var(--fs-md)', color: 'var(--text2)' }}>{doneCount} of {steps.length} done · tap an exercise to do it next</p>
+          {steps.map((st, i) => {
+            const isCurrent = st.id === currentId;
+            const canJump = st.status === 'todo' && !isCurrent;
+            return (
+              <button
+                key={st.id}
+                type="button"
+                disabled={!canJump}
+                onClick={() => { onJump(st.id); setShowUpNext(false); }}
+                style={{ minHeight: 56, borderRadius: 'var(--r-lg)', border: 'none', background: isCurrent ? 'var(--bg3)' : 'none', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 12, padding: '0 12px', textAlign: 'left', cursor: canJump ? 'pointer' : 'default' }}
+              >
+                <span aria-hidden="true" style={{ width: 28, height: 28, borderRadius: 14, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-mono)', fontSize: 12, background: st.status === 'done' ? 'var(--green)' : 'transparent', boxShadow: st.status === 'done' ? 'none' : `inset 0 0 0 2px ${isCurrent ? 'var(--accent)' : 'var(--iron)'}`, color: st.status === 'done' ? 'var(--on-accent)' : 'var(--text2)' }}>
+                  {st.status === 'done' ? <Check size={14} strokeWidth={3} /> : st.status === 'skipped' ? <Ban size={13} /> : i + 1}
+                </span>
+                <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <span style={{ fontSize: 17, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: st.status === 'todo' ? 'var(--text)' : 'var(--text2)', textDecoration: st.status === 'skipped' ? 'line-through' : 'none' }}>{st.name}</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text2)' }}>{st.detail}</span>
+                </span>
+                {isCurrent && <span style={{ fontSize: 'var(--fs-sm)', fontWeight: 700, letterSpacing: '0.12em' }}>NOW</span>}
+              </button>
+            );
+          })}
+          <button type="button" className="btn btn-ghost" style={{ minHeight: 56, marginTop: 8, fontSize: 'var(--fs-md)' }} onClick={() => { setShowUpNext(false); onAddExercise(); }}>
+            + Add exercise for today
+          </button>
+        </BottomSheet>
+      )}
+    </div>
+  );
+}
+
 function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dateStr, logForDate, logs, onShowToast, layout = 'accordion', onOpenInPager }) {
   const isScreen = layout === 'screen';
   const queryClient = useQueryClient();
@@ -2850,6 +3052,14 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
   // completing the skipped one. Resets on reload; doesn't touch the split's
   // canonical exercise order.
   const [heroOverrideId, setHeroOverrideId] = useState(null);
+  // Focus mode is remembered per day + date so it survives a reload or the
+  // screen locking mid-workout.
+  const focusKey = `wt_focus_${day._id}_${dateStr}`;
+  const [focusOpen, setFocusOpenState] = useState(() => { try { return localStorage.getItem(focusKey) === '1'; } catch { return false; } });
+  const setFocusOpen = (v) => {
+    setFocusOpenState(v);
+    try { if (v) localStorage.setItem(focusKey, '1'); else localStorage.removeItem(focusKey); } catch { /* storage unavailable */ }
+  };
   const [showAddModal, setShowAddModal] = useState(false);
 
   const [sessionNow, setSessionNow] = useState(Date.now());
@@ -3130,8 +3340,59 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
     }
   }
 
+  // ── Focus workout data ──
+  const canFocus = isScreen && !day.isRest && !readOnly && !isCompleted && displayExercises.length > 0;
+  useEffect(() => {
+    if (focusOpen && !canFocus) setFocusOpen(false);
+  }, [focusOpen, canFocus]);
+  const focusOrder = ['warmup', 'workout', 'cooldown'].flatMap((cat) => displayExercises.filter((e) => (e.category || 'workout') === cat));
+  const focusSteps = focusOrder.map((e) => {
+    const done = matchesDay(e.lastCheckedDate, dateStr) && e.checked;
+    const skipped = matchesDay(e.lastSkippedDate, dateStr) && e.skipped;
+    const unit = e.weightUnit || 'kg';
+    const detail = e.duration > 0 ? `${e.sets} × ${e.duration}${e.durationUnit || 'sec'}` : `${e.sets} × ${e.untilFailure ? 'failure' : e.reps}${e.weight > 0 ? ` · ${e.weight} ${unit}` : ''}`;
+    return { id: e._id, name: e.name, detail, status: done ? 'done' : skipped ? 'skipped' : 'todo' };
+  });
+  const restRemaining = activeRestRec ? Math.ceil((activeRestRec.restEndsAt - sessionNow) / 1000) : 0;
+  const adjustRest = (deltaMs) => {
+    if (!activeRestRec) return;
+    setActiveRestTimer({ ...activeRestRec, restEndsAt: Math.max(Date.now() + 1000, activeRestRec.restEndsAt + deltaMs) });
+  };
+  const restSlotEl = focusOpen && restRemaining > 0 && (
+    <section role="timer" aria-label={`Resting, ${fmtClock(restRemaining)} left`} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ background: 'var(--bg2)', borderRadius: 20, padding: '20px 16px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+        <span style={{ fontSize: 'var(--fs-sm)', fontWeight: 700, color: 'var(--text2)', letterSpacing: '0.12em', textTransform: 'uppercase', textAlign: 'center' }}>Rest · {activeRestRec.exerciseName}</span>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 72, lineHeight: 1 }}>{fmtClock(restRemaining)}</span>
+        <div style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
+          <button type="button" className="btn btn-ghost" style={{ minHeight: 56, fontFamily: 'var(--font-mono)', fontSize: 17 }} onClick={() => { tick(); adjustRest(-15000); }}>−15s</button>
+          <button type="button" className="btn btn-ghost" style={{ minHeight: 56, fontFamily: 'var(--font-mono)', fontSize: 17 }} onClick={() => { tick(); adjustRest(15000); }}>+15s</button>
+          <button type="button" className="btn btn-ghost" style={{ minHeight: 56, fontSize: 17 }} onClick={() => { tick(); clearActiveRestTimer(activeRestRec.exerciseId); }}>Skip</button>
+        </div>
+      </div>
+      {heroEx && (
+        <div style={{ minHeight: 64, borderRadius: 'var(--r-lg)', background: 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '0 16px' }}>
+          <span style={{ fontSize: 'var(--fs-sm)', fontWeight: 700, color: 'var(--text2)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>Up next</span>
+          <span style={{ fontSize: 17, fontWeight: 600, textAlign: 'right', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{heroEx.duration > 0 ? heroEx.name : `Set ${(matchesDay(heroEx.todaySetLogsDate, dateStr) ? (heroEx.todaySetLogs || []).length : 0) + 1} · ${heroEx.name}`}</span>
+        </div>
+      )}
+      <span style={{ fontSize: 'var(--fs-md)', color: 'var(--text2)', textAlign: 'center' }}>The logger comes back when rest ends</span>
+    </section>
+  );
+  const focusPosition = heroEx ? { index: focusOrder.indexOf(heroEx) + 1, total: focusOrder.length } : null;
+  const startFocusButtonEl = canFocus && (
+    <button
+      type="button"
+      onClick={() => { tick(); setFocusOpen(true); }}
+      className="btn btn-accent"
+      style={{ width: '100%', minHeight: 56, fontSize: 18, marginBottom: 12 }}
+    >
+      {sessionStart ? 'Resume workout' : 'Start workout'}
+    </button>
+  );
+
   const heroSectionEl = showHero && (
     <div style={{ padding: '16px 16px 4px' }}>
+      {startFocusButtonEl}
       {heroOverrideId && heroEx && heroEx._id === heroOverrideId && (
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10 }}>
           <button
@@ -3534,6 +3795,31 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
         )}
       </div>
 
+      {focusOpen && canFocus && createPortal(
+        <FocusWorkout
+          title={day.tag || day.name}
+          elapsedSeconds={currentDurationSeconds}
+          steps={focusSteps}
+          currentId={heroEx?._id}
+          onMinimize={() => setFocusOpen(false)}
+          onFinish={() => setShowConfirmFinish(true)}
+          finishDisabled={checkedCount === 0 || saveLogMutation.isPending}
+          onJump={(id) => setHeroOverrideId(id)}
+          onAddExercise={() => setShowAddModal(true)}
+        >
+          {heroEx ? (
+            <ExerciseRow variant="focus" key={heroEx._id} ex={heroEx} index={displayExercises.indexOf(heroEx)} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} dateStr={dateStr} logs={logs} onShowToast={onShowToast} localOnly={heroEx.isLastWeekWorkout} focusPosition={focusPosition} restSlot={restSlotEl} />
+          ) : (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 16, padding: '16px 16px calc(16px + var(--safe-bottom))', textAlign: 'center' }}>
+              <PartyPopper size={36} style={{ alignSelf: 'center', color: 'var(--green)' }} aria-hidden="true" />
+              <h1 style={{ margin: 0, fontSize: 32, fontWeight: 700, textTransform: 'uppercase' }}>All done</h1>
+              <p style={{ margin: 0, fontSize: 'var(--fs-md)', color: 'var(--text2)' }}>{checkedCount} exercise{checkedCount === 1 ? '' : 's'} done. Save it to your history.</p>
+              <button type="button" className="btn btn-accent" style={{ minHeight: 64, fontSize: 20 }} disabled={checkedCount === 0 || saveLogMutation.isPending} onClick={() => setShowConfirmFinish(true)}>Finish & save</button>
+            </div>
+          )}
+        </FocusWorkout>,
+        document.body
+      )}
       {completedLog && <DailyShareCard log={completedLog} cardRef={shareCardRef} />}
       {completedLog && <CompletionScreen log={completedLog} onClose={() => setCompletedLog(null)} onShare={handleShare} sharing={sharing} />}
       {showConfirmFinish && (

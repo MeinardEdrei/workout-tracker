@@ -128,6 +128,7 @@ function ActiveRestBanner({ onJumpToToday }) {
 
   return (
     <div
+      className="active-rest-banner"
       onClick={handleBannerClick}
       style={{
         position: 'fixed',
@@ -442,7 +443,7 @@ function ReloadPrompt() {
   if (!needRefresh) return null;
 
   return (
-    <div style={{
+    <div className="update-banner" style={{
       position: 'fixed',
       bottom: 'var(--above-nav)',
       left: '50%',
