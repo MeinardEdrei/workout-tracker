@@ -887,13 +887,13 @@ function AddExerciseModal({ splitDays, onConfirm, onClose }) {
           <div style={{ display: 'grid', gridTemplateColumns: isDuration ? '1fr 1.5fr 1fr' : '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
             <div>
               <div style={{ ...LABEL, marginBottom: 4 }}>sets</div>
-              <input className="input" type="number" min="0" step="1" value={form.sets} onChange={(e) => set('sets', e.target.value)} />
+              <input className="input" type="number" inputMode="numeric" min="0" step="1" value={form.sets} onChange={(e) => set('sets', e.target.value)} />
             </div>
             <div>
               <div style={{ ...LABEL, marginBottom: 4 }}>{isDuration ? 'duration' : 'reps'}</div>
               {isDuration ? (
                 <div style={{ display: 'flex', gap: 4 }}>
-                  <input className="input" style={{ flex: 1, minWidth: 0, margin: 0 }} type="number" min="1" step="1" value={form.duration || ''} onChange={(e) => set('duration', e.target.value)} />
+                  <input className="input" style={{ flex: 1, minWidth: 0, margin: 0 }} type="number" inputMode="numeric" min="1" step="1" value={form.duration || ''} onChange={(e) => set('duration', e.target.value)} />
                   <select className="select" style={{ padding: '0 8px', height: 44, borderRadius: 8, margin: 0 }} value={form.durationUnit || 'sec'} onChange={(e) => set('durationUnit', e.target.value)}>
                     <option value="sec">sec</option>
                     <option value="min">min</option>
@@ -902,12 +902,12 @@ function AddExerciseModal({ splitDays, onConfirm, onClose }) {
               ) : form.untilFailure ? (
                 <div style={{ height: 44, display: 'flex', alignItems: 'center', padding: '0 10px', borderRadius: 8, border: '1px solid var(--border2)', fontSize: 11, fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.05em' }}>TO FAILURE</div>
               ) : (
-                <input className="input" type="number" min="0" step="1" value={form.reps} onChange={(e) => set('reps', e.target.value)} />
+                <input className="input" type="number" inputMode="numeric" min="0" step="1" value={form.reps} onChange={(e) => set('reps', e.target.value)} />
               )}
             </div>
             <div>
               <div style={{ ...LABEL, marginBottom: 4 }}>weight</div>
-              <input className="input" type="number" min="0" step="0.5" value={form.weight} onChange={(e) => set('weight', e.target.value)} />
+              <input className="input" type="number" inputMode="decimal" min="0" step="0.5" value={form.weight} onChange={(e) => set('weight', e.target.value)} />
             </div>
           </div>
 
@@ -933,18 +933,18 @@ function AddExerciseModal({ splitDays, onConfirm, onClose }) {
           </select>
 
           <div style={{ ...LABEL, marginBottom: 4 }}>Rest (seconds)</div>
-          <input className="input" type="number" min="0" step="5" style={{ width: '100%', marginBottom: 16 }} placeholder="Default by type" value={form.restSeconds || ''} onChange={(e) => set('restSeconds', +e.target.value || 0)} />
+          <input className="input" type="number" inputMode="numeric" min="0" step="5" style={{ width: '100%', marginBottom: 16 }} placeholder="Default by type" value={form.restSeconds || ''} onChange={(e) => set('restSeconds', +e.target.value || 0)} />
 
           <div style={{ ...LABEL, marginBottom: 4 }}>Warm-up Ramp <span style={{ color: 'var(--text3)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></div>
           <div style={{ marginBottom: 16 }}>
             {(form.warmupRamp || []).map((step, i) => (
               <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
-                <input className="input" type="number" min="0" max="100" style={{ width: 64 }} placeholder="%" value={step.pct || ''} onChange={(e) => {
+                <input className="input" type="number" inputMode="numeric" min="0" max="100" style={{ width: 64 }} placeholder="%" value={step.pct || ''} onChange={(e) => {
                   const next = form.warmupRamp.map((st, idx) => (idx === i ? { ...st, pct: +e.target.value || 0 } : st));
                   set('warmupRamp', next);
                 }} />
                 <span style={{ fontSize: 11, color: 'var(--text3)' }}>% ×</span>
-                <input className="input" type="number" min="0" style={{ width: 56 }} placeholder="reps" value={step.reps || ''} onChange={(e) => {
+                <input className="input" type="number" inputMode="numeric" min="0" style={{ width: 56 }} placeholder="reps" value={step.reps || ''} onChange={(e) => {
                   const next = form.warmupRamp.map((st, idx) => (idx === i ? { ...st, reps: +e.target.value || 0 } : st));
                   set('warmupRamp', next);
                 }} />
@@ -1260,13 +1260,13 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
           <div style={{ display: 'grid', gridTemplateColumns: isDuration ? '1fr 1.5fr 1fr' : '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
             <div>
               <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>sets</div>
-              <input className="input" type="number" min="0" step="1" value={form.sets} onChange={(e) => setForm(f => ({ ...f, sets: e.target.value }))} />
+              <input className="input" type="number" inputMode="numeric" min="0" step="1" value={form.sets} onChange={(e) => setForm(f => ({ ...f, sets: e.target.value }))} />
             </div>
             <div>
               <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>{isDuration ? 'duration' : 'reps'}</div>
               {isDuration ? (
                 <div style={{ display: 'flex', gap: 4 }}>
-                  <input className="input" style={{ flex: 1, minWidth: 0, margin: 0 }} type="number" min="1" step="1" value={form.duration || ''} onChange={(e) => setForm(f => ({ ...f, duration: e.target.value }))} />
+                  <input className="input" style={{ flex: 1, minWidth: 0, margin: 0 }} type="number" inputMode="numeric" min="1" step="1" value={form.duration || ''} onChange={(e) => setForm(f => ({ ...f, duration: e.target.value }))} />
                   <select className="select" style={{ padding: '0 8px', height: 44, borderRadius: 8, margin: 0 }} value={form.durationUnit || 'sec'} onChange={(e) => setForm(f => ({ ...f, durationUnit: e.target.value }))}>
                     <option value="sec">sec</option>
                     <option value="min">min</option>
@@ -1275,12 +1275,12 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
               ) : form.untilFailure ? (
                 <div style={{ height: 44, display: 'flex', alignItems: 'center', padding: '0 10px', borderRadius: 8, border: '1px solid var(--border2)', fontSize: 11, fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.05em' }}>TO FAILURE</div>
               ) : (
-                <input className="input" type="number" min="0" step="1" value={form.reps} onChange={(e) => setForm(f => ({ ...f, reps: e.target.value }))} />
+                <input className="input" type="number" inputMode="numeric" min="0" step="1" value={form.reps} onChange={(e) => setForm(f => ({ ...f, reps: e.target.value }))} />
               )}
             </div>
             <div>
               <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>weight</div>
-              <input className="input" type="number" min="0" step="0.5" value={form.weight} onChange={(e) => setForm(f => ({ ...f, weight: e.target.value }))} />
+              <input className="input" type="number" inputMode="decimal" min="0" step="0.5" value={form.weight} onChange={(e) => setForm(f => ({ ...f, weight: e.target.value }))} />
             </div>
           </div>
 
@@ -1651,13 +1651,13 @@ function EditExerciseModal({ ex, splitId, dayId, splitDays, onConfirm, onClose, 
           <div style={{ display: 'grid', gridTemplateColumns: isDuration ? '1fr 1.5fr 1fr' : '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
             <div>
               <div style={{ ...LABEL, marginBottom: 4 }}>sets</div>
-              <input className="input" type="number" min="0" step="1" value={form.sets} onChange={(e) => setForm(f => ({ ...f, sets: e.target.value }))} />
+              <input className="input" type="number" inputMode="numeric" min="0" step="1" value={form.sets} onChange={(e) => setForm(f => ({ ...f, sets: e.target.value }))} />
             </div>
             <div>
               <div style={{ ...LABEL, marginBottom: 4 }}>{isDuration ? 'duration' : 'reps'}</div>
               {isDuration ? (
                 <div style={{ display: 'flex', gap: 4 }}>
-                  <input className="input" style={{ flex: 1, minWidth: 0, margin: 0 }} type="number" min="1" step="1" value={form.duration || ''} onChange={(e) => setForm(f => ({ ...f, duration: e.target.value }))} />
+                  <input className="input" style={{ flex: 1, minWidth: 0, margin: 0 }} type="number" inputMode="numeric" min="1" step="1" value={form.duration || ''} onChange={(e) => setForm(f => ({ ...f, duration: e.target.value }))} />
                   <select className="select" style={{ padding: '0 8px', height: 44, borderRadius: 8, margin: 0 }} value={form.durationUnit || 'sec'} onChange={(e) => setForm(f => ({ ...f, durationUnit: e.target.value }))}>
                     <option value="sec">sec</option>
                     <option value="min">min</option>
@@ -1666,12 +1666,12 @@ function EditExerciseModal({ ex, splitId, dayId, splitDays, onConfirm, onClose, 
               ) : form.untilFailure ? (
                 <div style={{ height: 44, display: 'flex', alignItems: 'center', padding: '0 10px', borderRadius: 8, border: '1px solid var(--border2)', fontSize: 11, fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.05em' }}>TO FAILURE</div>
               ) : (
-                <input className="input" type="number" min="0" step="1" value={form.reps} onChange={(e) => setForm(f => ({ ...f, reps: e.target.value }))} />
+                <input className="input" type="number" inputMode="numeric" min="0" step="1" value={form.reps} onChange={(e) => setForm(f => ({ ...f, reps: e.target.value }))} />
               )}
             </div>
             <div>
               <div style={{ ...LABEL, marginBottom: 4 }}>weight</div>
-              <input className="input" type="number" min="0" step="0.5" value={form.weight} onChange={(e) => setForm(f => ({ ...f, weight: e.target.value }))} />
+              <input className="input" type="number" inputMode="decimal" min="0" step="0.5" value={form.weight} onChange={(e) => setForm(f => ({ ...f, weight: e.target.value }))} />
             </div>
           </div>
 
@@ -1702,18 +1702,18 @@ function EditExerciseModal({ ex, splitId, dayId, splitDays, onConfirm, onClose, 
 
           <div style={{ marginBottom: 12 }}>
             <div style={{ ...LABEL, marginBottom: 4 }}>Rest (seconds)</div>
-            <input className="input" type="number" min="0" step="5" style={{ width: '100%', margin: 0 }} placeholder="Default by type" value={form.restSeconds || ''} onChange={(e) => setForm(f => ({ ...f, restSeconds: +e.target.value || 0 }))} />
+            <input className="input" type="number" inputMode="numeric" min="0" step="5" style={{ width: '100%', margin: 0 }} placeholder="Default by type" value={form.restSeconds || ''} onChange={(e) => setForm(f => ({ ...f, restSeconds: +e.target.value || 0 }))} />
           </div>
 
           <div style={{ marginBottom: 12 }}>
             <div style={{ ...LABEL, marginBottom: 4 }}>Warm-up Ramp <span style={{ color: 'var(--text3)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></div>
             {(form.warmupRamp || []).map((step, i) => (
               <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
-                <input className="input" type="number" min="0" max="100" style={{ width: 64 }} placeholder="%" value={step.pct || ''} onChange={(e) => {
+                <input className="input" type="number" inputMode="numeric" min="0" max="100" style={{ width: 64 }} placeholder="%" value={step.pct || ''} onChange={(e) => {
                   setForm(f => ({ ...f, warmupRamp: f.warmupRamp.map((st, idx) => (idx === i ? { ...st, pct: +e.target.value || 0 } : st)) }));
                 }} />
                 <span style={{ fontSize: 11, color: 'var(--text3)' }}>% ×</span>
-                <input className="input" type="number" min="0" style={{ width: 56 }} placeholder="reps" value={step.reps || ''} onChange={(e) => {
+                <input className="input" type="number" inputMode="numeric" min="0" style={{ width: 56 }} placeholder="reps" value={step.reps || ''} onChange={(e) => {
                   setForm(f => ({ ...f, warmupRamp: f.warmupRamp.map((st, idx) => (idx === i ? { ...st, reps: +e.target.value || 0 } : st)) }));
                 }} />
                 <span style={{ fontSize: 11, color: 'var(--text3)' }}>reps</span>
