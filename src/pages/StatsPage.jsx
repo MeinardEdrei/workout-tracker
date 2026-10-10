@@ -321,136 +321,110 @@ function getLastNWeeks(n) {
   });
 }
 
-function WeeklySessionsChart({ logs }) {
+const chartCardStyle = { borderRadius: 'var(--r-lg)', background: 'var(--bg2)', padding: '20px 16px 12px', marginBottom: 16 };
+const chartTitleStyle = { fontSize: 'var(--fs-sm)', fontWeight: 700, color: 'var(--text)', letterSpacing: '0.12em', textTransform: 'uppercase' };
+const axisText = { fontFamily: 'var(--font-mono)', fontSize: 12 };
+
+function WeeklySessionsChart({ logs, goal }) {
   const weeks = getLastNWeeks(8).map((w) => ({
     ...w,
     count: logs.filter((l) => l.date >= w.startStr && l.date <= w.endStr).length,
   }));
-
-  const maxCount = Math.max(...weeks.map((w) => w.count), 1);
+  const top = Math.max(...weeks.map((w) => w.count), goal || 0, 1);
+  // 330×130 viewBox: bars sit on y=100, labels below; 20px headroom for counts.
+  const barY = (v) => 100 - (v / top) * 80;
+  const summary = `Sessions per week for the last 8 weeks: ${weeks.map((w) => w.count).join(', ')}${goal ? `; goal ${goal}` : ''}`;
 
   return (
-    <div style={{ borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg2)', padding: '16px', marginBottom: 24 }}>
-      <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text3)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 14 }}>
-        Sessions / Week
+    <section style={chartCardStyle}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
+        <h3 style={{ ...chartTitleStyle, margin: 0 }}>Sessions / Week</h3>
+        {goal > 0 && <span style={{ fontSize: 'var(--fs-md)', color: 'var(--text2)' }}>Goal {goal}</span>}
       </div>
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 80 }}>
+      <svg viewBox="0 0 330 130" role="img" aria-label={summary} style={{ width: '100%', height: 'auto', display: 'block' }}>
+        {goal > 0 && <line x1="0" x2="330" y1={barY(goal)} y2={barY(goal)} stroke="var(--text2)" strokeOpacity="0.5" strokeDasharray="4 5" />}
         {weeks.map((w, i) => {
-          const h = w.count > 0 ? Math.max(6, Math.round((w.count / maxCount) * 72)) : 3;
+          const x = 8 + i * 41;
+          const y = barY(w.count);
+          const fill = w.isCurrent ? 'var(--accent)' : 'var(--iron)';
+          const text = w.isCurrent ? 'var(--text)' : 'var(--text2)';
           return (
-            <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%', gap: 4 }}>
-              {w.count > 0 && (
-                <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', fontWeight: 700, color: w.isCurrent ? 'var(--accent)' : 'var(--text3)' }}>{w.count}</div>
-              )}
-              <div style={{
-                width: '100%', height: h, borderRadius: 3,
-                background: w.isCurrent ? 'var(--accent)' : 'var(--bg3)',
-                transition: 'height 0.2s',
-              }} />
-            </div>
+            <g key={i}>
+              <rect x={x} y={w.count > 0 ? y : 97} width="28" height={w.count > 0 ? 100 - y : 3} rx="6" fill={w.count > 0 ? fill : 'var(--bg4)'} />
+              {w.count > 0 && <text x={x + 14} y={y - 8} textAnchor="middle" fill={text} style={axisText}>{w.count}</text>}
+              <text x={x + 14} y="122" textAnchor="middle" fill={text} style={axisText}>{w.isCurrent ? 'NOW' : w.label}</text>
+            </g>
           );
         })}
-      </div>
-      <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-        {weeks.map((w, i) => (
-          <div key={i} style={{ flex: 1, textAlign: 'center', fontSize: 8, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>
-            {w.label}
-          </div>
-        ))}
-      </div>
-    </div>
+      </svg>
+    </section>
   );
 }
 
 function WeeklyVolumeChart({ logs }) {
   // Standardise to kg across weeks so the trend line is comparable even if
-  // the user logged in mixed units at different points in their history.
+  // the user logged in mixed units, and use real logged sets when present.
   const weeks = getLastNWeeks(8).map((w) => {
     const weekLogs = logs.filter((l) => l.date >= w.startStr && l.date <= w.endStr);
-    const volumeKg = weekLogs.reduce((sum, l) => sum + (l.exercises || []).reduce((s, ex) => {
-      const weightKg = convertWeight(ex.weight || 0, ex.weightUnit || 'kg', 'kg');
-      return s + (ex.sets || 0) * (ex.reps || 0) * weightKg;
-    }, 0), 0);
+    const volumeKg = weekLogs.reduce((sum, l) => sum + (l.exercises || []).reduce((s, ex) => (
+      s + exerciseVolume(ex, (wt) => convertWeight(wt, ex.weightUnit || 'kg', 'kg'))
+    ), 0), 0);
     return { ...w, volume: Math.round(volumeKg) };
   });
 
-  const fmtVol = (v) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : `${v}`);
-
-  let linePath = '';
-  let areaPath = '';
-  let lastPointPct = null;
-  let maxVal = 0;
-  let minVal = 0;
+  const fmtVol = (v) => (v >= 1000 ? `${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : `${v}`);
   const hasData = weeks.some((w) => w.volume > 0);
-  if (hasData) {
-    const vals = weeks.map((w) => w.volume);
-    minVal = Math.min(...vals);
-    maxVal = Math.max(...vals);
-    const range = maxVal - minVal || 1;
-    const points = weeks.map((w, i) => {
-      const x = (i / (weeks.length - 1)) * 300;
-      const y = 90 - ((w.volume - minVal) / range) * 80;
-      return [x, y];
-    });
-    linePath = points.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x},${y}`).join(' ');
-    areaPath = `${linePath} L300,100 L0,100 Z`;
-    const [lx, ly] = points[points.length - 1];
-    lastPointPct = { left: (lx / 300) * 100, top: ly };
-  }
+  const current = weeks[weeks.length - 1].volume;
+  const previous = weeks[weeks.length - 2].volume;
+  const change = previous > 0 ? Math.round(((current - previous) / previous) * 100) : null;
 
-  const currentWeekVolume = weeks[weeks.length - 1].volume;
+  // Zero baseline: the y-axis always starts at 0 so week-to-week changes
+  // aren't exaggerated. Round the top up to a tidy gridline value.
+  const rawMax = Math.max(...weeks.map((w) => w.volume), 1);
+  const step = Math.pow(10, Math.floor(Math.log10(rawMax)));
+  const yMax = Math.ceil(rawMax / step) * step;
+  const X0 = 40, X1 = 322, Y0 = 130, Y1 = 14;
+  const pts = weeks.map((w, i) => [X0 + (i / (weeks.length - 1)) * (X1 - X0), Y0 - (w.volume / yMax) * (Y0 - Y1)]);
+  const line = pts.map(([x, y]) => `${x},${y}`).join(' ');
+  const area = `M${pts.map(([x, y]) => `${x} ${y}`).join(' L')} L${X1} ${Y0} L${X0} ${Y0} Z`;
+  const [lx, ly] = pts[pts.length - 1];
+  const summary = `Weekly volume in kilograms for the last 8 weeks: ${weeks.map((w) => w.volume).join(', ')}`;
 
   return (
-    <div style={{ borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg2)', padding: '16px', marginBottom: 24 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
-        <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text3)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-          Volume / Week
-        </div>
+    <section style={chartCardStyle}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
+        <h3 style={{ ...chartTitleStyle, margin: 0 }}>Volume / Week</h3>
         {hasData && (
-          <div style={{ fontSize: 13, fontWeight: 900, fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>
-            {fmtVol(currentWeekVolume)}<span style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 400, marginLeft: 3 }}>kg this week</span>
-          </div>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-md)' }}>
+            {fmtVol(current)} kg
+            {change != null && <span style={{ color: change >= 0 ? 'var(--green)' : 'var(--text2)', marginLeft: 6 }}>{change >= 0 ? '+' : ''}{change}%</span>}
+          </span>
         )}
       </div>
       {hasData ? (
-        <>
-          <div style={{ position: 'relative' }}>
-            <div style={{ position: 'absolute', top: 0, left: 0, fontSize: 8, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>{fmtVol(maxVal)}kg</div>
-            <div style={{ position: 'absolute', bottom: 0, left: 0, fontSize: 8, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>{fmtVol(minVal)}kg</div>
-            <svg viewBox="0 0 300 100" preserveAspectRatio="none" style={{ width: '100%', height: 100, display: 'block' }}>
-              <defs>
-                <linearGradient id="grad-weekly-volume" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.25" />
-                  <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
-                </linearGradient>
-              </defs>
-              <path d={areaPath} fill="url(#grad-weekly-volume)" />
-              <path d={linePath} fill="none" stroke="var(--accent)" strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
-            </svg>
-            {lastPointPct && (
-              <div style={{
-                position: 'absolute', left: `${lastPointPct.left}%`, top: lastPointPct.top,
-                width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)',
-                transform: 'translate(-50%, -50%)', boxShadow: '0 0 0 3px rgba(var(--accent-rgb), 0.2)',
-              }} />
-            )}
-          </div>
-          <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-            {weeks.map((w, i) => (
-              <div key={i} style={{ flex: 1, textAlign: 'center', fontSize: 8, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>
-                {w.label}
-              </div>
-            ))}
-          </div>
-        </>
+        <svg viewBox="0 0 330 150" role="img" aria-label={summary} style={{ width: '100%', height: 'auto', display: 'block' }}>
+          {[1, 0.5].map((f) => (
+            <g key={f}>
+              <line x1={X0} x2="330" y1={Y0 - f * (Y0 - Y1)} y2={Y0 - f * (Y0 - Y1)} stroke="var(--bg4)" />
+              <text x={X0 - 6} y={Y0 - f * (Y0 - Y1) + 4} textAnchor="end" fill="var(--text2)" style={axisText}>{fmtVol(yMax * f)}</text>
+            </g>
+          ))}
+          <line x1={X0} x2="330" y1={Y0} y2={Y0} stroke="var(--iron)" />
+          <text x={X0 - 6} y={Y0 + 4} textAnchor="end" fill="var(--text2)" style={axisText}>0</text>
+          <path d={area} fill="var(--accent)" fillOpacity="0.06" />
+          <polyline points={line} fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+          <circle cx={lx} cy={ly} r="5" fill="var(--accent)" />
+          {weeks.map((w, i) => (i % 2 === 0 || w.isCurrent) && (
+            <text key={i} x={pts[i][0]} y="148" textAnchor="middle" fill={w.isCurrent ? 'var(--text)' : 'var(--text2)'} style={axisText}>{w.isCurrent ? 'NOW' : w.label}</text>
+          ))}
+        </svg>
       ) : (
-        <div style={{ textAlign: 'center', color: 'var(--text3)', fontSize: 12, padding: '20px 0' }}>No weighted volume logged yet</div>
+        <div style={{ textAlign: 'center', color: 'var(--text2)', fontSize: 'var(--fs-md)', padding: '20px 0' }}>No weighted volume logged yet</div>
       )}
-    </div>
+    </section>
   );
 }
 
-/* ─── Exercise progression section ─── */
 function buildProgressionMap(logs) {
   const map = {};
   // logs are sorted newest-first; iterate so earliest entries win on dedupe
@@ -1604,7 +1578,7 @@ export default function StatsPage() {
               </div>
 
               {/* ── Weekly sessions chart ── */}
-              {workoutLogs.length > 0 && <WeeklySessionsChart logs={workoutLogs} />}
+              {workoutLogs.length > 0 && <WeeklySessionsChart logs={workoutLogs} goal={(activeSplit?.days || []).filter((d) => !d.isRest && (d.exercises || []).length > 0).length} />}
               {workoutLogs.length > 0 && <WeeklyVolumeChart logs={workoutLogs} />}
           </div>
 
