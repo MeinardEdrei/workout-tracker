@@ -10,7 +10,7 @@ import LeaderboardPage from '../components/LeaderboardPage';
 import { setSplitVisibility, reapplySplit as reapplySplitApi, getRanking } from '../api/index';
 import { X, Trophy, ArrowRight, RotateCcw, Upload } from 'lucide-react';
 import AiChatBubble from '../components/AiChatBubble';
-import { formatSplitAsText } from '../utils/splitText';
+import { formatSplitAsText, formatSplitWithHistory } from '../utils/splitText';
 
 const API = import.meta.env.VITE_API_URL || '';
 const SHOW_AI_CHAT = false; // archived: unused feature, flip to re-enable
@@ -687,6 +687,7 @@ export default function SplitsPage() {
   const [shareModal, setShareModal] = useState(null);
   const [historyModal, setHistoryModal] = useState(null);
   const [compareModal, setCompareModal] = useState(false);
+  const [copyHistoryModal, setCopyHistoryModal] = useState(null);
   const importInputRef = useRef(null);
   const [toast, setToast] = useState(null);
   const signInTimer = useRef(null);
@@ -697,19 +698,32 @@ export default function SplitsPage() {
   }
 
   function handleCopySplit(split) {
-    const text = formatSplitAsText(split);
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(() => {
-        showToast('Split copied to clipboard as text!');
-      }).catch(() => {
-        fallbackCopyTextToClipboard(text);
-      });
-    } else {
-      fallbackCopyTextToClipboard(text);
+    copyText(formatSplitAsText(split), 'Split copied to clipboard as text!');
+  }
+
+  async function handleCopySplitWithHistory(split, weeks) {
+    setCopyHistoryModal(null);
+    try {
+      const logs = await queryClient.fetchQuery({ queryKey: ['logs', storageKey], queryFn: storage.getLogs, staleTime: 2 * 60 * 1000 });
+      copyText(formatSplitWithHistory(split, logs, { weeks }), 'Split + history copied to clipboard!');
+    } catch {
+      showToast('Could not load workout history', 'error');
     }
   }
 
-  function fallbackCopyTextToClipboard(text) {
+  function copyText(text, successMessage) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => {
+        showToast(successMessage);
+      }).catch(() => {
+        fallbackCopyTextToClipboard(text, successMessage);
+      });
+    } else {
+      fallbackCopyTextToClipboard(text, successMessage);
+    }
+  }
+
+  function fallbackCopyTextToClipboard(text, successMessage) {
     const textArea = document.createElement('textarea');
     textArea.value = text;
     textArea.style.position = 'fixed';
@@ -721,7 +735,7 @@ export default function SplitsPage() {
     textArea.select();
     try {
       document.execCommand('copy');
-      showToast('Split copied to clipboard as text!');
+      showToast(successMessage);
     } catch {
       showToast('Failed to copy split', 'error');
     }
@@ -1335,13 +1349,20 @@ Coach:`;
                 {/* Expanded Details Row */}
                 {isExpanded && (
                   <div style={{ borderTop: '1px solid var(--border)', padding: '14px 16px', background: 'rgba(0,0,0,0.2)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginBottom: 10 }}>
                       <button
                         onClick={(e) => { e.stopPropagation(); handleCopySplit(split); }}
                         className="btn btn-ghost"
                         style={{ fontSize: 11, padding: '4px 10px', gap: 5, display: 'inline-flex', alignItems: 'center' }}
                       >
                         <CopyIcon /> Copy as Text
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setCopyHistoryModal(split); }}
+                        className="btn btn-ghost"
+                        style={{ fontSize: 11, padding: '4px 10px', gap: 5, display: 'inline-flex', alignItems: 'center' }}
+                      >
+                        <CopyIcon /> Copy with History
                       </button>
                     </div>
                     {sortedDays.length === 0 ? (
@@ -1494,6 +1515,32 @@ Coach:`;
           onRevert={(versionId) => revertMutation.mutate({ id: historyModal._id, versionId })}
           onClose={() => setHistoryModal(null)}
         />
+      )}
+      {copyHistoryModal && createPortal(
+        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setCopyHistoryModal(null)}>
+          <div className="modal">
+            <div className="modal-title">Copy with History</div>
+            <div style={{ color: 'var(--text3)', fontSize: 13, marginBottom: 14 }}>
+              Includes logged sets, reps, weights, swaps and skips for "{copyHistoryModal.name}".
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {[{ weeks: 4, label: 'Last 4 weeks' }, { weeks: 8, label: 'Last 8 weeks' }, { weeks: null, label: 'All history' }].map((opt) => (
+                <button
+                  key={opt.label}
+                  className="btn btn-ghost"
+                  style={{ width: '100%', justifyContent: 'center' }}
+                  onClick={() => handleCopySplitWithHistory(copyHistoryModal, opt.weeks)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="btn btn-ghost" onClick={() => setCopyHistoryModal(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
       {compareModal && (
         <SplitCompareModal
@@ -1652,6 +1699,18 @@ Coach:`;
               >
                 <CopyIcon />
                 Copy as Text
+              </button>
+
+              <button
+                onClick={() => { setCopyHistoryModal(s); setMenuOpenId(null); }}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '10px 16px', background: 'none', border: 'none',
+                  cursor: 'pointer', color: 'var(--text)', fontSize: 13, fontWeight: 600,
+                }}
+              >
+                <CopyIcon />
+                Copy with History
               </button>
 
               <button
