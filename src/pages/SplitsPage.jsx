@@ -8,7 +8,7 @@ import SplitEditor from './EditPage';
 import BrowseSplitsPage from './BrowseSplitsPage';
 import LeaderboardPage from '../components/LeaderboardPage';
 import { setSplitVisibility, reapplySplit as reapplySplitApi, getRanking } from '../api/index';
-import { X, Trophy, ArrowRight, RotateCcw, Upload, MoreHorizontal, Share2, Copy, CopyPlus, CalendarDays, Pencil, History, Columns2, Download, Globe, Lock, Trash2 } from 'lucide-react';
+import { X, Trophy, ArrowRight, RotateCcw, Upload, MoreHorizontal, Share2, Copy, CopyPlus, CalendarDays, Pencil, History, Columns2, Download, Globe, Lock, Trash2, Check, Plus, ShoppingBag } from 'lucide-react';
 import BottomSheet, { SheetRow, SheetTile } from '../components/BottomSheet';
 import { formatSplitAsText, formatSplitWithHistory } from '../utils/splitText';
 import ConfirmModal from '../components/ConfirmModal';
@@ -16,21 +16,6 @@ import Toast from '../components/Toast';
 
 const API = import.meta.env.VITE_API_URL || '';
 
-function PlusIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-      <line x1="8" y1="3" x2="8" y2="13" />
-      <line x1="3" y1="8" x2="13" y2="8" />
-    </svg>
-  );
-}
-function CheckIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-      <polyline points="2,7 6,11 12,3" stroke="#121110" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
 function InlineSpinner() {
   return (
     <span style={{
@@ -40,25 +25,6 @@ function InlineSpinner() {
     }} />
   );
 }
-function GlobeIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" />
-      <line x1="2" y1="12" x2="22" y2="12" />
-      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-    </svg>
-  );
-}
-function ShopIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
-      <line x1="3" y1="6" x2="21" y2="6" />
-      <path d="M16 10a4 4 0 0 1-8 0" />
-    </svg>
-  );
-}
-
 function SplitModal({ title, initial = '', onConfirm, onClose }) {
   const [value, setValue] = useState(initial);
   function submit(e) { e.preventDefault(); if (!value.trim()) return; onConfirm(value.trim()); }
@@ -796,7 +762,7 @@ export default function SplitsPage() {
             }}
             title="Browse community splits"
           >
-            <ShopIcon />
+            <ShoppingBag size={15} aria-hidden="true" />
             <span>Browse</span>
           </button>
 
@@ -824,7 +790,7 @@ export default function SplitsPage() {
 
           {/* Primary action: always accent, always prominent */}
           <button className="btn btn-accent" onClick={() => setModal({ type: 'add' })}>
-            <PlusIcon /> New
+            <Plus size={16} aria-hidden="true" /> New
           </button>
         </div>
       </div>
@@ -896,10 +862,10 @@ export default function SplitsPage() {
           <div style={{ color: 'var(--text2)', lineHeight: 1.5 }}>No splits yet.<br />Create your own training split or browse community programs to get started.</div>
           <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
             <button className="btn btn-accent" style={{ fontSize: 12, padding: '8px 14px', gap: 6 }} onClick={() => setModal({ type: 'add' })}>
-              <PlusIcon /> New Split
+              <Plus size={16} aria-hidden="true" /> New Split
             </button>
             <button className="btn" style={{ fontSize: 12, padding: '8px 14px', background: 'transparent', border: '1px solid var(--border2)', color: 'var(--text2)', gap: 6 }} onClick={() => isLoggedIn ? setBrowsing(true) : handleSignIn()}>
-              <ShopIcon /> Browse Community
+              <ShoppingBag size={15} aria-hidden="true" /> Browse Community
             </button>
           </div>
         </div>
@@ -937,7 +903,7 @@ export default function SplitsPage() {
                       display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s',
                     }}
                   >
-                    {split.isActive && <CheckIcon />}
+                    {split.isActive && <Check size={14} color="#121110" strokeWidth={3} aria-hidden="true" />}
                   </button>
 
                   {/* Name + meta — gets all remaining space */}
@@ -956,7 +922,7 @@ export default function SplitsPage() {
                       )}
                       {split.isPublic && (
                         <span style={{ color: 'var(--accent)', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                          <GlobeIcon /> Public
+                          <Globe size={15} aria-hidden="true" /> Public
                         </span>
                       )}
                       {split.sourceId && (

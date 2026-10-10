@@ -1,35 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import SplitShareCard from './SplitShareCard';
+import { Download, Share, X } from 'lucide-react';
 
 function toFilename(splitName) {
   return splitName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') + '-split.png';
 }
 
-function DownloadIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-      <polyline points="7 10 12 15 17 10" />
-      <line x1="12" y1="15" x2="12" y2="3" />
-    </svg>
-  );
-}
-function ShareIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
-      <polyline points="16 6 12 2 8 6" />
-      <line x1="12" y1="2" x2="12" y2="15" />
-    </svg>
-  );
-}
-function CloseIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-    </svg>
-  );
-}
 function Spinner() {
   return (
     <div style={{
@@ -148,7 +124,7 @@ export default function SplitShareModal({ split, onClose }) {
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', padding: 6, display: 'flex', borderRadius: 6, WebkitTapHighlightColor: 'transparent' }}
             aria-label="Close"
           >
-            <CloseIcon />
+            <X size={18} aria-hidden="true" />
           </button>
         </div>
 
@@ -199,7 +175,7 @@ export default function SplitShareModal({ split, onClose }) {
             onClick={handleDownload}
             disabled={!canAct}
           >
-            <DownloadIcon /> Download
+            <Download size={15} aria-hidden="true" /> Download
           </button>
           <button
             className="btn btn-accent"
@@ -207,7 +183,7 @@ export default function SplitShareModal({ split, onClose }) {
             onClick={handleShare}
             disabled={!canAct}
           >
-            <ShareIcon /> Share
+            <Share size={15} aria-hidden="true" /> Share
           </button>
         </div>
       </div>

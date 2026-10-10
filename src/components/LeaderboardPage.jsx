@@ -3,31 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getRanking } from '../api/index';
 import { isOnline, formatPresence } from '../utils/presence';
 import UserStatsModal from './UserStatsModal';
-
-function ChevronLeftIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-      <polyline points="9,3 5,7 9,11" />
-    </svg>
-  );
-}
-
-function TrophyIcon({ rank }) {
-  const colors = {
-    1: '#ffd700', // Gold
-    2: '#c0c0c0', // Silver
-    3: '#cd7f32', // Bronze
-  };
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={colors[rank]} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/>
-      <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
-      <path d="M4 22h16"/>
-      <path d="M10 14.66V17c0 .55-.45 1-1 1H4v2h16v-2h-5c-.55 0-1-.45-1-1v-2.34"/>
-      <path d="M12 2a8 8 0 0 0-8 8h16a8 8 0 0 0-8-8z"/>
-    </svg>
-  );
-}
+import { ChevronLeft, Trophy } from 'lucide-react';
 
 export default function LeaderboardPage({ onBack }) {
   const [filter, setFilter] = useState('weekly'); // 'weekly', 'monthly', 'yearly'
@@ -45,7 +21,7 @@ export default function LeaderboardPage({ onBack }) {
       <div className="page-header">
         <div>
           <button className="back-btn" onClick={onBack} style={{ marginBottom: 4 }}>
-            <ChevronLeftIcon /> Splits
+            <ChevronLeft size={14} aria-hidden="true" /> Splits
           </button>
           <h1 className="page-title">Leaderboard</h1>
           <div className="page-subtitle">Top Active Users</div>
@@ -147,7 +123,7 @@ export default function LeaderboardPage({ onBack }) {
                     color: rank === 1 ? '#ffd700' : rank === 2 ? '#e0e0e0' : rank === 3 ? '#cd7f32' : 'var(--text3)',
                     flexShrink: 0
                   }}>
-                    {isTop3 ? <TrophyIcon rank={rank} /> : rank}
+                    {isTop3 ? <Trophy size={16} aria-hidden="true" /> : rank}
                   </div>
 
                   {/* Avatar */}

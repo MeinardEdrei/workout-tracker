@@ -1,6 +1,6 @@
 import { useState, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Dumbbell } from 'lucide-react';
+import { Check, Dumbbell, Copy, Download, Share2, X } from 'lucide-react';
 
 const DAYS_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -77,46 +77,6 @@ function getVolumeComparison(volumeKg) {
     tons: tons.toFixed(2),
     comparison,
   };
-}
-
-function CloseIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="13" y1="5" x2="5" y2="13" />
-      <line x1="5" y1="5" x2="13" y2="13" />
-    </svg>
-  );
-}
-
-function CopyIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="5.5" y="5.5" width="8.5" height="8.5" rx="1.5"/>
-      <path d="M3.5 10.5h-1a1.5 1.5 0 0 1-1.5-1.5v-6A1.5 1.5 0 0 1 2.5 1.5h6A1.5 1.5 0 0 1 10 3v1"/>
-    </svg>
-  );
-}
-
-function DownloadIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M14 10v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-3"/>
-      <polyline points="5 7 8 10 11 7"/>
-      <line x1="8" y1="1" x2="8" y2="10"/>
-    </svg>
-  );
-}
-
-function NativeShareIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12.5" cy="3.5" r="2.5"/>
-      <circle cx="3.5" cy="8" r="2.5"/>
-      <circle cx="12.5" cy="12.5" r="2.5"/>
-      <line x1="5.7" y1="9.1" x2="10.3" y2="11.4"/>
-      <line x1="10.3" y1="4.6" x2="5.7" y2="6.9"/>
-    </svg>
-  );
 }
 
 export default function StatsShareModal({ logs, onClose }) {
@@ -263,7 +223,7 @@ export default function StatsShareModal({ logs, onClose }) {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
           <div style={{ fontSize: 13, fontWeight: 900, fontFamily: 'var(--font-mono)', letterSpacing: '0.12em', color: 'var(--text3)' }}>SHARE STATS</div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', display: 'flex', padding: 4 }} title="Close">
-            <CloseIcon />
+            <X size={18} aria-hidden="true" />
           </button>
         </div>
 
@@ -539,7 +499,7 @@ export default function StatsShareModal({ logs, onClose }) {
             className="btn btn-ghost"
             style={{ flex: 1, fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'center', height: 42 }}
           >
-            <CopyIcon /> Copy
+            <Copy size={14} aria-hidden="true" /> Copy
           </button>
           <button
             onClick={() => handleExport('download')}
@@ -547,7 +507,7 @@ export default function StatsShareModal({ logs, onClose }) {
             className="btn btn-accent"
             style={{ flex: 1, fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'center', height: 42 }}
           >
-            <DownloadIcon /> Download
+            <Download size={14} aria-hidden="true" /> Download
           </button>
           <button
             onClick={() => handleExport('share')}
@@ -555,7 +515,7 @@ export default function StatsShareModal({ logs, onClose }) {
             className="btn btn-ghost"
             style={{ flex: 1, fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'center', height: 42 }}
           >
-            <NativeShareIcon /> Share
+            <Share2 size={14} aria-hidden="true" /> Share
           </button>
         </div>
 

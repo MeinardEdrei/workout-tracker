@@ -8,7 +8,7 @@ import ExerciseThumbnail from '../components/ExerciseThumbnail';
 import { isSyncExcluded, excludeFromSync } from '../utils/syncPrefs';
 import { createPortal } from 'react-dom';
 import * as api from '../api/index.js';
-import { Check } from 'lucide-react';
+import { Check, ArrowLeftRight, GripVertical, ImageDown, Plus, Trash2, Upload, X } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
@@ -76,24 +76,10 @@ function MuscleTargetPicker({ selected, onToggle }) {
 const LABEL = { fontSize: 10, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 };
 
 /* ─── Icons ─── */
-function PlusIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-      <line x1="8" y1="3" x2="8" y2="13" /><line x1="3" y1="8" x2="13" y2="8" />
-    </svg>
-  );
-}
 function ChevronLeft() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
       <polyline points="10,4 6,8 10,12" />
-    </svg>
-  );
-}
-function TrashIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="2,4 14,4" /><path d="M5 4V2h6v2" /><path d="M3 4l1 10h8l1-10" />
     </svg>
   );
 }
@@ -104,40 +90,6 @@ function EditPencil() {
     </svg>
   );
 }
-function GripIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-      <line x1="3" y1="4" x2="11" y2="4" />
-      <line x1="3" y1="7" x2="11" y2="7" />
-      <line x1="3" y1="10" x2="11" y2="10" />
-    </svg>
-  );
-}
-
-function UploadIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 12H2a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-2"/>
-      <polyline points="8,2 8,10"/><polyline points="5,5 8,2 11,5"/>
-    </svg>
-  );
-}
-function SearchImageIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="6.5" cy="6.5" r="4.5"/><line x1="10" y1="10" x2="14" y2="14"/>
-      <line x1="5" y1="6.5" x2="8" y2="6.5"/><line x1="6.5" y1="5" x2="6.5" y2="8"/>
-    </svg>
-  );
-}
-function XSmallIcon() {
-  return (
-    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/>
-    </svg>
-  );
-}
-
 /* ─── Toast notification ─── */
 function Toast({ message, type = 'error' }) {
   if (!message) return null;
@@ -964,16 +916,6 @@ function AddExerciseModal({ splitDays, onConfirm, onClose }) {
   );
 }
 
-function SwapIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="12 5 15 8 12 11" />
-      <path d="M3 8h12" />
-      <polyline points="4 11 1 8 4 5" />
-    </svg>
-  );
-}
-
 function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
   const { storage, storageKey } = useStorage();
   const [form, setForm] = useState({ name: '', sets: 3, reps: 10, weight: 0, weightUnit: 'kg', muscleTargets: [], untilFailure: false, duration: 0, durationUnit: 'sec' });
@@ -1740,7 +1682,7 @@ function EditExerciseModal({ ex, splitId, dayId, splitDays, onConfirm, onClose, 
                       cursor: 'pointer', color: '#fff',
                     }}
                   >
-                    <XSmallIcon />
+                    <X size={10} aria-hidden="true" />
                   </button>
                 )}
                 {(imgFetching || imgUploading) && (
@@ -1761,7 +1703,7 @@ function EditExerciseModal({ ex, splitId, dayId, splitDays, onConfirm, onClose, 
                   onClick={handleFetchImage}
                   disabled={imgFetching || imgUploading}
                 >
-                  <SearchImageIcon />
+                  <ImageDown size={13} aria-hidden="true" />
                   {imgFetching ? 'Searching…' : 'Fetch from library'}
                 </button>
                 <button
@@ -1771,7 +1713,7 @@ function EditExerciseModal({ ex, splitId, dayId, splitDays, onConfirm, onClose, 
                   onClick={() => fileInputRef.current?.click()}
                   disabled={imgFetching || imgUploading}
                 >
-                  <UploadIcon />
+                  <Upload size={13} aria-hidden="true" />
                   {imgUploading ? 'Uploading…' : currentImageUrl ? 'Replace image' : 'Upload custom'}
                 </button>
                 <input
@@ -2018,7 +1960,7 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
         style={{ color: 'var(--text3)', cursor: 'grab', flexShrink: 0, display: 'flex', alignItems: 'center', touchAction: 'none', padding: '2px 2px' }}
         title="Drag to reorder"
       >
-        <GripIcon />
+        <GripVertical size={14} aria-hidden="true" />
       </div>
       <ExerciseThumbnail imageUrl={currentImageUrl || ex.imageUrl} name={ex.name} size={48} />
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -2034,7 +1976,7 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
           </div>
         )}
       </div>
-      <button className="btn-icon" style={{ flexShrink: 0 }} onClick={() => setShowSwapModal(true)} title="Switch/Swap"><SwapIcon /></button>
+      <button className="btn-icon" style={{ flexShrink: 0 }} onClick={() => setShowSwapModal(true)} title="Switch/Swap"><ArrowLeftRight size={14} aria-hidden="true" /></button>
       {(splitDays || []).length > 1 && (
         <button className="btn-icon" style={{ flexShrink: 0 }} onClick={() => setShowMoveModal(true)} title="Move to another day">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -2043,7 +1985,7 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
         </button>
       )}
       <button className="btn-icon" style={{ flexShrink: 0 }} onClick={() => setEditing(true)} title="Edit"><EditPencil /></button>
-      <button className="btn-icon" style={{ color: 'var(--red)', flexShrink: 0 }} onClick={() => setDeleteConfirm(true)} title="Delete"><TrashIcon /></button>
+      <button className="btn-icon" style={{ color: 'var(--red)', flexShrink: 0 }} onClick={() => setDeleteConfirm(true)} title="Delete"><Trash2 size={14} aria-hidden="true" /></button>
       
       {editing && (
         <EditExerciseModal
@@ -2359,7 +2301,7 @@ function DayEditor({ day, split, onBack, onDayUpdated }) {
         <>
           <div style={{ padding: '12px 16px 0', display: 'flex', justifyContent: 'flex-end' }}>
             <button className="btn btn-accent" style={{ fontSize: 12 }} onClick={() => setModal('addEx')}>
-              <PlusIcon /> Add Exercise
+              <Plus size={16} aria-hidden="true" /> Add Exercise
             </button>
           </div>
           <div style={{ marginTop: 12 }}>
@@ -2544,7 +2486,7 @@ function SplitEditorInner({ split, onBack, onSplitUpdated }) {
           <h1 className="page-title" style={{ fontSize: 22 }}>{split.name}</h1>
         </div>
         <button className="btn btn-accent" style={{ fontSize: 12 }} onClick={() => setModal('addDay')}>
-          <PlusIcon /> Add Day
+          <Plus size={16} aria-hidden="true" /> Add Day
         </button>
       </div>
 
@@ -2609,7 +2551,7 @@ function SplitEditorInner({ split, onBack, onSplitUpdated }) {
                 style={{ color: 'var(--red)' }}
                 onClick={(e) => { e.stopPropagation(); setModal({ type: 'deleteDay', day }); }}
               >
-                <TrashIcon />
+                <Trash2 size={14} aria-hidden="true" />
               </button>
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--text3)" strokeWidth="2" strokeLinecap="round">
                 <polyline points="5,3 9,7 5,11" />

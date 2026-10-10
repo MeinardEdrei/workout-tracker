@@ -16,7 +16,7 @@ import { getActiveRestTimer, getAllActiveRestTimers, setActiveRestTimer, clearAc
 import { getDayFlags, setDayFlag } from '../utils/earlySession';
 import { ensureSessionStart, getSessionStart, clearSessionStart, formatSessionDuration, formatSessionElapsed } from '../utils/sessionTiming';
 import { createPortal } from 'react-dom';
-import { X, Check, RotateCcw, Trophy, BarChart3, StickyNote, Dumbbell, Moon, PartyPopper, Flame, ChevronDown, CalendarDays, SkipForward, MoreHorizontal, Ban, Clock, AlertCircle } from 'lucide-react';
+import { X, Check, RotateCcw, Trophy, BarChart3, StickyNote, Dumbbell, Moon, PartyPopper, Flame, ChevronDown, CalendarDays, SkipForward, MoreHorizontal, Ban, Clock, AlertCircle, ArrowLeftRight, Share } from 'lucide-react';
 import { WheelPicker, WheelPickerWrapper } from '@ncdai/react-wheel-picker';
 import ConfirmModal from '../components/ConfirmModal';
 import Toast from '../components/Toast';
@@ -258,22 +258,6 @@ function ExerciseHistoryModal({ exName, logs, onClose }) {
   );
 }
 
-function CheckIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-      <polyline points="2,7 6,11 12,3" stroke="#121110" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-function ShareIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 8H2a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9a1 1 0 0 0-1-1h-2"/>
-      <polyline points="8,1 8,10"/><polyline points="5,4 8,1 11,4"/>
-    </svg>
-  );
-}
-
 async function captureAndShare(ref, filename, title) {
   const html2canvas = (await import('html2canvas')).default;
   const canvas = await html2canvas(ref.current, { backgroundColor: '#121110', scale: 2, useCORS: true, logging: false });
@@ -339,7 +323,7 @@ function CompletionScreen({ log, onClose, onShare, sharing }) {
         <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
           <button className="btn btn-ghost" style={{ flex: 1 }} onClick={onClose}>Close</button>
           <button className="btn btn-accent" style={{ flex: 1, gap: 8 }} onClick={onShare} disabled={sharing}>
-            <ShareIcon />{sharing ? 'Sharing…' : 'Share Card'}
+            <Share size={16} aria-hidden="true" />{sharing ? 'Sharing…' : 'Share Card'}
           </button>
         </div>
       </div>
@@ -895,7 +879,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
   // really planned as, since ex.name below now reads the swapped identity.
   const swappedPillEl = effectiveSwap && (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: isHero ? 10 : 9, fontWeight: 800, letterSpacing: '0.04em', color: 'var(--accent)', background: 'rgba(var(--accent-rgb), 0.08)', border: '1px solid rgba(var(--accent-rgb), 0.25)', padding: '2px 8px', borderRadius: 10, textTransform: 'uppercase' }}>
-      <SwapIcon /> Swapped from {rawEx.name}
+      <ArrowLeftRight size={10} aria-hidden="true" /> Swapped from {rawEx.name}
       {!readOnly && (
         <button
           type="button"
@@ -1689,7 +1673,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
           onClick={() => { setShowActionsMenu(false); setShowSwapModal(true); }}
           style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'none', border: 'none', borderBottom: '1px solid var(--border)', cursor: 'pointer', color: 'var(--text)', fontSize: 13, fontWeight: 600, textAlign: 'left' }}
         >
-          <SwapIcon /> Swap Exercise
+          <ArrowLeftRight size={10} aria-hidden="true" /> Swap Exercise
         </button>
         <button
           onClick={() => { setShowActionsMenu(false); setShowHistoryModal(true); }}
@@ -1930,7 +1914,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
               cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
             }}
           >
-            {effectiveChecked ? (<><CheckIcon /> Completed</>) : 'Mark Complete'}
+            {effectiveChecked ? (<><Check size={14} color="#121110" strokeWidth={3} aria-hidden="true" /> Completed</>) : 'Mark Complete'}
           </button>
         )}
 
@@ -1975,7 +1959,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
           transition: 'all 0.15s',
         }}
       >
-        {effectiveChecked ? <CheckIcon /> : effectiveSkipped ? <Ban size={16} color="var(--text3)" /> : null}
+        {effectiveChecked ? <Check size={14} color="#121110" strokeWidth={3} aria-hidden="true" /> : effectiveSkipped ? <Ban size={16} color="var(--text3)" /> : null}
       </button>
 
       {/* Thumbnail */}
@@ -2145,16 +2129,6 @@ function FinishWorkoutModal({ message, initialDurationSeconds, onConfirm, onClos
       </div>
     </div>,
     document.body
-  );
-}
-
-function SwapIcon() {
-  return (
-    <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="12 5 15 8 12 11" />
-      <path d="M3 8h12" />
-      <polyline points="4 11 1 8 4 5" />
-    </svg>
   );
 }
 

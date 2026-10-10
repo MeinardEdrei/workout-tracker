@@ -5,7 +5,7 @@ import StatsShareModal from '../components/StatsShareModal';
 import { createPortal } from 'react-dom';
 import { capitalizeWords, formatRelativeDate } from '../utils/textFormat';
 import { normKey, findDuplicatePairs } from '../utils/matchExercise';
-import { X, TrendingUp, TrendingDown, ArrowRight, RotateCcw, BarChart3, FolderOpen, Download, Tag, Pencil, Check, Flame, Minus, Trophy, Ban } from 'lucide-react';
+import { X, TrendingUp, TrendingDown, ArrowRight, RotateCcw, BarChart3, FolderOpen, Download, Tag, Pencil, Check, Flame, Minus, Trophy, Ban, ChevronDown, Share, Trash2 } from 'lucide-react';
 import { computeStreak } from '../utils/streaks';
 import { convertWeight } from '../utils/weight';
 import ConfirmModal from '../components/ConfirmModal';
@@ -14,30 +14,6 @@ const LOGS_STALE = 2 * 60 * 1000;
 const DOW_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-function ShareIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 8H2a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9a1 1 0 0 0-1-1h-2"/>
-      <polyline points="8,1 8,10"/><polyline points="5,4 8,1 11,4"/>
-    </svg>
-  );
-}
-function TrashIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="2,4 14,4"/><path d="M5 4V2h6v2"/><path d="M3 4l1 10h8l1-10"/>
-    </svg>
-  );
-}
-function ChevronIcon({ open }) {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--text3)" strokeWidth="2" strokeLinecap="round"
-      style={{ transform: open ? 'rotate(180deg)' : 'none', transition: '0.15s', flexShrink: 0 }}>
-      <polyline points="3,5 7,9 11,5"/>
-    </svg>
-  );
-}
 
 /* ─── Activity Tracker (Monthly + Yearly) ─── */
 function ChevronLeftSmall() {
@@ -667,7 +643,7 @@ function ProgressionCard({ exercise }) {
           })}
         </div>
 
-        <ChevronIcon open={expanded} />
+        <ChevronDown size={14} color="var(--text3)" style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: '0.15s', flexShrink: 0 }} aria-hidden="true" />
       </button>
 
       {expanded && (
@@ -877,7 +853,7 @@ function LogCard({ log, onDelete, hasPR }) {
           )}
         </div>
 
-        <ChevronIcon open={expanded} />
+        <ChevronDown size={14} color="var(--text3)" style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: '0.15s', flexShrink: 0 }} aria-hidden="true" />
       </button>
 
       {expanded && (
@@ -938,7 +914,7 @@ function LogCard({ log, onDelete, hasPR }) {
             );
           })}
           <div style={{ padding: '10px 14px', display: 'flex', justifyContent: 'flex-end' }}>
-            <button className="btn-icon" style={{ color: 'var(--red)' }} onClick={() => onDelete(log._id)}><TrashIcon /></button>
+            <button className="btn-icon" style={{ color: 'var(--red)' }} onClick={() => onDelete(log._id)}><Trash2 size={14} aria-hidden="true" /></button>
           </div>
         </div>
       )}
@@ -1544,7 +1520,7 @@ export default function StatsPage() {
             <FolderOpen size={13} /> Backups
           </button>
           {logs.length > 0 && (
-            <button className="btn-icon" style={{ color: 'var(--red)' }} onClick={() => setConfirm('clear')}><TrashIcon /></button>
+            <button className="btn-icon" style={{ color: 'var(--red)' }} onClick={() => setConfirm('clear')}><Trash2 size={14} aria-hidden="true" /></button>
           )}
         </div>
       </div>
@@ -1595,7 +1571,7 @@ export default function StatsPage() {
                   </div>
                   <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-end', minWidth: 0 }}>
                     <button className="btn" style={{ background: 'transparent', border: '1px solid var(--border2)', color: 'var(--text2)', fontSize: 12, gap: 6 }} onClick={() => setShowShareModal(true)}>
-                      <ShareIcon /> Share
+                      <Share size={16} aria-hidden="true" /> Share
                     </button>
                     {totalVolume > 0 && (
                       <div>

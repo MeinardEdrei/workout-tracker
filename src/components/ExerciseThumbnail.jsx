@@ -1,20 +1,5 @@
 import { useState, useEffect } from 'react';
-
-function DumbbellIcon() {
-  return (
-    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text3)' }}>
-      <path d="M6 4v16M18 4v16M2 8h4M18 8h4M2 16h4M18 16h4M6 8h12M6 16h12" />
-    </svg>
-  );
-}
-
-function XIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-      <line x1="4" y1="4" x2="16" y2="16" /><line x1="16" y1="4" x2="4" y2="16" />
-    </svg>
-  );
-}
+import { Dumbbell, X } from 'lucide-react';
 
 function Lightbox({ imageUrl, name, onClose }) {
   return (
@@ -35,7 +20,7 @@ function Lightbox({ imageUrl, name, onClose }) {
           color: '#fff', cursor: 'pointer', zIndex: 1,
         }}
       >
-        <XIcon />
+        <X size={20} aria-hidden="true" />
       </button>
       <img
         src={imageUrl}
@@ -87,7 +72,7 @@ export default function ExerciseThumbnail({ imageUrl, name, size = 80 }) {
             loading="lazy"
           />
         ) : (
-          <DumbbellIcon />
+          <Dumbbell size={28} aria-hidden="true" />
         )}
       </div>
       {lightboxOpen && <Lightbox imageUrl={imageUrl} name={name} onClose={() => setLightboxOpen(false)} />}

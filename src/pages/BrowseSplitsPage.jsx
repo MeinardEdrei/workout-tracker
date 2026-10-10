@@ -3,35 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getPublicSplits } from '../api/index';
 import { useAuth } from '../context/AuthContext';
 import { useStorage } from '../hooks/useStorage';
-import { X, Check, ArrowLeft, ArrowRight } from 'lucide-react';
+import { X, Check, ArrowLeft, ArrowRight, ChevronDown, ChevronLeft, Globe } from 'lucide-react';
 import SharedToast from '../components/Toast';
-
-function BackIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="15,18 9,12 15,6" />
-    </svg>
-  );
-}
-
-function ChevronIcon({ expanded }) {
-  return (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--text3)" strokeWidth="2" strokeLinecap="round"
-      style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: '0.15s', flexShrink: 0 }}>
-      <polyline points="4,6 8,10 12,6" />
-    </svg>
-  );
-}
-
-function GlobeIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" />
-      <line x1="2" y1="12" x2="22" y2="12" />
-      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-    </svg>
-  );
-}
 
 function InlineSpinner() {
   return (
@@ -98,11 +71,11 @@ export default function BrowseSplitsPage({ onBack }) {
       <div className="page-header">
         <div>
           <button className="back-btn" onClick={onBack} style={{ marginBottom: 4 }}>
-            <BackIcon /> Splits
+            <ChevronLeft size={18} aria-hidden="true" /> Splits
           </button>
           <h1 className="page-title">Browse Splits</h1>
           <div className="page-subtitle" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <GlobeIcon />
+            <Globe size={14} aria-hidden="true" />
             <span>Community programs</span>
           </div>
         </div>
@@ -176,7 +149,7 @@ export default function BrowseSplitsPage({ onBack }) {
                     </div>
                   </div>
 
-                  <ChevronIcon expanded={isExpanded} />
+                  <ChevronDown size={14} color="var(--text3)" style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: '0.15s', flexShrink: 0 }} aria-hidden="true" />
                 </div>
 
                 {/* Second row: meta pills + add button */}

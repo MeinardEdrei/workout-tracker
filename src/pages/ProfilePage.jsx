@@ -6,14 +6,7 @@ import { getRanking } from '../api/index';
 import { computeStreak } from '../utils/streaks';
 import { isOnline, formatPresence } from '../utils/presence';
 import UserStatsModal from '../components/UserStatsModal';
-
-function ChevronLeftIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-      <polyline points="9,3 5,7 9,11" />
-    </svg>
-  );
-}
+import { ChevronLeft } from 'lucide-react';
 
 export default function ProfilePage({ onBack }) {
   const { user } = useAuth();
@@ -53,7 +46,7 @@ export default function ProfilePage({ onBack }) {
       <div className="page-header">
         <div>
           <button className="back-btn" onClick={onBack} style={{ marginBottom: 4 }}>
-            <ChevronLeftIcon /> Back
+            <ChevronLeft size={14} aria-hidden="true" /> Back
           </button>
           <h1 className="page-title">Profile</h1>
         </div>
