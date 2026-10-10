@@ -26,6 +26,7 @@ import { CSS } from '@dnd-kit/utilities';
 import ConfirmModal from '../components/ConfirmModal';
 import SharedToast from '../components/Toast';
 import { useBackClose } from '../hooks/useBackClose';
+import { SkeletonCards } from '../components/Skeleton';
 
 /* ─── Constants ─── */
 const STANDARD_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday', 'Rest'];
@@ -2624,7 +2625,7 @@ export default function SplitEditor({ splitId, onBack }) {
     // local state update handled inside SplitEditorInner; query syncs on next invalidation
   }
 
-  if (isLoading) return <div className="spinner" />;
+  if (isLoading) return <SkeletonCards count={4} label="Loading split" />;
   if (!split) return <div className="empty-state">Split not found.</div>;
 
   return (

@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useStorage } from '../hooks/useStorage';
 import { X, Check, ArrowLeft, ArrowRight, ChevronDown, ChevronLeft, Globe } from 'lucide-react';
 import SharedToast from '../components/Toast';
+import { SkeletonCards } from '../components/Skeleton';
 
 function InlineSpinner() {
   return (
@@ -93,7 +94,7 @@ export default function BrowseSplitsPage({ onBack }) {
       </div>
 
       {isLoading ? (
-        <div className="spinner" />
+        <SkeletonCards count={3} label="Loading community splits" />
       ) : isError ? (
         <div className="empty-state">Failed to load public splits.</div>
       ) : filtered.length === 0 ? (

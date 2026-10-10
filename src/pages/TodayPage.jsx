@@ -20,6 +20,7 @@ import { X, Check, RotateCcw, Trophy, BarChart3, StickyNote, Dumbbell, Moon, Par
 import { WheelPicker, WheelPickerWrapper } from '@ncdai/react-wheel-picker';
 import ConfirmModal from '../components/ConfirmModal';
 import Toast from '../components/Toast';
+import { SkeletonCards } from '../components/Skeleton';
 
 // Keyboard activation for tap-to-edit text that isn't a <button> (so it can
 // keep flowing inline): Enter / Space behave like a tap.
@@ -3888,7 +3889,7 @@ export default function TodayPage() {
     });
   }, [splits, logs, isLoading, activeSplit, days, queryClient, storage]);
 
-  if (isLoading) return <div className="spinner" />;
+  if (isLoading) return <SkeletonCards count={4} label="Loading today's workout" />;
   if (error) return <div className="empty-state">Error: {error.message}</div>;
 
   if (!activeSplit) return (

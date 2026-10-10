@@ -9,6 +9,7 @@ import { X, TrendingUp, TrendingDown, ArrowRight, RotateCcw, BarChart3, FolderOp
 import { computeStreak } from '../utils/streaks';
 import { convertWeight } from '../utils/weight';
 import ConfirmModal from '../components/ConfirmModal';
+import { SkeletonCards } from '../components/Skeleton';
 
 const LOGS_STALE = 2 * 60 * 1000;
 const DOW_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
@@ -1556,7 +1557,7 @@ export default function StatsPage() {
         </div>
       </div>
 
-      {isLoading ? <div className="spinner" /> : (
+      {isLoading ? <SkeletonCards count={3} label="Loading stats" /> : (
         <div style={{ padding: '16px 16px 0' }}>
 
           {/* ── Tab control ── */}

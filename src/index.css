@@ -339,6 +339,7 @@ html, body, #root {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes scaleIn { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
+@keyframes skeletonPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
 @keyframes sheetUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 
 .back-row {

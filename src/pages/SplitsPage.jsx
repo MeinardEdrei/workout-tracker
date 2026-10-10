@@ -14,6 +14,7 @@ import { formatSplitAsText, formatSplitWithHistory } from '../utils/splitText';
 import ConfirmModal from '../components/ConfirmModal';
 import Toast from '../components/Toast';
 import { useBackClose } from '../hooks/useBackClose';
+import { SkeletonCards } from '../components/Skeleton';
 
 const API = import.meta.env.VITE_API_URL || '';
 
@@ -861,7 +862,7 @@ export default function SplitsPage() {
       </div>
 
       {isLoading ? (
-        <div className="spinner" />
+        <SkeletonCards count={2} label="Loading splits" />
       ) : splits.length === 0 ? (
         <div className="empty-state" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '40px 20px', textAlign: 'center' }}>
           <div style={{ color: 'var(--text2)', lineHeight: 1.5 }}>No splits yet.<br />Create your own training split or browse community programs to get started.</div>
