@@ -14,7 +14,7 @@ import { getActiveRestTimer, getAllActiveRestTimers, setActiveRestTimer, clearAc
 import { getDayFlags, setDayFlag } from '../utils/earlySession';
 import { ensureSessionStart, getSessionStart, clearSessionStart, formatSessionDuration, formatSessionElapsed } from '../utils/sessionTiming';
 import { createPortal } from 'react-dom';
-import { X, Check, RotateCcw, Trophy, BarChart3, StickyNote, Dumbbell, Moon, PartyPopper, Flame, ChevronDown, CalendarDays, SkipForward, MoreHorizontal, Ban, Clock } from 'lucide-react';
+import { X, Check, RotateCcw, Trophy, BarChart3, StickyNote, Dumbbell, Moon, PartyPopper, Flame, ChevronDown, CalendarDays, SkipForward, MoreHorizontal, Ban, Clock, AlertCircle } from 'lucide-react';
 import { WheelPicker, WheelPickerWrapper } from '@ncdai/react-wheel-picker';
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -637,6 +637,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
         queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
       }
     },
+    onError: handleSaveError,
   });
 
   const lastSessionInfo = useMemo(() => {
@@ -693,6 +694,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
       }
       setShowSwapModal(false);
     },
+    onError: handleSaveError,
   });
 
   const dismissSwapPromptMutation = useMutation({
@@ -710,6 +712,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
         queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
       }
     },
+    onError: handleSaveError,
   });
 
   // "Just for today" swap — writes into todaySwap instead of the permanent
@@ -731,6 +734,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
       }
       setShowSwapModal(false);
     },
+    onError: handleSaveError,
   });
 
   // Clears an active temporary swap — the underlying planned exercise
@@ -751,6 +755,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
         queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
       }
     },
+    onError: handleSaveError,
   });
   const effectiveChecked = isCompleted ? !ex.skipped : (matchesDay(ex.lastCheckedDate, dateStr) ? ex.checked : false);
   const effectiveSkipped = isCompleted ? !!ex.skipped : (matchesDay(ex.lastSkippedDate, dateStr) ? ex.skipped : false);
@@ -921,6 +926,15 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
     </div>
   );
 
+  // Every write below updates the row optimistically; if the save fails, put
+  // the row back and say so instead of silently showing data that never
+  // reached storage.
+  function handleSaveError() {
+    onToggle(rawEx);
+    queryClient.invalidateQueries({ queryKey: ['splits'] });
+    if (onShowToast) onShowToast("Couldn't save — check your connection and try again", 'error', AlertCircle);
+  }
+
   // Stamps lastCheckedDate/lastSkippedDate with THIS card's own dateStr — not
   // necessarily real "today" (doing a future day early, or retaking a past
   // one) — so progress stays correctly tied to the day it's actually for
@@ -948,6 +962,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
         onShowToast(`NEW PR! ${ex.name} @ ${ex.weight}${ex.weightUnit}`, 'success', Trophy);
       }
     },
+    onError: handleSaveError,
   });
 
   const skipMutation = useMutation({
@@ -967,6 +982,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
         queryClient.invalidateQueries({ queryKey: ['splits'] });
       }
     },
+    onError: handleSaveError,
   });
 
   // Target sets reached while logging via the set-by-set logger auto-completes
@@ -993,6 +1009,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
         queryClient.invalidateQueries({ queryKey: ['splits', storageKey] });
       }
     },
+    onError: handleSaveError,
   });
 
   // While a temporary swap is active, weight edits belong to the swap's own
@@ -1055,6 +1072,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
         }).catch(() => {});
       }
     },
+    onError: handleSaveError,
   });
 
   function buildSetsRepsPayload({ sets, reps, duration, durationUnit }) {
@@ -1146,6 +1164,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
         }).catch(() => {});
       }
     },
+    onError: handleSaveError,
   });
 
   async function handleSync() {
@@ -3002,7 +3021,9 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
       }
       queryClient.invalidateQueries({ queryKey: ['logs'] });
     },
-    onError: (e) => alert('Failed to save workout: ' + e.message),
+    onError: (e) => onShowToast
+      ? onShowToast(`Couldn't save workout: ${e.message}`, 'error', AlertCircle)
+      : alert('Failed to save workout: ' + e.message),
   });
 
   function handleFinish(customDurationSeconds = null) {
@@ -3975,16 +3996,16 @@ export default function TodayPage() {
         </>
       )}
       {toast && (
-        <div style={{
+        <div role={toast.type === 'error' ? 'alert' : 'status'} style={{
           position: 'fixed', bottom: 'var(--above-nav)', left: '50%', transform: 'translateX(-50%)',
-          zIndex: 1000, background: 'var(--bg2)', border: '1.5px solid var(--accent)',
+          zIndex: 1000, background: 'var(--bg2)', border: `1.5px solid ${toast.type === 'error' ? 'var(--red)' : 'var(--accent)'}`,
           borderRadius: 30, padding: '10px 20px', color: 'var(--text)',
           fontSize: 13, fontWeight: 700, boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
           display: 'flex', alignItems: 'center', gap: 10, animation: 'fadeIn 0.2s ease'
         }}>
-          {toast.Icon && <toast.Icon size={16} style={{ color: 'var(--accent)', flexShrink: 0 }} />}
+          {toast.Icon && <toast.Icon size={16} style={{ color: toast.type === 'error' ? 'var(--red)' : 'var(--accent)', flexShrink: 0 }} />}
           {toast.message}
-          <button onClick={() => setToast(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', display: 'flex' }}><X size={14} /></button>
+          <button aria-label="Dismiss" onClick={() => setToast(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', display: 'flex' }}><X size={14} /></button>
         </div>
       )}
     </div>
