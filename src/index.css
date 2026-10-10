@@ -44,6 +44,23 @@
      fixed toast or banner that floats above the nav. */
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --above-nav: calc(var(--nav-height) + var(--safe-bottom) + 12px);
+  /* Type: five sizes, 11px floor. */
+  --fs-xs: 11px;
+  --fs-sm: 13px;
+  --fs-md: 15px;
+  --fs-lg: 20px;
+  --fs-xl: 28px;
+  /* Radii and 8-pt spacing. */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 16px;
+  --r-xl: 24px;
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
   --font-display: 'Barlow Condensed', sans-serif;
   --font-mono: 'DM Mono', monospace;
 }
@@ -105,9 +122,9 @@ html, body, #root {
   background: none;
   border: none;
   cursor: pointer;
-  color: var(--text3);
+  color: var(--text2);
   font-family: var(--font-display);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -119,11 +136,10 @@ html, body, #root {
 
 .page-header {
   padding: calc(24px + env(safe-area-inset-top, 0px)) 80px 16px 20px;
-  border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--sp-3);
   position: sticky;
   top: 0;
   background: var(--bg);
@@ -131,7 +147,7 @@ html, body, #root {
 }
 
 .page-title {
-  font-size: 28px;
+  font-size: var(--fs-xl);
   font-weight: 800;
   letter-spacing: -0.01em;
   text-transform: uppercase;
@@ -139,7 +155,7 @@ html, body, #root {
 }
 
 .page-subtitle {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--text2);
   font-weight: 500;
   letter-spacing: 0.05em;
@@ -153,11 +169,11 @@ html, body, #root {
   gap: 6px;
   padding: 8px 16px;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--r-md);
   cursor: pointer;
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   transition: all 0.15s;
@@ -167,8 +183,8 @@ html, body, #root {
 .btn-accent { background: var(--accent); color: var(--on-accent); }
 .btn-accent:active { background: var(--accent2); }
 
-.btn-ghost { background: transparent; color: var(--text2); border: 1px solid var(--border2); }
-.btn-ghost:active { background: var(--bg3); }
+.btn-ghost { background: var(--bg3); color: var(--text); border: 1px solid transparent; }
+.btn-ghost:active { background: var(--bg4); }
 
 .btn-danger { background: transparent; color: var(--red); border: 1px solid transparent; }
 .btn-danger:active { background: rgba(var(--red-rgb), 0.1); }
@@ -182,25 +198,24 @@ html, body, #root {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
+  border-radius: var(--r-md);
   -webkit-tap-highlight-color: transparent;
 }
 .btn-icon:active { background: var(--bg3); }
 
 .card {
   background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-lg);
   overflow: hidden;
 }
 
 .input {
   background: var(--bg3);
   border: 1px solid var(--border2);
-  border-radius: 6px;
+  border-radius: var(--r-md);
   color: var(--text);
   font-family: var(--font-display);
-  font-size: 15px;
+  font-size: var(--fs-md);
   font-weight: 500;
   padding: 10px 12px;
   width: 100%;
@@ -224,8 +239,7 @@ html, body, #root {
 
 .modal {
   background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: var(--r-xl);
   width: 100%;
   max-width: 440px;
   padding: 24px 20px;
@@ -237,7 +251,7 @@ html, body, #root {
 }
 
 .modal-title {
-  font-size: 20px;
+  font-size: var(--fs-lg);
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.02em;
@@ -269,7 +283,7 @@ html, body, #root {
   width: 22px;
   height: 22px;
   border: 2px solid var(--border2);
-  border-radius: 4px;
+  border-radius: var(--r-sm);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -282,15 +296,14 @@ html, body, #root {
 
 .tag {
   display: inline-block;
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   padding: 2px 8px;
-  border-radius: 3px;
+  border-radius: var(--r-sm);
   background: var(--bg4);
   color: var(--text2);
-  border: 1px solid var(--border2);
 }
 
 .divider { height: 1px; background: var(--border); }
@@ -298,8 +311,8 @@ html, body, #root {
 .empty-state {
   padding: 48px 20px;
   text-align: center;
-  color: var(--text3);
-  font-size: 14px;
+  color: var(--text2);
+  font-size: var(--fs-md);
   font-weight: 500;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -344,10 +357,10 @@ html, body, #root {
 .select {
   background: var(--bg3);
   border: 1px solid var(--border2);
-  border-radius: 6px;
+  border-radius: var(--r-md);
   color: var(--text);
   font-family: var(--font-display);
-  font-size: 14px;
+  font-size: var(--fs-md);
   font-weight: 600;
   padding: 8px 10px;
   outline: none;
@@ -359,14 +372,13 @@ html, body, #root {
   .page-title { font-size: 22px; }
   .page-subtitle { font-size: 11px; }
   .btn { padding: 7px 11px; font-size: 12px; }
-  .btn-icon { padding: 6px; }
 }
 
 /* ── Responsive: narrow phones (≤ 380px) ────────────────────────────────── */
 @media (max-width: 380px) {
   .page-title { font-size: 22px; }
-  .page-subtitle { font-size: 11px; }
-  .btn { padding: 7px 10px; font-size: 11px; }
+  .page-subtitle { font-size: var(--fs-xs); }
+  .btn { padding: 7px 10px; font-size: 12px; }
 }
 
 @media (max-width: 480px) {
