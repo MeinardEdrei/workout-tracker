@@ -10,6 +10,7 @@ import LeaderboardPage from '../components/LeaderboardPage';
 import { setSplitVisibility, reapplySplit as reapplySplitApi, getRanking } from '../api/index';
 import { X, Trophy, ArrowRight, RotateCcw, Upload } from 'lucide-react';
 import AiChatBubble from '../components/AiChatBubble';
+import { formatSplitAsText } from '../utils/splitText';
 
 const API = import.meta.env.VITE_API_URL || '';
 const SHOW_AI_CHAT = false; // archived: unused feature, flip to re-enable
@@ -56,35 +57,6 @@ function CopyIcon() {
   );
 }
 
-function formatSplitAsText(split) {
-  const sortedDays = [...(split.days || [])].sort((a, b) => (a.dayOrder ?? 8) - (b.dayOrder ?? 8));
-  let text = `🏋️ ${split.name}\n\n`;
-  
-  sortedDays.forEach((day, idx) => {
-    text += `DAY ${idx + 1}: ${day.name.toUpperCase()}${day.tag ? ` (${day.tag})` : ''}\n`;
-    if (day.isRest) {
-      text += `• Rest Day\n\n`;
-      return;
-    }
-    const exercises = day.exercises || [];
-    if (exercises.length === 0) {
-      text += `• No exercises\n\n`;
-      return;
-    }
-    exercises.forEach((ex) => {
-      const rStr = ex.duration > 0 ? `${ex.duration}${ex.durationUnit || 'sec'}` : (ex.untilFailure || !ex.reps || ex.reps === 0) ? 'Failure' : `${ex.reps} reps`;
-      const wStr = ex.weight > 0 ? ` @ ${ex.weight} ${ex.weightUnit || 'kg'}` : '';
-      const catPrefix = ex.category === 'warmup' ? '[Warm-up] ' : ex.category === 'cooldown' ? '[Cool-down] ' : '';
-      const muscleStr = ex.muscleTargets && ex.muscleTargets.length > 0 ? ` (${ex.muscleTargets.join(', ')})` : '';
-      text += `• ${catPrefix}${ex.name} — ${ex.sets} sets × ${rStr}${wStr}${muscleStr}\n`;
-      if (ex.notes) {
-        text += `  Note: ${ex.notes}\n`;
-      }
-    });
-    text += `\n`;
-  });
-  return text.trim();
-}
 function GlobeIcon() {
   return (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
