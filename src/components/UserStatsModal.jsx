@@ -61,7 +61,7 @@ export default function UserStatsModal({ user, filter, onClose }) {
               <div style={{
                 width: 48, height: 48, borderRadius: '50%', background: 'var(--accent)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 18, fontWeight: 900, color: '#0a0a0a'
+                fontSize: 18, fontWeight: 900, color: 'var(--bg)'
               }}>
                 {user.name[0].toUpperCase()}
               </div>
@@ -99,7 +99,7 @@ export default function UserStatsModal({ user, filter, onClose }) {
 
         {/* Latest Activity */}
         {lastWorkoutStr && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text2)', background: 'rgba(232,255,90,0.03)', border: '1px solid rgba(232,255,90,0.1)', borderRadius: 8, padding: '8px 12px', marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text2)', background: 'rgba(var(--accent-rgb), 0.03)', border: '1px solid rgba(var(--accent-rgb), 0.1)', borderRadius: 8, padding: '8px 12px', marginBottom: 16 }}>
             <CalendarIcon />
             <span style={{ fontWeight: 600 }}>{lastWorkoutStr}</span>
           </div>
@@ -135,7 +135,7 @@ export default function UserStatsModal({ user, filter, onClose }) {
                         REST
                       </span>
                     ) : day.tag ? (
-                      <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--accent)', background: 'rgba(232,255,90,0.06)', padding: '1px 6px', borderRadius: 4 }}>
+                      <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--accent)', background: 'rgba(var(--accent-rgb), 0.06)', padding: '1px 6px', borderRadius: 4 }}>
                         {day.tag}
                       </span>
                     ) : null}

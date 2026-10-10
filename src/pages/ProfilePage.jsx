@@ -69,7 +69,7 @@ export default function ProfilePage({ onBack }) {
           {user?.avatar ? (
             <img src={user.avatar} alt={user.name} style={{ width: 56, height: 56, borderRadius: '50%', border: '2px solid var(--accent)', objectFit: 'cover', flexShrink: 0 }} />
           ) : (
-            <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, fontWeight: 900, color: '#0a0a0a', flexShrink: 0 }}>
+            <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, fontWeight: 900, color: 'var(--bg)', flexShrink: 0 }}>
               {(user?.name || user?.email || '?')[0].toUpperCase()}
             </div>
           )}

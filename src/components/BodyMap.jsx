@@ -71,7 +71,7 @@ export default function BodyMap({ exercises = [], size = 180 }) {
       return { fill: '#1a1a1f', stroke: '#2e2e38', strokeWidth: 1 };
     } else if (maxSets <= 2) {
       // Light Target - Neon Green/Yellow tint
-      return { fill: 'rgba(232, 255, 90, 0.35)', stroke: 'rgba(232, 255, 90, 0.8)', strokeWidth: 1.2 };
+      return { fill: 'rgba(var(--accent-rgb),  0.35)', stroke: 'rgba(var(--accent-rgb),  0.8)', strokeWidth: 1.2 };
     } else if (maxSets <= 5) {
       // Medium Target - Vibrant Orange
       return { fill: 'rgba(245, 158, 11, 0.55)', stroke: 'rgba(245, 158, 11, 0.95)', strokeWidth: 1.2 };
@@ -90,7 +90,7 @@ export default function BodyMap({ exercises = [], size = 180 }) {
       {/* Front View */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <div style={{ fontSize: 9, fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Front</div>
-        <svg width={size} height={size * 2.2} viewBox="0 0 100 220" style={{ background: '#08080a', borderRadius: 8, padding: 4 }}>
+        <svg width={size} height={size * 2.2} viewBox="0 0 100 220" style={{ background: 'var(--bg)', borderRadius: 8, padding: 4 }}>
           {/* Head & Neck */}
           <circle cx="50" cy="15" r="9" style={jointStyle} />
           <line x1="50" y1="24" x2="50" y2="30" style={{ stroke: '#2e2e38', strokeWidth: 4 }} />
@@ -152,7 +152,7 @@ export default function BodyMap({ exercises = [], size = 180 }) {
       {/* Back View */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <div style={{ fontSize: 9, fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Back</div>
-        <svg width={size} height={size * 2.2} viewBox="0 0 100 220" style={{ background: '#08080a', borderRadius: 8, padding: 4 }}>
+        <svg width={size} height={size * 2.2} viewBox="0 0 100 220" style={{ background: 'var(--bg)', borderRadius: 8, padding: 4 }}>
           {/* Head & Neck */}
           <circle cx="50" cy="15" r="9" style={jointStyle} />
           <line x1="50" y1="24" x2="50" y2="30" style={{ stroke: '#2e2e38', strokeWidth: 4 }} />

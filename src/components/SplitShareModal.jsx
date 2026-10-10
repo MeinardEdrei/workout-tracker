@@ -34,7 +34,7 @@ function Spinner() {
   return (
     <div style={{
       width: 28, height: 28, margin: '0 auto 12px',
-      border: '2.5px solid #2a2a2a', borderTopColor: '#c8f55a',
+      border: '2.5px solid #2a2a2a', borderTopColor: 'var(--accent)',
       borderRadius: '50%', animation: 'spin 0.7s linear infinite',
     }} />
   );
@@ -62,7 +62,7 @@ export default function SplitShareModal({ split, onClose }) {
         const canvas = await html2canvas(cardRef.current, {
           scale: 2,
           useCORS: true,
-          backgroundColor: '#0d0d0d',
+          backgroundColor: '#121110',
           logging: false,
           allowTaint: true,
         });
@@ -139,13 +139,13 @@ export default function SplitShareModal({ split, onClose }) {
             <div style={{ fontSize: 15, fontWeight: 800, color: '#f0f0f0', textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: 'var(--font-display)' }}>
               Share Split
             </div>
-            <div style={{ fontSize: 11, color: '#555', marginTop: 2, fontFamily: 'var(--font-display)', letterSpacing: '0.03em' }}>
+            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2, fontFamily: 'var(--font-display)', letterSpacing: '0.03em' }}>
               {split.name}
             </div>
           </div>
           <button
             onClick={onClose}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#555', padding: 6, display: 'flex', borderRadius: 6, WebkitTapHighlightColor: 'transparent' }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', padding: 6, display: 'flex', borderRadius: 6, WebkitTapHighlightColor: 'transparent' }}
             aria-label="Close"
           >
             <CloseIcon />
@@ -155,9 +155,9 @@ export default function SplitShareModal({ split, onClose }) {
         {/* Scrollable preview area */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 16px' }}>
           {phase === 'generating' && (
-            <div style={{ textAlign: 'center', padding: '60px 0', color: '#555' }}>
+            <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text3)' }}>
               <Spinner />
-              <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', fontFamily: 'var(--font-display)', textTransform: 'uppercase', color: '#555' }}>
+              <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', fontFamily: 'var(--font-display)', textTransform: 'uppercase', color: 'var(--text3)' }}>
                 Generating image…
               </div>
             </div>
@@ -180,7 +180,7 @@ export default function SplitShareModal({ split, onClose }) {
           {phase === 'error' && (
             <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--red)', fontFamily: 'var(--font-display)' }}>
               <div style={{ fontSize: 14, fontWeight: 700 }}>Failed to generate image</div>
-              <div style={{ fontSize: 12, color: '#555', marginTop: 6 }}>Try closing and reopening the share panel.</div>
+              <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 6 }}>Try closing and reopening the share panel.</div>
             </div>
           )}
         </div>
@@ -191,7 +191,7 @@ export default function SplitShareModal({ split, onClose }) {
           borderTop: '1px solid #1e1e1e',
           display: 'flex', gap: 10,
           flexShrink: 0,
-          background: '#0a0a0a',
+          background: 'var(--bg)',
         }}>
           <button
             className="btn btn-ghost"

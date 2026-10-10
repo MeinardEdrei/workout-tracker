@@ -28,7 +28,7 @@ export default function DailyShareCard({ log, cardRef }) {
         left: '-9999px',
         top: 0,
         width: 390,
-        background: '#0a0a0d',
+        background: 'var(--bg)',
         fontFamily: "'Barlow Condensed', 'Arial Narrow', sans-serif",
         padding: 0,
         overflow: 'hidden',
@@ -39,7 +39,7 @@ export default function DailyShareCard({ log, cardRef }) {
     >
       {/* Header stripe */}
       <div style={{
-        background: 'linear-gradient(135deg, #e8ff5a 0%, #c5df39 100%)',
+        background: 'linear-gradient(135deg, var(--accent) 0%, var(--accent) 100%)',
         padding: '24px 24px 20px',
       }}>
         <div style={{
@@ -47,7 +47,7 @@ export default function DailyShareCard({ log, cardRef }) {
           fontWeight: 900,
           letterSpacing: '0.16em',
           textTransform: 'uppercase',
-          color: '#0a0a0a',
+          color: 'var(--bg)',
           marginBottom: 4,
           opacity: 0.8
         }}>
@@ -58,7 +58,7 @@ export default function DailyShareCard({ log, cardRef }) {
           fontWeight: 900,
           textTransform: 'uppercase',
           letterSpacing: '0.01em',
-          color: '#0a0a0a',
+          color: 'var(--bg)',
           lineHeight: 1.1,
         }}>
           {log.dayName}
@@ -67,7 +67,7 @@ export default function DailyShareCard({ log, cardRef }) {
           <div style={{
             fontSize: 13,
             fontWeight: 700,
-            color: '#0a0a0a',
+            color: 'var(--bg)',
             opacity: 0.7,
             marginTop: 4,
             letterSpacing: '0.04em',
@@ -100,7 +100,7 @@ export default function DailyShareCard({ log, cardRef }) {
         display: 'flex',
         gap: 0,
         borderBottom: '1px solid #181820',
-        background: '#0a0a0d'
+        background: 'var(--bg)'
       }}>
         <div style={{
           flex: 1,
@@ -123,20 +123,20 @@ export default function DailyShareCard({ log, cardRef }) {
         {vol && (
           <div style={{ flex: 1, padding: '16px 20px', borderRight: durationLabel ? '1px solid #181820' : 'none', textAlign: 'center' }}>
             <div style={{ fontSize: 10, color: '#525262', fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 4 }}>Volume</div>
-            <div style={{ fontSize: 28, fontWeight: 900, color: '#e8ff5a' }}>{vol}</div>
+            <div style={{ fontSize: 28, fontWeight: 900, color: 'var(--accent)' }}>{vol}</div>
           </div>
         )}
         {durationLabel && (
           <div style={{ flex: 1, padding: '16px 20px', textAlign: 'center' }}>
             <div style={{ fontSize: 10, color: '#525262', fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 4 }}>Time</div>
-            <div style={{ fontSize: 28, fontWeight: 900, color: '#e8ff5a' }}>{durationLabel}</div>
+            <div style={{ fontSize: 28, fontWeight: 900, color: 'var(--accent)' }}>{durationLabel}</div>
           </div>
         )}
       </div>
 
       {/* Cybernetic Muscle Target Map Visual */}
       {/* <div style={{
-        background: '#08080a',
+        background: 'var(--bg)',
         padding: '20px 24px',
         display: 'flex',
         justifyContent: 'center',
@@ -146,7 +146,7 @@ export default function DailyShareCard({ log, cardRef }) {
       </div> */}
 
       {/* Exercise list */}
-      <div style={{ padding: '8px 0 4px', background: '#0a0a0d' }}>
+      <div style={{ padding: '8px 0 4px', background: 'var(--bg)' }}>
         {(() => {
           const doneExercises = log.exercises.filter((ex) => !ex.skipped);
           return doneExercises.map((ex, i) => {

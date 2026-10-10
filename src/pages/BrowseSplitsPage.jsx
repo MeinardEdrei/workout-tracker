@@ -169,7 +169,7 @@ export default function BrowseSplitsPage({ onBack }) {
                         style={{ width: 34, height: 34, borderRadius: '50%', objectFit: 'cover', display: 'block', border: '1.5px solid var(--border2)' }}
                       />
                     ) : (
-                      <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: '#0a0a0a', flexShrink: 0 }}>
+                      <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: 'var(--bg)', flexShrink: 0 }}>
                         {(split.userId?.name || '?')[0].toUpperCase()}
                       </div>
                     )}
@@ -196,7 +196,7 @@ export default function BrowseSplitsPage({ onBack }) {
                       {trainingDays.length} training {trainingDays.length === 1 ? 'day' : 'days'}
                     </span>
                     {tags.slice(0, 3).map((tag) => (
-                      <span key={tag} style={{ fontSize: 10, fontWeight: 700, color: 'var(--accent)', background: 'rgba(232,255,90,0.07)', border: '1px solid rgba(232,255,90,0.15)', borderRadius: 4, padding: '2px 7px', whiteSpace: 'nowrap' }}>
+                      <span key={tag} style={{ fontSize: 10, fontWeight: 700, color: 'var(--accent)', background: 'rgba(var(--accent-rgb), 0.07)', border: '1px solid rgba(var(--accent-rgb), 0.15)', borderRadius: 4, padding: '2px 7px', whiteSpace: 'nowrap' }}>
                         {tag}
                       </span>
                     ))}
@@ -210,9 +210,9 @@ export default function BrowseSplitsPage({ onBack }) {
                       padding: '6px 14px', borderRadius: 6, fontSize: 12, fontWeight: 700,
                       fontFamily: 'var(--font-display)', textTransform: 'uppercase', letterSpacing: '0.04em',
                       cursor: isAdded || isCopying ? 'default' : 'pointer',
-                      border: isAdded ? '1px solid rgba(232,255,90,0.2)' : 'none',
+                      border: isAdded ? '1px solid rgba(var(--accent-rgb), 0.2)' : 'none',
                       background: isAdded ? 'transparent' : 'var(--accent)',
-                      color: isAdded ? 'var(--accent)' : '#0a0a0a',
+                      color: isAdded ? 'var(--accent)' : 'var(--bg)',
                       display: 'flex', alignItems: 'center', gap: 5,
                       transition: 'all 0.15s', whiteSpace: 'nowrap', flexShrink: 0,
                     }}
@@ -238,7 +238,7 @@ export default function BrowseSplitsPage({ onBack }) {
                                 )}
                               </div>
                               {day.tag && (
-                                <span style={{ fontSize: 10, color: 'var(--accent)', background: 'rgba(232,255,90,0.08)', padding: '2px 7px', borderRadius: 4, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', border: '1px solid rgba(232,255,90,0.15)' }}>{day.tag}</span>
+                                <span style={{ fontSize: 10, color: 'var(--accent)', background: 'rgba(var(--accent-rgb), 0.08)', padding: '2px 7px', borderRadius: 4, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', border: '1px solid rgba(var(--accent-rgb), 0.15)' }}>{day.tag}</span>
                               )}
                             </div>
                             {!day.isRest && (
@@ -248,7 +248,7 @@ export default function BrowseSplitsPage({ onBack }) {
                                   let nameStyle = { color: 'var(--text)' };
                                   if (ex.category === 'warmup') {
                                     prefix = "[WU] ";
-                                    nameStyle.color = '#ff9f43';
+                                    nameStyle.color = 'var(--yellow)';
                                   } else if (ex.category === 'cooldown') {
                                     prefix = "[CD] ";
                                     nameStyle.color = 'var(--blue)';

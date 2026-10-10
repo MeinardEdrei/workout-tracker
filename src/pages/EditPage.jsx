@@ -142,7 +142,7 @@ function Toast({ message, type = 'error' }) {
   return (
     <div style={{
       position: 'fixed', bottom: 90, left: '50%', transform: 'translateX(-50%)',
-      background: type === 'error' ? 'var(--red)' : '#1e3a0f',
+      background: type === 'error' ? 'var(--red)' : 'var(--bg3)',
       color: '#fff', padding: '10px 16px', borderRadius: 8,
       fontSize: 13, fontWeight: 600, zIndex: 400, maxWidth: 300,
       textAlign: 'center', pointerEvents: 'none',
@@ -166,7 +166,7 @@ function PickerPill({ label, selected, disabled, onClick, small }) {
         borderRadius: 22,
         border: selected ? 'none' : '1px solid var(--border2)',
         background: selected ? 'var(--accent)' : 'transparent',
-        color: selected ? '#0a0a0a' : (disabled ? 'var(--text3)' : 'var(--text2)'),
+        color: selected ? 'var(--bg)' : (disabled ? 'var(--text3)' : 'var(--text2)'),
         fontFamily: 'var(--font-display)',
         fontSize: small ? 11 : 12,
         fontWeight: 700,
@@ -347,7 +347,7 @@ function WeightSyncModal({
   const categoryChanged = oldCategory !== undefined && newCategory !== undefined && oldCategory !== newCategory;
 
   const isIncrease = delta > 0;
-  const directionColor = isIncrease ? 'var(--green)' : '#f87171';
+  const directionColor = isIncrease ? 'var(--green)' : 'var(--red)';
   const deltaFormatted = Math.abs(delta).toFixed(1).replace(/\.0$/, '');
 
   const oldRepsStr = (oldUntilFailure || oldReps === 0) ? 'Failure' : `${oldReps}`;
@@ -369,7 +369,7 @@ function WeightSyncModal({
               {' '}
               <span style={{
                 fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
-                background: isIncrease ? 'rgba(68,255,136,0.12)' : 'rgba(248,113,113,0.12)',
+                background: isIncrease ? 'rgba(var(--green-rgb), 0.12)' : 'rgba(var(--red-rgb), 0.12)',
                 color: directionColor, padding: '2px 6px', borderRadius: 4,
               }}>
                 {isIncrease ? `+${deltaFormatted}${newUnit} increase` : `-${deltaFormatted}${newUnit} decrease`}
@@ -854,7 +854,7 @@ function AddExerciseModal({ splitDays, onConfirm, onClose }) {
                     {s.isCustom && (
                       <span style={{
                         fontSize: 8, fontWeight: 800, color: 'var(--accent)',
-                        background: 'rgba(232,255,90,0.08)', border: '1px solid rgba(232,255,90,0.2)',
+                        background: 'rgba(var(--accent-rgb), 0.08)', border: '1px solid rgba(var(--accent-rgb), 0.2)',
                         padding: '2px 6px', borderRadius: 4, textTransform: 'uppercase', letterSpacing: '0.04em',
                         flexShrink: 0
                       }}>
@@ -1239,7 +1239,7 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
                     {s.isCustom && (
                       <span style={{
                         fontSize: 8, fontWeight: 800, color: 'var(--accent)',
-                        background: 'rgba(232,255,90,0.08)', border: '1px solid rgba(232,255,90,0.2)',
+                        background: 'rgba(var(--accent-rgb), 0.08)', border: '1px solid rgba(var(--accent-rgb), 0.2)',
                         padding: '2px 6px', borderRadius: 4, textTransform: 'uppercase', letterSpacing: '0.04em',
                         flexShrink: 0
                       }}>
@@ -1630,7 +1630,7 @@ function EditExerciseModal({ ex, splitId, dayId, splitDays, onConfirm, onClose, 
                     {s.isCustom && (
                       <span style={{
                         fontSize: 8, fontWeight: 800, color: 'var(--accent)',
-                        background: 'rgba(232,255,90,0.08)', border: '1px solid rgba(232,255,90,0.2)',
+                        background: 'rgba(var(--accent-rgb), 0.08)', border: '1px solid rgba(var(--accent-rgb), 0.2)',
                         padding: '2px 6px', borderRadius: 4, textTransform: 'uppercase', letterSpacing: '0.04em',
                         flexShrink: 0
                       }}>
@@ -2176,9 +2176,9 @@ function CategoryHeader({ type }) {
     warmup: {
       label: 'Warm-up',
       subtitle: 'Dynamic prep & muscle activation',
-      color: '#ff9f43',
-      bgColor: 'rgba(255,159,67,0.06)',
-      borderColor: 'rgba(255,159,67,0.15)',
+      color: 'var(--yellow)',
+      bgColor: 'rgba(var(--yellow-rgb), 0.06)',
+      borderColor: 'rgba(var(--yellow-rgb), 0.15)',
       icon: (
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
@@ -2189,8 +2189,8 @@ function CategoryHeader({ type }) {
       label: 'Main Workout',
       subtitle: 'Primary strength & hypertrophy sets',
       color: 'var(--accent)',
-      bgColor: 'rgba(232,255,90,0.04)',
-      borderColor: 'rgba(232,255,90,0.12)',
+      bgColor: 'rgba(var(--accent-rgb), 0.04)',
+      borderColor: 'rgba(var(--accent-rgb), 0.12)',
       icon: (
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="m6.5 6.5 11 11M21 21l-3-3M3 3l3 3M18.5 5.5l3-3M5.5 18.5l-3 3M8.5 4.5l2-2M17.5 13.5l2-2M13.5 17.5l-2 2M4.5 8.5l-2 2" />
@@ -2201,8 +2201,8 @@ function CategoryHeader({ type }) {
       label: 'Cool Down',
       subtitle: 'Stretching, mobility & recovery',
       color: 'var(--blue)',
-      bgColor: 'rgba(90,240,255,0.04)',
-      borderColor: 'rgba(90,240,255,0.12)',
+      bgColor: 'rgba(var(--blue-rgb), 0.04)',
+      borderColor: 'rgba(var(--blue-rgb), 0.12)',
       icon: (
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z" />
@@ -2357,7 +2357,7 @@ function DayEditor({ day, split, onBack, onDayUpdated }) {
                 fontSize: 11,
                 padding: '6px 10px',
                 background: isRest ? 'var(--accent)' : 'transparent',
-                color: isRest ? '#0a0a0a' : 'var(--text2)',
+                color: isRest ? 'var(--bg)' : 'var(--text2)',
                 border: '1px solid var(--border2)',
               }}
               onClick={toggleRest}
@@ -2381,7 +2381,7 @@ function DayEditor({ day, split, onBack, onDayUpdated }) {
       {deleteToast && (
         <div style={{
           position: 'fixed', bottom: 80, left: '50%', transform: 'translateX(-50%)',
-          background: '#1e3a0f', color: '#fff', padding: '10px 16px',
+          background: 'var(--bg3)', color: '#fff', padding: '10px 16px',
           borderRadius: 8, fontSize: 13, fontWeight: 600, zIndex: 200,
           maxWidth: 320, textAlign: 'center',
         }}>
@@ -2658,7 +2658,7 @@ function SplitEditorInner({ split, onBack, onSplitUpdated }) {
       {deleteToast && (
         <div style={{
           position: 'fixed', bottom: 80, left: '50%', transform: 'translateX(-50%)',
-          background: '#1e3a0f', color: '#fff', padding: '10px 16px',
+          background: 'var(--bg3)', color: '#fff', padding: '10px 16px',
           borderRadius: 8, fontSize: 13, fontWeight: 600, zIndex: 200,
           maxWidth: 320, textAlign: 'center',
         }}>

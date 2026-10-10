@@ -78,7 +78,7 @@ export default function LeaderboardPage({ onBack }) {
                 letterSpacing: '0.04em',
                 cursor: 'pointer',
                 background: filter === f ? 'var(--accent)' : 'transparent',
-                color: filter === f ? '#0a0a0a' : 'var(--text3)',
+                color: filter === f ? 'var(--bg)' : 'var(--text3)',
                 transition: 'all 0.15s',
               }}
             >

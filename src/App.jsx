@@ -139,10 +139,10 @@ function ActiveRestBanner({ onJumpToToday }) {
         padding: '10px 14px', cursor: 'pointer',
         background: 'rgba(17, 17, 17, 0.95)',
         backdropFilter: 'blur(10px)',
-        border: remaining > 0 ? '1.5px solid var(--accent)' : '1.5px solid #4ade80',
+        border: remaining > 0 ? '1.5px solid var(--accent)' : '1.5px solid var(--green)',
         borderRadius: 12,
         boxShadow: remaining > 0
-          ? '0 8px 32px rgba(0,0,0,0.7), 0 0 16px rgba(232,255,90,0.18)'
+          ? '0 8px 32px rgba(0,0,0,0.7), 0 0 16px rgba(var(--accent-rgb), 0.18)'
           : '0 8px 32px rgba(0,0,0,0.7), 0 0 16px rgba(74,222,128,0.25)',
         animation: 'fadeIn 0.2s ease',
       }}
@@ -150,9 +150,9 @@ function ActiveRestBanner({ onJumpToToday }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
         <span style={{
           width: 9, height: 9, borderRadius: '50%',
-          background: remaining > 0 ? 'var(--accent)' : '#4ade80',
+          background: remaining > 0 ? 'var(--accent)' : 'var(--green)',
           animation: remaining > 0 ? 'pulse 1.5s infinite' : 'none',
-          boxShadow: remaining > 0 ? '0 0 8px var(--accent)' : '0 0 8px #4ade80',
+          boxShadow: remaining > 0 ? '0 0 8px var(--accent)' : '0 0 8px var(--green)',
           flexShrink: 0
         }} />
         <div style={{ minWidth: 0 }}>
@@ -161,7 +161,7 @@ function ActiveRestBanner({ onJumpToToday }) {
           </div>
           <div style={{
             fontSize: 17, fontWeight: 900, fontFamily: 'var(--font-mono)',
-            color: remaining > 0 ? 'var(--accent)' : '#4ade80', lineHeight: 1.1
+            color: remaining > 0 ? 'var(--accent)' : 'var(--green)', lineHeight: 1.1
           }}>
             {remaining > 0 ? `${String(Math.floor(remaining / 60)).padStart(2, '0')}:${String(remaining % 60).padStart(2, '0')}` : 'Ready for next set!'}
           </div>
@@ -187,7 +187,7 @@ function ActiveRestBanner({ onJumpToToday }) {
           onClick={addTime}
           title="Add 30 seconds"
           style={{
-            background: 'rgba(232,255,90,0.12)', border: '1px solid rgba(232,255,90,0.35)',
+            background: 'rgba(var(--accent-rgb), 0.12)', border: '1px solid rgba(var(--accent-rgb), 0.35)',
             borderRadius: 6, padding: '5px 8px', cursor: 'pointer',
             color: 'var(--accent)', fontSize: 11, fontWeight: 800, fontFamily: 'var(--font-mono)'
           }}
@@ -199,9 +199,9 @@ function ActiveRestBanner({ onJumpToToday }) {
           onClick={handleDismiss}
           style={{
             background: remaining > 0 ? 'none' : 'rgba(74,222,128,0.15)',
-            border: remaining > 0 ? '1px solid var(--border2)' : '1px solid #4ade80',
+            border: remaining > 0 ? '1px solid var(--border2)' : '1px solid var(--green)',
             borderRadius: 6, padding: '5px 9px', cursor: 'pointer',
-            color: remaining > 0 ? 'var(--text2)' : '#4ade80',
+            color: remaining > 0 ? 'var(--text2)' : 'var(--green)',
             fontSize: 11, fontWeight: 800, fontFamily: 'var(--font-mono)'
           }}
         >
@@ -406,7 +406,7 @@ function AuthCorner({ onOpenProfile }) {
                 <div style={{
                   width: 30, height: 30, borderRadius: '50%', background: 'var(--accent)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 13, fontWeight: 800, color: '#0a0a0a',
+                  fontSize: 13, fontWeight: 800, color: 'var(--bg)',
                 }}>
                   {(user.name || user.email)[0].toUpperCase()}
                 </div>
@@ -563,7 +563,7 @@ function ReloadPrompt() {
           onClick={() => updateServiceWorker(true)}
           style={{
             background: 'var(--accent)',
-            color: '#0a0a0a',
+            color: 'var(--bg)',
             border: 'none',
             borderRadius: 6,
             padding: '6px 12px',
@@ -676,7 +676,7 @@ export default function App() {
         <div style={{
           background: 'rgba(25, 20, 5, 0.95)',
           backdropFilter: 'blur(8px)',
-          borderBottom: '1px solid rgba(232, 255, 90, 0.3)',
+          borderBottom: '1px solid rgba(var(--accent-rgb),  0.3)',
           color: 'var(--accent)',
           padding: '10px 16px',
           textAlign: 'center',

@@ -60,9 +60,9 @@ export default function BodyMuscleMap({ muscleSetsMap, selectedMuscle, onSelectM
     const sets = muscleSetsMap[muscleKey] || 0;
     if (sets === 0) return { sets: 0, color: 'var(--text3)', fill: 'rgba(255,255,255,0.03)', opacity: 0.4, label: '0s' };
     
-    if (sets >= 10 && sets <= 20) return { sets, color: '#44ff88', fill: 'rgba(68,255,136,0.25)', opacity: 1, label: `${sets}s` };
-    if (sets >= 6 && sets <= 9) return { sets, color: '#5af0ff', fill: 'rgba(90,240,255,0.25)', opacity: 0.9, label: `${sets}s` };
-    if (sets > 20) return { sets, color: '#e8ff5a', fill: 'rgba(232,255,90,0.25)', opacity: 1, label: `${sets}s` };
+    if (sets >= 10 && sets <= 20) return { sets, color: 'var(--green)', fill: 'rgba(var(--green-rgb), 0.25)', opacity: 1, label: `${sets}s` };
+    if (sets >= 6 && sets <= 9) return { sets, color: 'var(--blue)', fill: 'rgba(var(--blue-rgb), 0.25)', opacity: 0.9, label: `${sets}s` };
+    if (sets > 20) return { sets, color: 'var(--accent)', fill: 'rgba(var(--accent-rgb), 0.25)', opacity: 1, label: `${sets}s` };
     return { sets, color: 'var(--text2)', fill: 'rgba(255,255,255,0.12)', opacity: 0.7, label: `${sets}s` };
   }
 
@@ -138,7 +138,7 @@ export default function BodyMuscleMap({ muscleSetsMap, selectedMuscle, onSelectM
                   }} />
                   <span style={{
                     fontSize: 8, fontWeight: 900, fontFamily: 'var(--font-mono)',
-                    color: isSelected ? '#0a0a0a' : 'var(--text)',
+                    color: isSelected ? 'var(--bg)' : 'var(--text)',
                     background: isSelected ? 'var(--accent)' : 'rgba(10,10,10,0.85)',
                     border: `1px solid ${info.color}`, padding: '0px 3px', borderRadius: 4,
                     lineHeight: 1.2, whiteSpace: 'nowrap'
@@ -187,7 +187,7 @@ export default function BodyMuscleMap({ muscleSetsMap, selectedMuscle, onSelectM
                   }} />
                   <span style={{
                     fontSize: 8, fontWeight: 900, fontFamily: 'var(--font-mono)',
-                    color: isSelected ? '#0a0a0a' : 'var(--text)',
+                    color: isSelected ? 'var(--bg)' : 'var(--text)',
                     background: isSelected ? 'var(--accent)' : 'rgba(10,10,10,0.85)',
                     border: `1px solid ${info.color}`, padding: '0px 3px', borderRadius: 4,
                     lineHeight: 1.2, whiteSpace: 'nowrap'
@@ -216,7 +216,7 @@ export default function BodyMuscleMap({ muscleSetsMap, selectedMuscle, onSelectM
                 padding: '2px 7px', borderRadius: 8,
                 background: isSelected ? 'var(--accent)' : 'var(--bg2)',
                 border: `1px solid ${isSelected ? 'var(--accent)' : info.color}`,
-                color: isSelected ? '#0a0a0a' : info.color,
+                color: isSelected ? 'var(--bg)' : info.color,
                 fontSize: 9, fontWeight: 700, fontFamily: 'var(--font-mono)',
                 cursor: 'pointer', transition: 'all 0.15s',
                 display: 'inline-flex', alignItems: 'center', gap: 3

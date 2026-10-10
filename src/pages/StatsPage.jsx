@@ -111,9 +111,9 @@ function MonthCalendar({ year, month, logDates }) {
                 fontSize: 11,
                 fontFamily: 'var(--font-mono)',
                 fontWeight: hasLog ? 900 : 500,
-                background: hasLog ? 'var(--accent)' : isToday ? 'rgba(232,255,90,0.1)' : 'var(--bg3)',
-                color: hasLog ? '#0a0a0a' : isToday ? 'var(--accent)' : isFuture ? 'var(--text3)' : 'var(--text2)',
-                border: isToday && !hasLog ? '1px solid rgba(232,255,90,0.35)' : '1px solid transparent',
+                background: hasLog ? 'var(--accent)' : isToday ? 'rgba(var(--accent-rgb), 0.1)' : 'var(--bg3)',
+                color: hasLog ? 'var(--bg)' : isToday ? 'var(--accent)' : isFuture ? 'var(--text3)' : 'var(--text2)',
+                border: isToday && !hasLog ? '1px solid rgba(var(--accent-rgb), 0.35)' : '1px solid transparent',
                 opacity: isFuture ? 0.35 : 1,
                 transition: 'background 0.12s',
               }}
@@ -195,8 +195,8 @@ function YearHeatmap({ year, logDates }) {
                     width: 12,
                     height: 12,
                     borderRadius: 2,
-                    background: hasLog ? 'var(--accent)' : isToday ? 'rgba(232,255,90,0.15)' : 'var(--bg3)',
-                    border: isToday && !hasLog ? '1px solid rgba(232,255,90,0.4)' : '1px solid transparent',
+                    background: hasLog ? 'var(--accent)' : isToday ? 'rgba(var(--accent-rgb), 0.15)' : 'var(--bg3)',
+                    border: isToday && !hasLog ? '1px solid rgba(var(--accent-rgb), 0.4)' : '1px solid transparent',
                     opacity: isFuture || !inYear ? 0.25 : 1,
                     transition: 'background 0.1s',
                   }}
@@ -236,7 +236,7 @@ function ActivityTracker({ logs }) {
               padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700,
               letterSpacing: '0.05em', textTransform: 'uppercase', cursor: 'pointer', border: 'none',
               background: view === v ? 'var(--accent)' : 'var(--bg3)',
-              color: view === v ? '#0a0a0a' : 'var(--text3)',
+              color: view === v ? 'var(--bg)' : 'var(--text3)',
               transition: 'all 0.15s',
             }}
           >
@@ -294,7 +294,7 @@ function ActivityTracker({ logs }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, justifyContent: 'flex-end' }}>
             <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text3)' }}>Less</div>
             {[0.1, 0.3, 0.6, 1].map((op, i) => (
-              <div key={i} style={{ width: 10, height: 10, borderRadius: 2, background: i === 3 ? 'var(--accent)' : `rgba(232,255,90,${op})` }} />
+              <div key={i} style={{ width: 10, height: 10, borderRadius: 2, background: i === 3 ? 'var(--accent)' : `rgba(var(--accent-rgb), ${op})` }} />
             ))}
             <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text3)' }}>More</div>
           </div>
@@ -327,8 +327,8 @@ function WeekStrip({ weekLogs }) {
         <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
           <div style={{
             width: '100%', height: 28, borderRadius: 4,
-            background: d.logged ? 'var(--accent)' : d.isToday ? 'rgba(232,255,90,0.12)' : 'var(--bg3)',
-            border: d.isToday && !d.logged ? '1px solid rgba(232,255,90,0.3)' : '1px solid transparent',
+            background: d.logged ? 'var(--accent)' : d.isToday ? 'rgba(var(--accent-rgb), 0.12)' : 'var(--bg3)',
+            border: d.isToday && !d.logged ? '1px solid rgba(var(--accent-rgb), 0.3)' : '1px solid transparent',
             transition: 'background 0.15s',
           }} />
           <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', fontWeight: 700, color: d.isToday ? 'var(--accent)' : 'var(--text3)', letterSpacing: '0.05em' }}>
@@ -472,7 +472,7 @@ function WeeklyVolumeChart({ logs }) {
               <div style={{
                 position: 'absolute', left: `${lastPointPct.left}%`, top: lastPointPct.top,
                 width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)',
-                transform: 'translate(-50%, -50%)', boxShadow: '0 0 0 3px rgba(232,255,90,0.2)',
+                transform: 'translate(-50%, -50%)', boxShadow: '0 0 0 3px rgba(var(--accent-rgb), 0.2)',
               }} />
             )}
           </div>
@@ -638,7 +638,7 @@ function ProgressionCard({ exercise }) {
               style={{
                 fontSize: 9, fontWeight: 800, fontFamily: 'var(--font-mono)', padding: '1px 6px', borderRadius: 4,
                 border: use1RM ? '1px solid var(--accent)' : '1px solid var(--border2)',
-                background: use1RM ? 'rgba(232,255,90,0.12)' : 'var(--bg3)',
+                background: use1RM ? 'rgba(var(--accent-rgb), 0.12)' : 'var(--bg3)',
                 color: use1RM ? 'var(--accent)' : 'var(--text3)', cursor: 'pointer'
               }}
               title="Toggle Weight / Est 1RM"
@@ -725,7 +725,7 @@ function ProgressionCard({ exercise }) {
                   <div style={{
                     position: 'absolute', left: `${activePointPct.left}%`, top: activePointPct.top,
                     width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)',
-                    transform: 'translate(-50%, -50%)', boxShadow: '0 0 0 3px rgba(232,255,90,0.2)',
+                    transform: 'translate(-50%, -50%)', boxShadow: '0 0 0 3px rgba(var(--accent-rgb), 0.2)',
                   }} />
                 )}
               </div>
@@ -742,7 +742,7 @@ function ProgressionCard({ exercise }) {
               style={{
                 fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)', padding: '2px 8px', borderRadius: 4,
                 border: !use1RM ? '1px solid var(--accent)' : '1px solid var(--border2)',
-                background: !use1RM ? 'rgba(232,255,90,0.1)' : 'transparent',
+                background: !use1RM ? 'rgba(var(--accent-rgb), 0.1)' : 'transparent',
                 color: !use1RM ? 'var(--accent)' : 'var(--text3)', cursor: 'pointer'
               }}
             >
@@ -753,7 +753,7 @@ function ProgressionCard({ exercise }) {
               style={{
                 fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)', padding: '2px 8px', borderRadius: 4,
                 border: use1RM ? '1px solid var(--accent)' : '1px solid var(--border2)',
-                background: use1RM ? 'rgba(232,255,90,0.1)' : 'transparent',
+                background: use1RM ? 'rgba(var(--accent-rgb), 0.1)' : 'transparent',
                 color: use1RM ? 'var(--accent)' : 'var(--text3)', cursor: 'pointer'
               }}
             >
@@ -868,7 +868,7 @@ function LogCard({ log, onDelete, hasPR }) {
             <div style={{ fontSize: 16, fontWeight: 900, fontFamily: 'var(--font-display)', textTransform: 'uppercase', letterSpacing: '0.02em', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{log.dayName}</div>
             {hasPR && (
               <span style={{
-                fontSize: 8, fontWeight: 900, color: 'var(--accent)', background: 'rgba(232, 255, 90, 0.1)',
+                fontSize: 8, fontWeight: 900, color: 'var(--accent)', background: 'rgba(var(--accent-rgb),  0.1)',
                 border: '1px solid var(--accent)', padding: '1px 5px', borderRadius: 4,
                 textTransform: 'uppercase', letterSpacing: '0.05em', flexShrink: 0,
                 display: 'inline-flex', alignItems: 'center', gap: 3,
@@ -906,7 +906,7 @@ function LogCard({ log, onDelete, hasPR }) {
             let nameStyle = { fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-display)', textTransform: 'uppercase', color: 'var(--text)', letterSpacing: '0.01em' };
             if (ex.category === 'warmup') {
               prefix = "[WU] ";
-              nameStyle.color = '#ff9f43';
+              nameStyle.color = 'var(--yellow)';
             } else if (ex.category === 'cooldown') {
               prefix = "[CD] ";
               nameStyle.color = 'var(--blue)';
@@ -933,7 +933,7 @@ function LogCard({ log, onDelete, hasPR }) {
                       fontSize: 8,
                       fontWeight: 900,
                       color: 'var(--accent)',
-                      background: 'rgba(232, 255, 90, 0.1)',
+                      background: 'rgba(var(--accent-rgb),  0.1)',
                       border: '1px solid var(--accent)',
                       padding: '1px 5px',
                       borderRadius: 4,
@@ -1136,9 +1136,9 @@ function BackupModal({ logs, splits, storage, queryClient, onClose }) {
         {msg && (
           <div style={{
             fontSize: 12, fontWeight: 600, padding: '8px 12px', borderRadius: 6,
-            background: msg.type === 'error' ? 'rgba(255,68,68,0.12)' : 'rgba(232,255,90,0.12)',
+            background: msg.type === 'error' ? 'rgba(var(--red-rgb), 0.12)' : 'rgba(var(--accent-rgb), 0.12)',
             color: msg.type === 'error' ? 'var(--red)' : 'var(--accent)',
-            border: `1px solid ${msg.type === 'error' ? 'rgba(255,68,68,0.3)' : 'rgba(232,255,90,0.3)'}`,
+            border: `1px solid ${msg.type === 'error' ? 'rgba(var(--red-rgb), 0.3)' : 'rgba(var(--accent-rgb), 0.3)'}`,
             marginBottom: 12,
           }}>
             {msg.text}
@@ -1276,7 +1276,7 @@ function ManageExercisesModal({ logs, storage, storageKey, queryClient, onClose 
                   style={{
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                     padding: '10px 12px', borderRadius: 8, textAlign: 'left', cursor: 'pointer',
-                    background: survivor === s.name ? 'rgba(232,255,90,0.08)' : 'var(--bg3)',
+                    background: survivor === s.name ? 'rgba(var(--accent-rgb), 0.08)' : 'var(--bg3)',
                     border: `1px solid ${survivor === s.name ? 'var(--accent)' : 'var(--border2)'}`,
                   }}
                 >
@@ -1308,8 +1308,8 @@ function ManageExercisesModal({ logs, storage, storageKey, queryClient, onClose 
                       key={`${pair.a}::${pair.b}`}
                       style={{
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8,
-                        padding: '10px 12px', borderRadius: 8, background: 'rgba(232,255,90,0.06)',
-                        border: '1px solid rgba(232,255,90,0.2)',
+                        padding: '10px 12px', borderRadius: 8, background: 'rgba(var(--accent-rgb), 0.06)',
+                        border: '1px solid rgba(var(--accent-rgb), 0.2)',
                       }}
                     >
                       <span style={{ fontSize: 12, color: 'var(--text)', minWidth: 0 }}>
@@ -1356,7 +1356,7 @@ function ManageExercisesModal({ logs, storage, storageKey, queryClient, onClose 
                     key={s.name}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 6,
-                      background: isSelected ? 'rgba(232,255,90,0.08)' : 'var(--bg3)',
+                      background: isSelected ? 'rgba(var(--accent-rgb), 0.08)' : 'var(--bg3)',
                       border: `1px solid ${isSelected ? 'var(--accent)' : 'transparent'}`,
                     }}
                   >
@@ -1385,7 +1385,7 @@ function ManageExercisesModal({ logs, storage, storageKey, queryClient, onClose 
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                           }}
                         >
-                          {isSelected && <Check size={11} color="#0a0a0a" />}
+                          {isSelected && <Check size={11} color="#121110" />}
                         </button>
                         <span style={{ fontSize: 12, color: 'var(--text)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
                         <span style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
@@ -1406,9 +1406,9 @@ function ManageExercisesModal({ logs, storage, storageKey, queryClient, onClose 
         {msg && (
           <div style={{
             fontSize: 12, fontWeight: 600, padding: '8px 12px', borderRadius: 6, marginTop: 12,
-            background: msg.type === 'error' ? 'rgba(255,68,68,0.12)' : 'rgba(232,255,90,0.12)',
+            background: msg.type === 'error' ? 'rgba(var(--red-rgb), 0.12)' : 'rgba(var(--accent-rgb), 0.12)',
             color: msg.type === 'error' ? 'var(--red)' : 'var(--accent)',
-            border: `1px solid ${msg.type === 'error' ? 'rgba(255,68,68,0.3)' : 'rgba(232,255,90,0.3)'}`,
+            border: `1px solid ${msg.type === 'error' ? 'rgba(var(--red-rgb), 0.3)' : 'rgba(var(--accent-rgb), 0.3)'}`,
           }}>
             {msg.text}
           </div>
@@ -1579,7 +1579,7 @@ export default function StatsPage() {
                   flex: 1, padding: '8px 0', borderRadius: 20, fontSize: 11, fontWeight: 700,
                   letterSpacing: '0.05em', textTransform: 'uppercase', cursor: 'pointer', border: 'none',
                   background: activeTabIndex === i ? 'var(--accent)' : 'var(--bg3)',
-                  color: activeTabIndex === i ? '#0a0a0a' : 'var(--text3)',
+                  color: activeTabIndex === i ? 'var(--bg)' : 'var(--text3)',
                   transition: 'all 0.15s',
                 }}
               >
@@ -1664,7 +1664,7 @@ export default function StatsPage() {
               {/* ── Manage Exercises ── */}
               <SectionLabel>Exercises</SectionLabel>
               <div style={{ borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg2)', padding: '16px', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 14 }}>
-                <div style={{ width: 44, height: 44, borderRadius: 10, background: 'rgba(232,255,90,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', flexShrink: 0 }}>
+                <div style={{ width: 44, height: 44, borderRadius: 10, background: 'rgba(var(--accent-rgb), 0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', flexShrink: 0 }}>
                   <Tag size={20} />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>

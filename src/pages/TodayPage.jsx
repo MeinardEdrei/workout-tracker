@@ -197,8 +197,8 @@ function ExerciseHistoryModal({ exName, logs, onClose }) {
                 <div key={idx} style={{
                   padding: '10px 12px',
                   borderRadius: 8,
-                  background: isPr ? 'rgba(232, 255, 90, 0.04)' : 'var(--bg3)',
-                  border: `1px solid ${isPr ? 'rgba(232, 255, 90, 0.2)' : 'var(--border2)'}`,
+                  background: isPr ? 'rgba(var(--accent-rgb),  0.04)' : 'var(--bg3)',
+                  border: `1px solid ${isPr ? 'rgba(var(--accent-rgb),  0.2)' : 'var(--border2)'}`,
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
@@ -224,7 +224,7 @@ function ExerciseHistoryModal({ exName, logs, onClose }) {
                   {isPr && rec.weight > 0 && (
                     <span style={{
                       fontSize: 10, fontWeight: 800, color: 'var(--accent)',
-                      background: 'rgba(232, 255, 90, 0.12)', border: '1px solid rgba(232, 255, 90, 0.25)',
+                      background: 'rgba(var(--accent-rgb),  0.12)', border: '1px solid rgba(var(--accent-rgb),  0.25)',
                       padding: '2px 7px', borderRadius: 10, textTransform: 'uppercase', letterSpacing: '0.04em'
                     }}>
                       <Trophy size={11} style={{ verticalAlign: -1, marginRight: 3 }} />Max
@@ -248,7 +248,7 @@ function ExerciseHistoryModal({ exName, logs, onClose }) {
 function CheckIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-      <polyline points="2,7 6,11 12,3" stroke="#0a0a0a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      <polyline points="2,7 6,11 12,3" stroke="#121110" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -263,7 +263,7 @@ function ShareIcon() {
 
 async function captureAndShare(ref, filename, title) {
   const html2canvas = (await import('html2canvas')).default;
-  const canvas = await html2canvas(ref.current, { backgroundColor: '#0a0a0a', scale: 2, useCORS: true, logging: false });
+  const canvas = await html2canvas(ref.current, { backgroundColor: '#121110', scale: 2, useCORS: true, logging: false });
   canvas.toBlob(async (blob) => {
     const file = new File([blob], filename, { type: 'image/png' });
     if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -318,7 +318,7 @@ function CompletionScreen({ log, onClose, onShare, sharing }) {
         </div>
 
         {/* Dynamic Muscle Scanner Map */}
-        {/* <div style={{ background: '#08080a', borderRadius: 12, padding: '14px 10px', display: 'flex', justifyContent: 'center', border: '1px solid var(--border)' }}>
+        {/* <div style={{ background: 'var(--bg)', borderRadius: 12, padding: '14px 10px', display: 'flex', justifyContent: 'center', border: '1px solid var(--border)' }}>
           <BodyMap exercises={log.exercises} size={90} />
         </div> */}
 
@@ -356,7 +356,7 @@ function WeightSyncModal({
   const categoryChanged = oldCategory !== undefined && newCategory !== undefined && oldCategory !== newCategory;
 
   const isIncrease = delta > 0;
-  const directionColor = isIncrease ? 'var(--green)' : '#f87171';
+  const directionColor = isIncrease ? 'var(--green)' : 'var(--red)';
   const deltaFormatted = Math.abs(delta).toFixed(1).replace(/\.0$/, '');
 
   const oldRepsStr = (oldUntilFailure || oldReps === 0) ? 'Failure' : `${oldReps}`;
@@ -378,7 +378,7 @@ function WeightSyncModal({
               {' '}
               <span style={{
                 fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
-                background: isIncrease ? 'rgba(68,255,136,0.12)' : 'rgba(248,113,113,0.12)',
+                background: isIncrease ? 'rgba(var(--green-rgb), 0.12)' : 'rgba(var(--red-rgb), 0.12)',
                 color: directionColor, padding: '2px 6px', borderRadius: 4,
               }}>
                 {isIncrease ? `+${deltaFormatted}${newUnit} increase` : `-${deltaFormatted}${newUnit} decrease`}
@@ -450,9 +450,9 @@ function CategoryHeader({ type }) {
     warmup: {
       label: 'Warm-up',
       subtitle: 'Dynamic prep & muscle activation',
-      color: '#ff9f43',
-      bgColor: 'rgba(255,159,67,0.06)',
-      borderColor: 'rgba(255,159,67,0.15)',
+      color: 'var(--yellow)',
+      bgColor: 'rgba(var(--yellow-rgb), 0.06)',
+      borderColor: 'rgba(var(--yellow-rgb), 0.15)',
       icon: (
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
@@ -463,8 +463,8 @@ function CategoryHeader({ type }) {
       label: 'Main Workout',
       subtitle: 'Primary strength & hypertrophy sets',
       color: 'var(--accent)',
-      bgColor: 'rgba(232,255,90,0.04)',
-      borderColor: 'rgba(232,255,90,0.12)',
+      bgColor: 'rgba(var(--accent-rgb), 0.04)',
+      borderColor: 'rgba(var(--accent-rgb), 0.12)',
       icon: (
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="m6.5 6.5 11 11M21 21l-3-3M3 3l3 3M18.5 5.5l3-3M5.5 18.5l-3 3M8.5 4.5l2-2M17.5 13.5l2-2M13.5 17.5l-2 2M4.5 8.5l-2 2" />
@@ -475,8 +475,8 @@ function CategoryHeader({ type }) {
       label: 'Cool Down',
       subtitle: 'Stretching, mobility & recovery',
       color: 'var(--blue)',
-      bgColor: 'rgba(90,240,255,0.04)',
-      borderColor: 'rgba(90,240,255,0.12)',
+      bgColor: 'rgba(var(--blue-rgb), 0.04)',
+      borderColor: 'rgba(var(--blue-rgb), 0.12)',
       icon: (
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z" />
@@ -872,7 +872,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
   // "Just for today" swap indicator — the pill shows what this slot is
   // really planned as, since ex.name below now reads the swapped identity.
   const swappedPillEl = effectiveSwap && (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: isHero ? 10 : 9, fontWeight: 800, letterSpacing: '0.04em', color: 'var(--accent)', background: 'rgba(232,255,90,0.08)', border: '1px solid rgba(232,255,90,0.25)', padding: '2px 8px', borderRadius: 10, textTransform: 'uppercase' }}>
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: isHero ? 10 : 9, fontWeight: 800, letterSpacing: '0.04em', color: 'var(--accent)', background: 'rgba(var(--accent-rgb), 0.08)', border: '1px solid rgba(var(--accent-rgb), 0.25)', padding: '2px 8px', borderRadius: 10, textTransform: 'uppercase' }}>
       <SwapIcon /> Swapped from {rawEx.name}
       {!readOnly && (
         <button
@@ -1209,7 +1209,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
         <button
           onClick={() => weightMutation.mutate({ weight: weightVal, unit: weightUnit })}
           disabled={weightMutation.isPending}
-          style={{ padding: '3px 12px', borderRadius: 4, border: 'none', background: 'var(--accent)', color: '#0a0a0a', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}
+          style={{ padding: '3px 12px', borderRadius: 4, border: 'none', background: 'var(--accent)', color: 'var(--bg)', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}
         ><Check size={12} /></button>
         <button
           onClick={() => { setEditingWeight(false); setWeightVal(String(ex.weight ?? 0)); setWeightUnit(ex.weightUnit || 'kg'); }}
@@ -1288,7 +1288,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
       <button
         onClick={() => { if (ex.duration > 0) setsRepsMutation.mutate({ sets: setsVal, duration: durationVal, durationUnit: durationUnitVal }); else setsRepsMutation.mutate({ sets: setsVal, reps: repsVal }); }}
         disabled={setsRepsMutation.isPending}
-        style={{ padding: isHero ? '4px 10px' : '2px 7px', borderRadius: 4, border: 'none', background: 'var(--accent)', color: '#0a0a0a', fontWeight: 900, fontSize: isHero ? 13 : 11, cursor: 'pointer', display: 'inline-flex' }}
+        style={{ padding: isHero ? '4px 10px' : '2px 7px', borderRadius: 4, border: 'none', background: 'var(--accent)', color: 'var(--bg)', fontWeight: 900, fontSize: isHero ? 13 : 11, cursor: 'pointer', display: 'inline-flex' }}
       ><Check size={12} /></button>
       <button
         onClick={() => { setEditingSetsReps(false); setSetsVal(String(ex.sets ?? 3)); setRepsVal(String(ex.reps ?? 0)); setDurationVal(String(ex.duration ?? 0)); setDurationUnitVal(ex.durationUnit || 'sec'); }}
@@ -1414,7 +1414,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
         type="button"
         onClick={() => setLogIsDropSet((v) => !v)}
         style={{
-          background: logIsDropSet ? 'rgba(232,255,90,0.15)' : 'transparent',
+          background: logIsDropSet ? 'rgba(var(--accent-rgb), 0.15)' : 'transparent',
           border: logIsDropSet ? '1px solid var(--accent)' : '1px dashed var(--border2)',
           borderRadius: 6,
           padding: '2px 8px',
@@ -1480,7 +1480,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
               style={{
                 width: isHero ? 32 : 22, height: isHero ? 32 : 22, borderRadius: isHero ? 6 : 5, cursor: 'pointer',
                 border: logRirVal === r ? '1.5px solid var(--accent)' : '1px solid var(--border2)',
-                background: logRirVal === r ? 'rgba(232,255,90,0.12)' : 'var(--bg2)',
+                background: logRirVal === r ? 'rgba(var(--accent-rgb), 0.12)' : 'var(--bg2)',
                 color: logRirVal === r ? 'var(--accent)' : 'var(--text2)',
                 fontSize: isHero ? 12 : 9, fontWeight: 800, fontFamily: 'var(--font-mono)',
               }}
@@ -1493,7 +1493,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
           type="button"
           onClick={confirmSetLog}
           disabled={setLogsMutation.isPending}
-          style={{ padding: isHero ? '6px 16px' : '4px 10px', borderRadius: 6, border: 'none', background: 'var(--accent)', color: '#0a0a0a', fontWeight: 900, fontSize: isHero ? 12 : 10, cursor: 'pointer' }}
+          style={{ padding: isHero ? '6px 16px' : '4px 10px', borderRadius: 6, border: 'none', background: 'var(--accent)', color: 'var(--bg)', fontWeight: 900, fontSize: isHero ? 12 : 10, cursor: 'pointer' }}
         >{editingLogIndex != null ? 'Save' : `Log Set ${nextSetNumber}`}</button>
         <button
           type="button"
@@ -1544,7 +1544,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
             style={{
               padding: '8px 16px', borderRadius: 6, cursor: 'pointer',
               border: targetSetsReached ? '1px dashed var(--border2)' : '1.5px solid var(--accent)',
-              background: targetSetsReached ? 'transparent' : 'rgba(232,255,90,0.08)',
+              background: targetSetsReached ? 'transparent' : 'rgba(var(--accent-rgb), 0.08)',
               color: targetSetsReached ? 'var(--text3)' : 'var(--accent)',
               fontSize: 13, fontWeight: 800, fontFamily: 'var(--font-mono)',
             }}
@@ -1617,7 +1617,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
         {!effectiveSkipped && onPromote && (
           <button
             onClick={onPromote}
-            style={{ color: 'var(--accent)', fontSize: isHero ? 11 : 10, fontFamily: 'var(--font-mono)', cursor: 'pointer', padding: isHero ? '4px 8px' : '2px 5px', borderRadius: 4, border: '1.5px solid rgba(232,255,90,0.3)', background: 'rgba(232,255,90,0.06)', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+            style={{ color: 'var(--accent)', fontSize: isHero ? 11 : 10, fontFamily: 'var(--font-mono)', cursor: 'pointer', padding: isHero ? '4px 8px' : '2px 5px', borderRadius: 4, border: '1.5px solid rgba(var(--accent-rgb), 0.3)', background: 'rgba(var(--accent-rgb), 0.06)', display: 'inline-flex', alignItems: 'center', gap: 3 }}
             title="Do this exercise next instead"
           >
             <SkipForward size={12} /> Do Next
@@ -1691,7 +1691,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
         onKeyDown={(e) => { if (e.key === 'Enter') notesMutation.mutate(notesVal); }}
         style={{ flex: 1, padding: '3px 7px', fontSize: 11, borderRadius: 5, border: '1px solid var(--accent)', background: 'var(--bg3)', color: 'var(--text)', outline: 'none' }}
       />
-      <button onClick={() => notesMutation.mutate(notesVal)} style={{ padding: '2px 8px', borderRadius: 4, background: 'var(--accent)', color: '#0a0a0a', fontWeight: 800, fontSize: 11, border: 'none', cursor: 'pointer' }}><Check size={12} /></button>
+      <button onClick={() => notesMutation.mutate(notesVal)} style={{ padding: '2px 8px', borderRadius: 4, background: 'var(--accent)', color: 'var(--bg)', fontWeight: 800, fontSize: 11, border: 'none', cursor: 'pointer' }}><Check size={12} /></button>
     </div>
   ) : ex.notes ? (
     <div
@@ -1780,7 +1780,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
           padding: 'clamp(14px, 3.2vh, 28px) 18px', borderRadius: 20,
           border: highlighted ? '2px solid var(--accent)' : '1.5px solid var(--accent)',
           background: 'var(--bg2)',
-          boxShadow: highlighted ? '0 0 24px rgba(232,255,90,0.45)' : '0 8px 32px rgba(232,255,90,0.1)',
+          boxShadow: highlighted ? '0 0 24px rgba(var(--accent-rgb), 0.45)' : '0 8px 32px rgba(var(--accent-rgb), 0.1)',
           opacity: toggleMutation.isPending ? 0.6 : 1, transition: 'all 0.25s ease',
           maxWidth: 420, margin: '0 auto', width: '100%', maxHeight: '100%', boxSizing: 'border-box',
           overflowY: 'auto',
@@ -1879,7 +1879,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
             style={{
               marginTop: 4, width: '100%', padding: 'clamp(10px, 2vh, 16px)', borderRadius: 14, border: 'none',
               background: effectiveChecked ? 'var(--bg3)' : 'var(--accent)',
-              color: effectiveChecked ? 'var(--text2)' : '#0a0a0a',
+              color: effectiveChecked ? 'var(--text2)' : 'var(--bg)',
               fontWeight: 900, fontSize: 15, textTransform: 'uppercase', letterSpacing: '0.04em',
               cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
             }}
@@ -1902,7 +1902,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
         padding: '12px 16px', borderBottom: '1px solid var(--border)',
         opacity: (toggleMutation.isPending) ? 0.5 : 1,
         transition: 'all 0.25s ease',
-        background: highlighted ? 'rgba(232,255,90,0.1)' : effectiveChecked ? 'rgba(255,255,255,0.01)' : 'transparent',
+        background: highlighted ? 'rgba(var(--accent-rgb), 0.1)' : effectiveChecked ? 'rgba(255,255,255,0.01)' : 'transparent',
       }}
     >
       {/* Circular checkbox — doubles as "tap to undo" when skipped, so there's
@@ -2016,7 +2016,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
               }}
               style={{ flex: 1, padding: '3px 7px', fontSize: 11, borderRadius: 5, border: '1px solid var(--accent)', background: 'var(--bg3)', color: 'var(--text)', outline: 'none' }}
             />
-            <button onClick={() => notesMutation.mutate(notesVal)} style={{ padding: '2px 8px', borderRadius: 4, background: 'var(--accent)', color: '#0a0a0a', fontWeight: 800, fontSize: 11, border: 'none', cursor: 'pointer' }}><Check size={12} /></button>
+            <button onClick={() => notesMutation.mutate(notesVal)} style={{ padding: '2px 8px', borderRadius: 4, background: 'var(--accent)', color: 'var(--bg)', fontWeight: 800, fontSize: 11, border: 'none', cursor: 'pointer' }}><Check size={12} /></button>
           </div>
         ) : ex.notes ? (
           <div
@@ -2346,7 +2346,7 @@ function AddExerciseFromOtherDaysModal({ splitDays, logs, onConfirm, onClose }) 
                               })}
                               style={{
                                 padding: '4px 10px', fontSize: 11, fontWeight: 700, borderRadius: 6,
-                                background: 'var(--accent)', color: '#0a0a0a', border: 'none', cursor: 'pointer'
+                                background: 'var(--accent)', color: 'var(--bg)', border: 'none', cursor: 'pointer'
                               }}
                             >
                               + Add
@@ -2410,7 +2410,7 @@ function AddExerciseFromOtherDaysModal({ splitDays, logs, onConfirm, onClose }) 
                       {s.isCustom && (
                         <span style={{
                           fontSize: 8, fontWeight: 800, color: 'var(--accent)',
-                          background: 'rgba(232,255,90,0.08)', border: '1px solid rgba(232,255,90,0.2)',
+                          background: 'rgba(var(--accent-rgb), 0.08)', border: '1px solid rgba(var(--accent-rgb), 0.2)',
                           padding: '2px 6px', borderRadius: 4, textTransform: 'uppercase', letterSpacing: '0.04em',
                           flexShrink: 0
                         }}>
@@ -2712,7 +2712,7 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
                     {s.isCustom && (
                       <span style={{
                         fontSize: 8, fontWeight: 800, color: 'var(--accent)',
-                        background: 'rgba(232,255,90,0.08)', border: '1px solid rgba(232,255,90,0.2)',
+                        background: 'rgba(var(--accent-rgb), 0.08)', border: '1px solid rgba(var(--accent-rgb), 0.2)',
                         padding: '2px 6px', borderRadius: 4, textTransform: 'uppercase', letterSpacing: '0.04em',
                         flexShrink: 0
                       }}>
@@ -3117,7 +3117,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10 }}>
           <button
             onClick={() => setHeroOverrideId(null)}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, color: 'var(--accent)', background: 'rgba(232,255,90,0.08)', border: '1px solid rgba(232,255,90,0.25)', borderRadius: 20, padding: '5px 12px', cursor: 'pointer' }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, color: 'var(--accent)', background: 'rgba(var(--accent-rgb), 0.08)', border: '1px solid rgba(var(--accent-rgb), 0.25)', borderRadius: 20, padding: '5px 12px', cursor: 'pointer' }}
           >
             <RotateCcw size={11} /> Doing this first · Reset order
           </button>
@@ -3221,7 +3221,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
                       fontWeight: 700,
                       borderRadius: 6,
                       background: alreadyAdded ? 'rgba(255,255,255,0.05)' : 'var(--accent)',
-                      color: alreadyAdded ? 'var(--text3)' : '#0a0a0a',
+                      color: alreadyAdded ? 'var(--text3)' : 'var(--bg)',
                       border: 'none',
                       cursor: alreadyAdded ? 'default' : 'pointer',
                     }}
@@ -3273,7 +3273,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
         <div style={{
           padding: '14px 16px',
           borderTop: '1px solid var(--border)',
-          background: isSkippedDay ? 'rgba(255,255,255,0.02)' : 'rgba(68,255,136,0.03)',
+          background: isSkippedDay ? 'rgba(255,255,255,0.02)' : 'rgba(var(--green-rgb), 0.03)',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
@@ -3404,7 +3404,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
       ) : (
         <>
           {isCompleted ? (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 800, color: 'var(--green)', letterSpacing: '0.08em', textTransform: 'uppercase', background: 'rgba(68,255,136,0.1)', padding: '4px 8px', borderRadius: 4 }}><Check size={11} /> Done</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 800, color: 'var(--green)', letterSpacing: '0.08em', textTransform: 'uppercase', background: 'rgba(var(--green-rgb), 0.1)', padding: '4px 8px', borderRadius: 4 }}><Check size={11} /> Done</span>
           ) : isPast ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               {isRetaking && total > 0 && (
@@ -3413,7 +3413,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
                 </span>
               )}
               {isRetaking ? (
-                <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--accent)', letterSpacing: '0.08em', textTransform: 'uppercase', background: 'rgba(232,255,90,0.1)', border: '1.5px solid var(--accent)', padding: '4px 8px', borderRadius: 4 }}>Retaking</span>
+                <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--accent)', letterSpacing: '0.08em', textTransform: 'uppercase', background: 'rgba(var(--accent-rgb), 0.1)', border: '1.5px solid var(--accent)', padding: '4px 8px', borderRadius: 4 }}>Retaking</span>
               ) : (
                 <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', background: 'rgba(255,255,255,0.03)', padding: '4px 8px', borderRadius: 4 }}>Skipped</span>
               )}
@@ -3425,7 +3425,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
                   {checkedCount}<span style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 400 }}>/{total}</span>
                 </span>
               )}
-              <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--accent)', letterSpacing: '0.08em', textTransform: 'uppercase', background: 'rgba(232,255,90,0.1)', border: '1.5px solid var(--accent)', padding: '4px 8px', borderRadius: 4 }}>Advancing</span>
+              <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--accent)', letterSpacing: '0.08em', textTransform: 'uppercase', background: 'rgba(var(--accent-rgb), 0.1)', border: '1.5px solid var(--accent)', padding: '4px 8px', borderRadius: 4 }}>Advancing</span>
             </div>
           ) : total > 0 ? (
             <span style={{ fontSize: 18, fontWeight: 900, fontFamily: 'var(--font-mono)', color: checkedCount === total ? 'var(--green)' : checkedCount > 0 ? 'var(--accent)' : 'var(--text3)' }}>
@@ -3460,11 +3460,11 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
         {!isScreen && (
           <HeaderTag
             onClick={() => !day.isRest && setOpen((o) => !o)}
-            style={{ width: '100%', background: isToday ? 'rgba(232,255,90,0.04)' : 'transparent', border: 'none', cursor: day.isRest ? 'default' : 'pointer', padding: '16px 16px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, textAlign: 'left' }}
+            style={{ width: '100%', background: isToday ? 'rgba(var(--accent-rgb), 0.04)' : 'transparent', border: 'none', cursor: day.isRest ? 'default' : 'pointer', padding: '16px 16px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, textAlign: 'left' }}
           >
             <div style={{ flex: 1, minWidth: 0 }}>
               {isToday && (
-                <div style={{ fontSize: 8, fontWeight: 900, letterSpacing: '0.18em', background: 'var(--accent)', color: '#0a0a0a', padding: '2px 6px', borderRadius: 2, textTransform: 'uppercase', display: 'inline-block', marginBottom: 6 }}>TODAY</div>
+                <div style={{ fontSize: 8, fontWeight: 900, letterSpacing: '0.18em', background: 'var(--accent)', color: 'var(--bg)', padding: '2px 6px', borderRadius: 2, textTransform: 'uppercase', display: 'inline-block', marginBottom: 6 }}>TODAY</div>
               )}
               <div style={{ fontSize: 28, fontWeight: 900, fontFamily: 'var(--font-display)', letterSpacing: '0.02em', textTransform: 'uppercase', lineHeight: 1, color: (isToday || isRetaking || isAdvancing) ? 'var(--accent)' : day.isRest ? 'var(--text3)' : 'var(--text)' }}>
                 {day.name}
@@ -3607,7 +3607,7 @@ function ConsistencyCard({ logs, activeSplit }) {
             </div>
             <div style={{ 
               width: 24, height: 24, borderRadius: '50%', 
-              background: d.isDone ? 'rgba(68,255,136,0.1)' : 'var(--bg3)',
+              background: d.isDone ? 'rgba(var(--green-rgb), 0.1)' : 'var(--bg3)',
               border: `1px solid ${d.isDone ? 'var(--green)' : d.isToday ? 'var(--border2)' : 'transparent'}`,
               display: 'flex', alignItems: 'center', justifyContent: 'center'
             }}>
@@ -3887,7 +3887,7 @@ export default function TodayPage() {
         {viewMode === 'pager' && activeDayIndex != null && displayDays[activeDayIndex] ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
             {activeDayIndex === todayIndex && (
-              <span style={{ fontSize: 8, fontWeight: 900, letterSpacing: '0.1em', background: 'var(--accent)', color: '#0a0a0a', padding: '2px 5px', borderRadius: 3, textTransform: 'uppercase', flexShrink: 0 }}>Today</span>
+              <span style={{ fontSize: 8, fontWeight: 900, letterSpacing: '0.1em', background: 'var(--accent)', color: 'var(--bg)', padding: '2px 5px', borderRadius: 3, textTransform: 'uppercase', flexShrink: 0 }}>Today</span>
             )}
             <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--text)', textTransform: 'uppercase', letterSpacing: '0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {displayDays[activeDayIndex].name}

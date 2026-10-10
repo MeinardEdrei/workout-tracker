@@ -13,7 +13,7 @@
 }
 
 .wt-wheel-highlight-wrapper[data-rwp-highlight-wrapper] {
-  background: rgba(232, 255, 90, 0.06);
+  background: rgba(var(--accent-rgb), 0.06);
   border-top: 1.5px solid var(--border2);
   border-bottom: 1.5px solid var(--border2);
 }

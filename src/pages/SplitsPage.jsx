@@ -24,7 +24,7 @@ function PlusIcon() {
 function CheckIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-      <polyline points="2,7 6,11 12,3" stroke="#0a0a0a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      <polyline points="2,7 6,11 12,3" stroke="#121110" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -183,7 +183,7 @@ function NewSplitModal({ onConfirm, onClose, onBrowse }) {
                 style={{
                   width: 36, height: 36, borderRadius: 8, fontSize: 13, fontWeight: 700,
                   border: `1px solid ${daysPerWeek === n ? 'var(--accent)' : 'var(--border2)'}`,
-                  background: daysPerWeek === n ? 'rgba(232,255,90,0.12)' : 'transparent',
+                  background: daysPerWeek === n ? 'rgba(var(--accent-rgb), 0.12)' : 'transparent',
                   color: daysPerWeek === n ? 'var(--accent)' : 'var(--text2)', cursor: 'pointer',
                 }}
               >
@@ -196,7 +196,7 @@ function NewSplitModal({ onConfirm, onClose, onBrowse }) {
               style={{
                 padding: '0 12px', height: 36, borderRadius: 8, fontSize: 12, fontWeight: 700,
                 border: `1px solid ${daysPerWeek === 0 ? 'var(--accent)' : 'var(--border2)'}`,
-                background: daysPerWeek === 0 ? 'rgba(232,255,90,0.12)' : 'transparent',
+                background: daysPerWeek === 0 ? 'rgba(var(--accent-rgb), 0.12)' : 'transparent',
                 color: daysPerWeek === 0 ? 'var(--accent)' : 'var(--text2)', cursor: 'pointer',
               }}
             >
@@ -218,7 +218,7 @@ function NewSplitModal({ onConfirm, onClose, onBrowse }) {
                     style={{
                       padding: '7px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700,
                       border: `1px solid ${style === s.key ? 'var(--accent)' : 'var(--border2)'}`,
-                      background: style === s.key ? 'rgba(232,255,90,0.12)' : 'transparent',
+                      background: style === s.key ? 'rgba(var(--accent-rgb), 0.12)' : 'transparent',
                       color: style === s.key ? 'var(--accent)' : 'var(--text2)', cursor: 'pointer',
                     }}
                   >
@@ -785,7 +785,7 @@ export default function SplitsPage() {
                   <div style={{
                     width: 30, height: 30, borderRadius: '50%', background: 'var(--accent)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 13, fontWeight: 800, color: '#0a0a0a',
+                    fontSize: 13, fontWeight: 800, color: 'var(--bg)',
                   }}>
                     {(user.name || user.email)[0].toUpperCase()}
                   </div>
@@ -992,7 +992,7 @@ export default function SplitsPage() {
                   marginBottom: 10,
                   borderRadius: 10,
                   border: `1px solid ${split.isActive ? 'var(--accent)' : 'var(--border)'}`,
-                  background: split.isActive ? 'rgba(232,255,90,0.04)' : 'var(--bg2)',
+                  background: split.isActive ? 'rgba(var(--accent-rgb), 0.04)' : 'var(--bg2)',
                   opacity: actionLoading === split._id ? 0.5 : 1,
                   transition: 'opacity 0.15s',
                   overflow: 'hidden'
@@ -1104,7 +1104,7 @@ export default function SplitsPage() {
                                 )}
                               </div>
                               {day.tag && (
-                                <span style={{ fontSize: 10, color: 'var(--accent)', background: 'rgba(232,255,90,0.08)', padding: '2px 8px', borderRadius: 4, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', border: '1px solid rgba(232,255,90,0.15)' }}>
+                                <span style={{ fontSize: 10, color: 'var(--accent)', background: 'rgba(var(--accent-rgb), 0.08)', padding: '2px 8px', borderRadius: 4, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', border: '1px solid rgba(var(--accent-rgb), 0.15)' }}>
                                   {day.tag}
                                 </span>
                               )}
@@ -1117,7 +1117,7 @@ export default function SplitsPage() {
                                   let nameStyle = { color: 'var(--text)' };
                                   if (ex.category === 'warmup') {
                                     prefix = "[WU] ";
-                                    nameStyle.color = '#ff9f43';
+                                    nameStyle.color = 'var(--yellow)';
                                   } else if (ex.category === 'cooldown') {
                                     prefix = "[CD] ";
                                     nameStyle.color = 'var(--blue)';
@@ -1282,7 +1282,7 @@ export default function SplitsPage() {
                       position: 'absolute', top: 2,
                       left: s.isPublic ? 18 : 2,
                       width: 14, height: 14, borderRadius: '50%',
-                      background: s.isPublic ? '#0a0a0a' : 'var(--text3)',
+                      background: s.isPublic ? 'var(--bg)' : 'var(--text3)',
                       transition: 'left 0.2s',
                     }} />
                   </div>

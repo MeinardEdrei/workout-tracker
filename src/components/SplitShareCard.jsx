@@ -27,7 +27,7 @@ function ExerciseRow({ ex, scale }) {
 
   return (
     <div style={{ display: 'flex', gap: 7, marginBottom: Math.round(5 * scale) }}>
-      <span style={{ color: '#c8f55a', fontSize: fs(11, scale), lineHeight: 1.4, flexShrink: 0, marginTop: 1 }}>–</span>
+      <span style={{ color: 'var(--accent)', fontSize: fs(11, scale), lineHeight: 1.4, flexShrink: 0, marginTop: 1 }}>–</span>
       <div>
         {/* Name + muscle pills on the same line, wrapping naturally */}
         <div style={{ display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: 3, lineHeight: 1.4 }}>
@@ -56,7 +56,7 @@ function ExerciseRow({ ex, scale }) {
           })}
         </div>
         {stats && (
-          <div style={{ fontSize: fs(10, scale), color: '#555', fontFamily: "'DM Mono', monospace", marginTop: 2 }}>
+          <div style={{ fontSize: fs(10, scale), color: 'var(--text3)', fontFamily: "'DM Mono', monospace", marginTop: 2 }}>
             {stats}
           </div>
         )}
@@ -77,7 +77,7 @@ function DaySection({ day, scale }) {
         gap: 8,
       }}>
         <div style={{
-          fontSize: fs(14, scale), fontWeight: 800, color: '#c8f55a',
+          fontSize: fs(14, scale), fontWeight: 800, color: 'var(--accent)',
           textTransform: 'uppercase', letterSpacing: '0.07em',
           fontFamily: "'Barlow Condensed', sans-serif",
           flex: 1, minWidth: 0,
@@ -88,7 +88,7 @@ function DaySection({ day, scale }) {
           <div style={{
             fontSize: fs(9, scale), fontWeight: 700, letterSpacing: '0.05em',
             textTransform: 'uppercase',
-            color: '#0d0d0d', background: '#c8f55a',
+            color: 'var(--bg)', background: 'var(--accent)',
             padding: `2px ${Math.round(8 * scale)}px`,
             borderRadius: 10,
             whiteSpace: 'nowrap', flexShrink: 0,
@@ -138,8 +138,8 @@ export default function SplitShareCard({ split, cardRef }) {
         left: '-9999px',
         top: 0,
         width: 390,
-        backgroundColor: '#0d0d0d',
-        borderLeft: '3px solid #c8f55a',
+        backgroundColor: '#121110',
+        borderLeft: '3px solid var(--accent)',
         padding: '22px 24px 20px 24px',
         fontFamily: "'Barlow Condensed', sans-serif",
         boxSizing: 'border-box',
@@ -170,7 +170,7 @@ export default function SplitShareCard({ split, cardRef }) {
 
         <div style={{
           fontSize: fs(12, scale),
-          color: '#555',
+          color: 'var(--text3)',
           marginTop: 6,
           fontWeight: 700,
           letterSpacing: '0.07em',
