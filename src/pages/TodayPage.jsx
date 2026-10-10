@@ -11,6 +11,8 @@ import ExerciseThumbnail from '../components/ExerciseThumbnail';
 import RepeatButton from '../components/RepeatButton';
 import { tick } from '../utils/haptics';
 import BottomSheet, { SheetRow } from '../components/BottomSheet';
+import PlateCalculator from '../components/PlateCalculator';
+import { suggestNextSet } from '../utils/suggest';
 import { useBackClose } from '../hooks/useBackClose';
 import { isSyncExcluded, excludeFromSync } from '../utils/syncPrefs';
 import { computeStreak } from '../utils/streaks';
@@ -18,7 +20,7 @@ import { getActiveRestTimer, getAllActiveRestTimers, setActiveRestTimer, clearAc
 import { getDayFlags, setDayFlag } from '../utils/earlySession';
 import { ensureSessionStart, getSessionStart, clearSessionStart, formatSessionDuration, formatSessionElapsed } from '../utils/sessionTiming';
 import { createPortal } from 'react-dom';
-import { X, Check, RotateCcw, Trophy, BarChart3, StickyNote, Dumbbell, Moon, PartyPopper, Flame, ChevronDown, CalendarDays, SkipForward, MoreHorizontal, Ban, Clock, AlertCircle, ArrowLeftRight, Share } from 'lucide-react';
+import { X, Check, RotateCcw, Trophy, BarChart3, StickyNote, Dumbbell, Moon, PartyPopper, Flame, ChevronDown, CalendarDays, SkipForward, MoreHorizontal, Ban, Clock, AlertCircle, ArrowLeftRight, Share, TrendingUp } from 'lucide-react';
 import { WheelPicker, WheelPickerWrapper } from '@ncdai/react-wheel-picker';
 import ConfirmModal from '../components/ConfirmModal';
 import Toast from '../components/Toast';
@@ -533,6 +535,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
   // this row's state and mutations with a thumb-zone layout.
   const isFocus = variant === 'focus';
   const [showFocusOptions, setShowFocusOptions] = useState(false);
+  const [showPlates, setShowPlates] = useState(false);
   const queryClient = useQueryClient();
   const { storage, storageKey } = useStorage();
 
@@ -1498,6 +1501,14 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
   };
   const unitStyle = { fontSize: 'var(--fs-sm)', fontWeight: 700, color: 'var(--text2)', letterSpacing: '0.08em', textTransform: 'uppercase', width: 40 };
   const decimalInput = (v) => v.replace(',', '.');
+  // Next-set suggestion (double progression + RIR). Hidden when it would just
+  // repeat the plan, while warming up, or when editing an already-logged set.
+  const suggestion = !logIsWarmup && editingLogIndex == null && !ex.untilFailure && !(ex.duration > 0)
+    ? suggestNextSet({ targetReps: ex.reps, targetSets: ex.sets, step: weightStep, plannedWeight: ex.weight || 0, todaySets: workingLogs, lastSets: lastSessionInfo?.setLogs || [] })
+    : null;
+  const showSuggestion = suggestion && suggestion.reason !== 'From your plan';
+  const suggestionApplied = showSuggestion && +logWeightVal === suggestion.weight && +logRepsVal === suggestion.reps;
+  const loggerUnit = ex.weightUnit || 'kg';
   const setLogFormEl = (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', padding: 12, borderRadius: 'var(--r-lg)', background: 'var(--bg2)', boxShadow: logIsWarmup ? 'inset 0 0 0 1.5px var(--yellow)' : logIsDropSet ? 'inset 0 0 0 1.5px var(--accent)' : 'none' }}>
       {logIsWarmup ? (
@@ -1519,6 +1530,23 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
       >
         ↓ Drop set{logIsDropSet ? ' · on' : ''}
       </button>}
+      {showSuggestion && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 4px 4px 8px' }}>
+          <TrendingUp size={18} style={{ color: 'var(--text2)', flexShrink: 0 }} aria-hidden="true" />
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span style={{ fontSize: 17, fontWeight: 700 }}>Try <span style={{ fontFamily: 'var(--font-mono)' }}>{suggestion.weight} × {suggestion.reps}</span></span>
+            <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--text2)' }}>{suggestion.reason}</span>
+          </div>
+          {suggestionApplied ? (
+            <span aria-label="Suggestion applied" style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--green)' }}><Check size={20} strokeWidth={2.6} /></span>
+          ) : (
+            <button type="button" onClick={() => { tick(); setLogWeightVal(String(suggestion.weight)); setLogRepsVal(String(suggestion.reps)); setLogIsDropSet(false); }}
+              style={{ minWidth: 64, height: 44, borderRadius: 'var(--r-md)', border: 'none', background: 'var(--bg3)', color: 'var(--text)', fontSize: 'var(--fs-md)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer' }}>
+              Use
+            </button>
+          )}
+        </div>
+      )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, height: 64, padding: '0 6px', borderRadius: 'var(--r-lg)', background: 'var(--bg)' }}>
         <RepeatButton aria-label="Decrease weight (hold to repeat)" onStep={(n) => adjustLogWeight(-(n >= 10 ? 2 : 1) * weightStep)} style={stepBtnStyle}>−</RepeatButton>
         <input
@@ -1533,6 +1561,17 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
         <span style={unitStyle}>{ex.weightUnit || 'kg'}</span>
         <RepeatButton aria-label="Increase weight (hold to repeat)" onStep={(n) => adjustLogWeight((n >= 10 ? 2 : 1) * weightStep)} style={stepBtnStyle}>+</RepeatButton>
       </div>
+      {+logWeightVal > 0 && (
+        <button type="button" onClick={() => setShowPlates(true)} style={{ alignSelf: 'center', minHeight: 32, padding: '0 10px', background: 'none', border: 'none', color: 'var(--text2)', fontSize: 'var(--fs-sm)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer' }}>
+          Plates for {logWeightVal} {loggerUnit}
+        </button>
+      )}
+      {showPlates && (
+        <BottomSheet title="Plate math" onClose={() => setShowPlates(false)}>
+          <PlateCalculator initialWeight={+logWeightVal} unit={loggerUnit === 'lbs' ? 'lbs' : 'kg'} compact />
+          <button type="button" className="btn btn-ghost" style={{ minHeight: 48, marginTop: 8 }} onClick={() => setShowPlates(false)}>Done</button>
+        </BottomSheet>
+      )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, height: 64, padding: '0 6px', borderRadius: 'var(--r-lg)', background: 'var(--bg)' }}>
         <RepeatButton aria-label="Decrease reps (hold to repeat)" onStep={() => setLogRepsVal((v) => String(Math.max(0, (+v || 0) - 1)))} style={stepBtnStyle}>−</RepeatButton>
         <input
