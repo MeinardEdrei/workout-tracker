@@ -1,8 +1,9 @@
 import { useState } from 'react';
+import PlateCalculator from '../components/PlateCalculator';
 import { ArrowRight } from 'lucide-react';
 import { convertWeight } from '../utils/weight';
 
-export default function CalculatorPage() {
+function ConvertTab() {
   const [kgVal, setKgVal] = useState('');
   const [lbsVal, setLbsVal] = useState('');
   const [refTab, setRefTab] = useState('plates'); // 'plates' or 'grid'
@@ -83,22 +84,12 @@ export default function CalculatorPage() {
   ];
 
   return (
-    <div style={{ padding: '0 0 24px' }}>
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Calculator</h1>
-          <div className="page-subtitle">Weight conversion & reference</div>
+    <div>
+      {(kgVal || lbsVal) && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0 16px' }}>
+          <button className="btn btn-ghost" style={{ minHeight: 40 }} onClick={clearAll}>Clear</button>
         </div>
-        {(kgVal || lbsVal) && (
-          <button
-            className="btn btn-ghost"
-            style={{ padding: '6px 12px', fontSize: 11, color: 'var(--text2)', borderColor: 'var(--border)' }}
-            onClick={clearAll}
-          >
-            Clear
-          </button>
-        )}
-      </div>
+      )}
 
       <div style={{ padding: '16px 16px 0' }}>
         {/* Converter Panel */}
@@ -405,6 +396,95 @@ export default function CalculatorPage() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// Estimated one-rep max from a set, with a % table for programming.
+function OneRepMaxTab() {
+  const [unit, setUnit] = useState('kg');
+  const [weight, setWeight] = useState('100');
+  const [reps, setReps] = useState('5');
+  const w = parseFloat(weight) || 0;
+  const r = Math.max(1, Math.min(30, parseInt(reps, 10) || 1));
+  // Epley for higher reps, Brzycki for lower — they agree closely at 5–10.
+  const e1rm = r === 1 ? w : r <= 10 ? w * (36 / (37 - r)) : w * (1 + r / 30);
+  const round = (n) => Math.round(n * 2) / 2;
+  const label = { fontSize: 'var(--fs-sm)', fontWeight: 700, color: 'var(--text2)', letterSpacing: '0.12em', textTransform: 'uppercase' };
+  const field = { width: '100%', height: 56, textAlign: 'center', background: 'var(--bg2)', border: 'none', borderRadius: 'var(--r-lg)', color: 'var(--text)', fontFamily: 'var(--font-mono)', fontSize: 28 };
+  return (
+    <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}><span style={label}>Weight ({unit})</span>
+          <input inputMode="decimal" value={weight} onChange={(e) => setWeight(e.target.value.replace(',', '.'))} onFocus={(e) => e.target.select()} style={field} /></label>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}><span style={label}>Reps</span>
+          <input inputMode="numeric" value={reps} onChange={(e) => setReps(e.target.value.replace(/\D/g, ''))} onFocus={(e) => e.target.select()} style={field} /></label>
+      </div>
+      <div role="radiogroup" aria-label="Units" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, background: 'var(--bg2)', borderRadius: 14, padding: 4 }}>
+        {['kg', 'lbs'].map((u) => (
+          <button key={u} type="button" role="radio" aria-checked={unit === u} onClick={() => setUnit(u)}
+            style={{ height: 40, borderRadius: 10, border: 'none', background: unit === u ? 'var(--accent)' : 'transparent', color: unit === u ? 'var(--on-accent)' : 'var(--text2)', fontSize: 'var(--fs-md)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer' }}>{u}</button>
+        ))}
+      </div>
+      <section style={{ background: 'var(--bg2)', borderRadius: 20, padding: 20, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+        <span style={label}>Estimated 1RM</span>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 56, lineHeight: 1.1 }}>{w > 0 ? round(e1rm) : '—'}<span style={{ fontSize: 20, color: 'var(--text2)' }}> {unit}</span></span>
+        {r > 12 && <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--text2)' }}>Less accurate above 12 reps</span>}
+      </section>
+      {w > 0 && (
+        <section style={{ background: 'var(--bg2)', borderRadius: 20, padding: '8px 16px' }}>
+          {[95, 90, 85, 80, 75, 70, 65, 60].map((pct) => (
+            <div key={pct} style={{ display: 'flex', justifyContent: 'space-between', minHeight: 40, alignItems: 'center', fontFamily: 'var(--font-mono)', fontSize: 17, borderBottom: pct === 60 ? 'none' : '1px solid var(--bg3)' }}>
+              <span style={{ color: 'var(--text2)' }}>{pct}%</span><span>{round((e1rm * pct) / 100)} {unit}</span>
+            </div>
+          ))}
+        </section>
+      )}
+    </div>
+  );
+}
+
+const CALC_TABS = [
+  { id: 'plates', label: 'Plates' },
+  { id: 'convert', label: 'Convert' },
+  { id: 'onerm', label: '1RM' },
+];
+
+export default function CalculatorPage() {
+  const [tab, setTab] = useState(() => { try { return localStorage.getItem('wt_calc_tab') || 'plates'; } catch { return 'plates'; } });
+  const [plateUnit, setPlateUnit] = useState('kg');
+  const choose = (id) => { setTab(id); try { localStorage.setItem('wt_calc_tab', id); } catch { /* storage unavailable */ } };
+  return (
+    <div style={{ padding: '0 0 24px' }}>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Calc</h1>
+          <div className="page-subtitle">Plates · convert · 1RM</div>
+        </div>
+      </div>
+      <div style={{ padding: '0 16px' }}>
+        <div role="tablist" aria-label="Calculator" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 4, background: 'var(--bg2)', borderRadius: 14, padding: 4 }}>
+          {CALC_TABS.map((t) => (
+            <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} onClick={() => choose(t.id)}
+              style={{ height: 40, borderRadius: 10, border: 'none', background: tab === t.id ? 'var(--accent)' : 'transparent', color: tab === t.id ? 'var(--on-accent)' : 'var(--text2)', fontSize: 'var(--fs-md)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer' }}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {tab === 'plates' && (
+        <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div role="radiogroup" aria-label="Plate units" style={{ alignSelf: 'flex-end', display: 'grid', gridTemplateColumns: '56px 56px', gap: 4, background: 'var(--bg2)', borderRadius: 12, padding: 4 }}>
+            {['kg', 'lbs'].map((u) => (
+              <button key={u} type="button" role="radio" aria-checked={plateUnit === u} onClick={() => setPlateUnit(u)}
+                style={{ height: 36, borderRadius: 9, border: 'none', background: plateUnit === u ? 'var(--accent)' : 'transparent', color: plateUnit === u ? 'var(--on-accent)' : 'var(--text2)', fontSize: 'var(--fs-sm)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer' }}>{u}</button>
+            ))}
+          </div>
+          <PlateCalculator key={plateUnit} unit={plateUnit} initialWeight={plateUnit === 'kg' ? 60 : 135} />
+        </div>
+      )}
+      {tab === 'convert' && <ConvertTab />}
+      {tab === 'onerm' && <OneRepMaxTab />}
     </div>
   );
 }
