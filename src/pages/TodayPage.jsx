@@ -641,6 +641,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
         onToggle({ ...rawEx, notes });
       }
       setEditingNotes(false);
+      return { previous: rawEx };
     },
     onSuccess: (data) => {
       onToggle({ ...rawEx, ...data });
@@ -716,6 +717,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
     },
     onMutate: () => {
       onToggle({ ...rawEx, lastSwapName: '', lastSwapDate: '', lastSwapImageUrl: '', lastSwapMuscleTargets: [] });
+      return { previous: rawEx };
     },
     onSuccess: (data) => {
       onToggle({ ...rawEx, ...data });
@@ -737,6 +739,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
     },
     onMutate: (swapData) => {
       onToggle({ ...rawEx, todaySwap: swapData, todaySwapDate: dateStr });
+      return { previous: rawEx };
     },
     onSuccess: (data) => {
       onToggle({ ...rawEx, ...data });
@@ -759,6 +762,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
     },
     onMutate: () => {
       onToggle({ ...rawEx, todaySwap: null, todaySwapDate: '', todaySetLogs: [], todaySetLogsDate: '' });
+      return { previous: rawEx };
     },
     onSuccess: (data) => {
       onToggle({ ...rawEx, ...data });
@@ -940,8 +944,11 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
   // Every write below updates the row optimistically; if the save fails, put
   // the row back and say so instead of silently showing data that never
   // reached storage.
-  function handleSaveError() {
-    onToggle(rawEx);
+  // onMutate returns { previous } — the row as it was before the optimistic
+  // update. rawEx here would already be the optimistic copy (React Query
+  // hands the in-flight mutation the latest render's closure).
+  function handleSaveError(_err, _vars, context) {
+    if (context?.previous) onToggle(context.previous);
     queryClient.invalidateQueries({ queryKey: ['splits'] });
     if (onShowToast) onShowToast("Couldn't save — check your connection and try again", 'error', AlertCircle);
   }
@@ -965,6 +972,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
     onMutate: (nextChecked) => {
       if (nextChecked) ensureSessionStart(dayId, dateStr);
       onToggle({ ...rawEx, checked: nextChecked, lastCheckedDate: dateStr, skipped: nextChecked ? false : rawEx.skipped });
+      return { previous: rawEx };
     },
     onSuccess: (updated) => {
       onToggle(updated);
@@ -986,6 +994,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
     },
     onMutate: (nextSkipped) => {
       onToggle({ ...rawEx, skipped: nextSkipped, lastSkippedDate: dateStr, checked: nextSkipped ? false : rawEx.checked });
+      return { previous: rawEx };
     },
     onSuccess: (updated) => {
       onToggle(updated);
@@ -1013,6 +1022,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
     },
     onMutate: (nextSetLogs) => {
       onToggle({ ...rawEx, todaySetLogs: nextSetLogs, todaySetLogsDate: dateStr, ...autoCompleteFields(nextSetLogs) });
+      return { previous: rawEx };
     },
     onSuccess: (updated) => {
       onToggle(updated);
@@ -1040,6 +1050,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
     onMutate: ({ weight, unit }) => {
       onToggle({ ...rawEx, ...weightPatch(weight, unit) });
       setEditingWeight(false);
+      return { previous: rawEx };
     },
     onSuccess: (data) => {
       onToggle({ ...rawEx, ...data });
@@ -1120,6 +1131,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
     onMutate: (vals) => {
       onToggle({ ...rawEx, ...setsRepsPatch(vals) });
       setEditingSetsReps(false);
+      return { previous: rawEx };
     },
     onSuccess: (data, { sets, reps, duration, durationUnit }) => {
       onToggle({ ...rawEx, ...data });
