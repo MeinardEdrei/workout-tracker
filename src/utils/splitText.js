@@ -52,6 +52,7 @@ function formatPerformance(ex) {
     const sets = ex.setLogs.map((s) => {
       const w = s.weight || ex.weight || 0;
       let str = w > 0 ? `${s.reps || 0}×${w}${unit}` : `${s.reps || 0} reps`;
+      if (s.isWarmup) str = `W ${str}`;
       if (s.rir != null && s.rir !== '') str += ` RIR ${s.rir}`;
       if (s.isDropSet) str += ' (drop)';
       return str;

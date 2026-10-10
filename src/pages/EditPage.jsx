@@ -27,6 +27,7 @@ import ConfirmModal from '../components/ConfirmModal';
 import SharedToast from '../components/Toast';
 import { useBackClose } from '../hooks/useBackClose';
 import { SkeletonCards } from '../components/Skeleton';
+import { workingSets } from '../utils/sets';
 
 /* ─── Constants ─── */
 const STANDARD_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday', 'Rest'];
@@ -209,11 +210,11 @@ function getLastExercisePerformance(name, logs, splitDays) {
         let weight = match.weight || 0;
         let reps = match.reps || 10;
         if (match.setLogs && match.setLogs.length > 0) {
-          const setsWithWeight = match.setLogs.filter((s) => s.weight > 0);
+          const setsWithWeight = workingSets(match.setLogs).filter((s) => s.weight > 0);
           if (setsWithWeight.length > 0) {
             weight = setsWithWeight[setsWithWeight.length - 1].weight;
           }
-          const setsWithReps = match.setLogs.filter((s) => s.reps > 0);
+          const setsWithReps = workingSets(match.setLogs).filter((s) => s.reps > 0);
           if (setsWithReps.length > 0) {
             reps = setsWithReps[0].reps;
           }
@@ -942,11 +943,11 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
           let resolvedWeight = ex.weight || 0;
           let resolvedReps = ex.reps || 10;
           if (ex.setLogs && ex.setLogs.length > 0) {
-            const setsWithWeight = ex.setLogs.filter((s) => s.weight > 0);
+            const setsWithWeight = workingSets(ex.setLogs).filter((s) => s.weight > 0);
             if (setsWithWeight.length > 0) {
               resolvedWeight = setsWithWeight[setsWithWeight.length - 1].weight;
             }
-            const setsWithReps = ex.setLogs.filter((s) => s.reps > 0);
+            const setsWithReps = workingSets(ex.setLogs).filter((s) => s.reps > 0);
             if (setsWithReps.length > 0) {
               resolvedReps = setsWithReps[0].reps;
             }

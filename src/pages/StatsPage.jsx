@@ -11,6 +11,7 @@ import { convertWeight } from '../utils/weight';
 import ConfirmModal from '../components/ConfirmModal';
 import { SkeletonCards } from '../components/Skeleton';
 import { localDateStr } from '../utils/localDate';
+import { workingSets } from '../utils/sets';
 
 const LOGS_STALE = 2 * 60 * 1000;
 const DOW_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
@@ -440,7 +441,7 @@ function MuscleVolumeCard({ logs, split }) {
     if (log.skipped || log.date < week.startStr || log.date > week.endStr) continue;
     for (const ex of log.exercises || []) {
       if (ex.skipped) continue;
-      const sets = ex.setLogs?.length || ex.sets || 0;
+      const sets = ex.setLogs?.length ? workingSets(ex.setLogs).length : (ex.sets || 0);
       for (const muscle of ex.muscleTargets || []) counts[muscle] = (counts[muscle] || 0) + sets;
     }
   }
@@ -800,7 +801,7 @@ function ProgressionCard({ exercise }) {
 // the caller convert (or leave as-is) before multiplying.
 function exerciseVolume(ex, weightInUnit = (w) => w) {
   if (ex.setLogs?.length) {
-    return ex.setLogs.reduce((sum, s) => sum + (s.reps || 0) * weightInUnit(s.weight || ex.weight || 0), 0);
+    return workingSets(ex.setLogs).reduce((sum, s) => sum + (s.reps || 0) * weightInUnit(s.weight || ex.weight || 0), 0);
   }
   return (ex.sets || 0) * (ex.reps || 0) * weightInUnit(ex.weight || 0);
 }

@@ -24,6 +24,7 @@ import ConfirmModal from '../components/ConfirmModal';
 import Toast from '../components/Toast';
 import { SkeletonCards } from '../components/Skeleton';
 import { localDateStr } from '../utils/localDate';
+import { workingSets } from '../utils/sets';
 
 // Keyboard activation for tap-to-edit text that isn't a <button> (so it can
 // keep flowing inline): Enter / Space behave like a tap.
@@ -89,11 +90,11 @@ function getLastExercisePerformance(name, logs, splitDays) {
         let weight = match.weight || 0;
         let reps = match.reps || 10;
         if (match.setLogs && match.setLogs.length > 0) {
-          const setsWithWeight = match.setLogs.filter((s) => s.weight > 0);
+          const setsWithWeight = workingSets(match.setLogs).filter((s) => s.weight > 0);
           if (setsWithWeight.length > 0) {
             weight = setsWithWeight[setsWithWeight.length - 1].weight;
           }
-          const setsWithReps = match.setLogs.filter((s) => s.reps > 0);
+          const setsWithReps = workingSets(match.setLogs).filter((s) => s.reps > 0);
           if (setsWithReps.length > 0) {
             reps = setsWithReps[0].reps;
           }
@@ -571,6 +572,14 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
   const [logRirVal, setLogRirVal] = useState(null);
   const [logWeightVal, setLogWeightVal] = useState(String(ex.weight ?? 0));
   const [logIsDropSet, setLogIsDropSet] = useState(false);
+  const [logIsWarmup, setLogIsWarmup] = useState(false);
+  const warmupSkipKey = `wt_wu_skip_${rawEx._id}_${dateStr}`;
+  const [warmupSkipped, setWarmupSkippedState] = useState(() => { try { return localStorage.getItem(warmupSkipKey) === '1'; } catch { return false; } });
+  const skipWarmup = () => {
+    setWarmupSkippedState(true);
+    try { localStorage.setItem(warmupSkipKey, '1'); } catch { /* storage unavailable */ }
+    closeSetLogger();
+  };
   // Wall-clock deadline, not a decrementing counter — see src/utils/restTimer.js.
   // Initialized from localStorage so an active rest survives this row
   // unmounting (page switch) and remounting (screen off / app backgrounded).
@@ -656,7 +665,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
     const log = candidates[0];
     const match = log.exercises.find((e) => (e.name || '').trim().toLowerCase() === key);
     if (!match) return null;
-    return { date: log.date, setLogs: match.setLogs || [], reps: match.reps, weight: match.weight, weightUnit: match.weightUnit || 'kg' };
+    return { date: log.date, setLogs: workingSets(match.setLogs), reps: match.reps, weight: match.weight, weightUnit: match.weightUnit || 'kg' };
   }, [logs, ex.name, dateStr]);
 
   const prInfo = useMemo(() => {
@@ -771,7 +780,15 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
   const effectiveSetLogs = isCompleted ? [] : (matchesDay(ex.todaySetLogsDate, dateStr) ? (ex.todaySetLogs || []) : []);
   // Distinguishes "the target-sets logger did this for you" from a manual
   // checkbox tap, so overriding completion by hand still reads as deliberate.
-  const isAutoChecked = effectiveChecked && ex.sets > 0 && effectiveSetLogs.length >= ex.sets;
+  // Warm-up sets are logged alongside working sets but never count toward
+  // the target, volume, PRs or "last time".
+  const workingLogs = effectiveSetLogs.filter((s) => !s.isWarmup);
+  const warmupLogs = effectiveSetLogs.filter((s) => s.isWarmup);
+  const isAutoChecked = effectiveChecked && ex.sets > 0 && workingLogs.length >= ex.sets;
+  const warmupRamp = ex.warmupRamp || [];
+  const warmupPending = !readOnly && !isCompleted && warmupRamp.length > 0 && (ex.weight || 0) > 0
+    && workingLogs.length === 0 && warmupLogs.length < warmupRamp.length && !warmupSkipped;
+  const rampWeight = (step) => Math.round(((step.pct || 0) / 100) * (ex.weight || 0) * 2) / 2;
 
   // Live weight-picker value while editing, or active logger weight, so the warm-up preview
   // dynamically tracks weight changes instead of showing stale weights.
@@ -800,6 +817,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
                 setLogRepsVal(String(step.reps || 8));
                 setLogRirVal(null);
                 setLogIsDropSet(false);
+                setLogIsWarmup(true);
                 setLoggingSet(true);
               }}
               title="Tap to load warm-up weight and reps into logger"
@@ -1004,7 +1022,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
   // is redundant. The checkbox itself still works as a manual override.
   function autoCompleteFields(nextSetLogs) {
     if (!(ex.sets > 0)) return {};
-    const done = nextSetLogs.length >= ex.sets;
+    const done = nextSetLogs.filter((s) => !s.isWarmup).length >= ex.sets;
     return { checked: done, lastCheckedDate: done ? dateStr : ex.lastCheckedDate };
   }
 
@@ -1339,15 +1357,29 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
   // still reachable via the "⋯" menu ("Edit Target Sets/Reps") since it's now
   // an occasional admin action, not the primary one; what the user actually
   // taps during a set is this reps stepper + RIR pill grid.
-  const nextSetNumber = effectiveSetLogs.length + 1;
-  const targetSetsReached = effectiveSetLogs.length >= (ex.sets || 0);
+  const nextSetNumber = workingLogs.length + 1;
+  const targetSetsReached = workingLogs.length >= (ex.sets || 0);
 
   const weightStep = (ex.weightUnit || 'kg') === 'lbs' ? 5 : 2.5;
 
-  function openSetLogger(existingIndex, existingEntry, isDropSet = false) {
-    const nextSetIdx = existingIndex != null ? existingIndex : effectiveSetLogs.length;
-    const lastLoggedWeight = effectiveSetLogs.length > 0 ? effectiveSetLogs[effectiveSetLogs.length - 1].weight : undefined;
-    const lastLoggedReps = effectiveSetLogs.length > 0 ? effectiveSetLogs[effectiveSetLogs.length - 1].reps : undefined;
+  function openSetLogger(existingIndex, existingEntry, isDropSet = false, warmupStep = null) {
+    // Warm-up step: load the ramp's weight × reps and flag the set.
+    const step = warmupStep != null ? warmupRamp[warmupStep] : null;
+    if (step || existingEntry?.isWarmup) {
+      setEditingLogIndex(existingIndex);
+      setLogWeightVal(String(existingEntry?.weight ?? rampWeight(step)));
+      setLogRepsVal(String(existingEntry?.reps ?? step.reps ?? 8));
+      setLogRirVal(null);
+      setLogIsDropSet(false);
+      setLogIsWarmup(true);
+      setLoggingSet(true);
+      return;
+    }
+    setLogIsWarmup(false);
+    const workingIdx = existingIndex != null ? effectiveSetLogs.slice(0, existingIndex).filter((s) => !s.isWarmup).length : workingLogs.length;
+    const nextSetIdx = workingIdx;
+    const lastLoggedWeight = workingLogs.length > 0 ? workingLogs[workingLogs.length - 1].weight : undefined;
+    const lastLoggedReps = workingLogs.length > 0 ? workingLogs[workingLogs.length - 1].reps : undefined;
 
     // Check if the previous session had recorded reps / weight for this set index or overall
     const prevSessionSetReps = lastSessionInfo?.setLogs?.[nextSetIdx]?.reps ?? lastSessionInfo?.reps;
@@ -1376,17 +1408,17 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
 
     const initialW = +initialWStr || 0;
     const autoDrop = (isDropSet || existingEntry?.isDropSet) ||
-      (existingIndex == null && effectiveSetLogs.length > 0 && lastLoggedWeight != null && lastLoggedWeight > 0 && initialW < lastLoggedWeight);
+      (existingIndex == null && workingLogs.length > 0 && lastLoggedWeight != null && lastLoggedWeight > 0 && initialW < lastLoggedWeight);
     setLogIsDropSet(!!autoDrop);
     setLoggingSet(true);
   }
 
   function adjustLogWeight(delta) {
-    const lastLoggedWeight = effectiveSetLogs.length > 0 ? effectiveSetLogs[effectiveSetLogs.length - 1].weight : undefined;
+    const lastLoggedWeight = workingLogs.length > 0 ? workingLogs[workingLogs.length - 1].weight : undefined;
     setLogWeightVal((v) => {
       const nextW = Math.max(0, (+v || 0) + delta);
       // Auto-detect drop set when weight drops below previous set
-      if (editingLogIndex == null && effectiveSetLogs.length > 0 && lastLoggedWeight != null && lastLoggedWeight > 0) {
+      if (!logIsWarmup && editingLogIndex == null && workingLogs.length > 0 && lastLoggedWeight != null && lastLoggedWeight > 0) {
         if (nextW < lastLoggedWeight && nextW > 0) {
           setLogIsDropSet(true);
         } else if (nextW >= lastLoggedWeight) {
@@ -1402,20 +1434,22 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
     setEditingLogIndex(null);
     setLogRirVal(null);
     setLogIsDropSet(false);
+    setLogIsWarmup(false);
   }
 
   // Focus mode keeps the logger open, prefilled for the next set, so logging
   // is one tap. Re-runs after each logged set and when the exercise changes.
   useEffect(() => {
     if (isFocus && !readOnly && !loggingSet && !effectiveSkipped && !(ex.duration > 0) && !editingSetsReps) {
-      openSetLogger(null, null);
+      openSetLogger(null, null, false, warmupPending ? warmupLogs.length : null);
     }
-  }, [isFocus, readOnly, loggingSet, effectiveSkipped, effectiveSetLogs.length, rawEx._id, editingSetsReps]);
+  }, [isFocus, readOnly, loggingSet, effectiveSkipped, effectiveSetLogs.length, rawEx._id, editingSetsReps, warmupPending]);
 
   const REST_DEFAULTS = { compound: 120, isolation: 90, core: 60 };
+  const WARMUP_REST_SECONDS = 45;
 
   function confirmSetLog() {
-    const entry = { reps: Math.max(0, +logRepsVal || 0), rir: logRirVal, weight: Math.max(0, +logWeightVal || 0), isDropSet: logIsDropSet };
+    const entry = { reps: Math.max(0, +logRepsVal || 0), rir: logIsWarmup ? null : logRirVal, weight: Math.max(0, +logWeightVal || 0), isDropSet: logIsWarmup ? false : logIsDropSet, isWarmup: logIsWarmup };
     const isNewSet = editingLogIndex == null;
     if (isNewSet) ensureSessionStart(dayId, dateStr);
     const next = isNewSet
@@ -1425,19 +1459,19 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
     closeSetLogger();
     // Auto-start rest timer
     if (isNewSet) {
-      const seconds = ex.restSeconds > 0 ? ex.restSeconds : (REST_DEFAULTS[ex.exerciseType] || REST_DEFAULTS.compound);
+      const seconds = entry.isWarmup ? WARMUP_REST_SECONDS : ex.restSeconds > 0 ? ex.restSeconds : (REST_DEFAULTS[ex.exerciseType] || REST_DEFAULTS.compound);
       const endsAt = Date.now() + seconds * 1000;
       setActiveRestTimer({ splitId, dayId, exerciseId: rawEx._id, exerciseName: rawEx.name, restEndsAt: endsAt });
       setRestEndsAt(endsAt);
       setRestNow(Date.now());
     }
     // Prompt if logged weight is heavier than target
-    if (!entry.isDropSet && entry.weight > (ex.weight || 0) && !effectiveSwap && !heavierWeightPromptedRef.current) {
+    if (!entry.isWarmup && !entry.isDropSet && entry.weight > (ex.weight || 0) && !effectiveSwap && !heavierWeightPromptedRef.current) {
       heavierWeightPromptedRef.current = true;
       setHeavierWeightPrompt({ loggedWeight: entry.weight, targetWeight: ex.weight || 0 });
     }
     // Prompt if logged reps significantly exceed target (e.g. 60 vs 10 reps on calves)
-    if (!entry.isDropSet && entry.reps > (ex.reps || 0) && !effectiveSwap && !higherRepsPromptedRef.current) {
+    if (!entry.isWarmup && !entry.isDropSet && entry.reps > (ex.reps || 0) && !effectiveSwap && !higherRepsPromptedRef.current) {
       higherRepsPromptedRef.current = true;
       setHigherRepsPrompt({ loggedReps: entry.reps, targetReps: ex.reps || 0 });
     }
@@ -1465,8 +1499,12 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
   const unitStyle = { fontSize: 'var(--fs-sm)', fontWeight: 700, color: 'var(--text2)', letterSpacing: '0.08em', textTransform: 'uppercase', width: 40 };
   const decimalInput = (v) => v.replace(',', '.');
   const setLogFormEl = (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', padding: 12, borderRadius: 'var(--r-lg)', background: 'var(--bg2)', boxShadow: logIsDropSet ? 'inset 0 0 0 1.5px var(--accent)' : 'none' }}>
-      <button
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', padding: 12, borderRadius: 'var(--r-lg)', background: 'var(--bg2)', boxShadow: logIsWarmup ? 'inset 0 0 0 1.5px var(--yellow)' : logIsDropSet ? 'inset 0 0 0 1.5px var(--accent)' : 'none' }}>
+      {logIsWarmup ? (
+        <span style={{ alignSelf: 'center', fontSize: 'var(--fs-sm)', fontWeight: 700, color: 'var(--yellow)', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'center' }}>
+          Warm-up · doesn't count toward PRs or volume
+        </span>
+      ) : <button
         type="button"
         aria-pressed={logIsDropSet}
         onClick={() => setLogIsDropSet((v) => !v)}
@@ -1480,7 +1518,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
         }}
       >
         ↓ Drop set{logIsDropSet ? ' · on' : ''}
-      </button>
+      </button>}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, height: 64, padding: '0 6px', borderRadius: 'var(--r-lg)', background: 'var(--bg)' }}>
         <RepeatButton aria-label="Decrease weight (hold to repeat)" onStep={(n) => adjustLogWeight(-(n >= 10 ? 2 : 1) * weightStep)} style={stepBtnStyle}>−</RepeatButton>
         <input
@@ -1509,7 +1547,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
         <span style={unitStyle}>reps</span>
         <RepeatButton aria-label="Increase reps (hold to repeat)" onStep={() => setLogRepsVal((v) => String((+v || 0) + 1))} style={stepBtnStyle}>+</RepeatButton>
       </div>
-      <div role="radiogroup" aria-label="Reps in reserve" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+      {!logIsWarmup && <div role="radiogroup" aria-label="Reps in reserve" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <span style={{ ...unitStyle, width: 36, textAlign: 'center' }}>RIR</span>
         {[0, 1, 2, 3, 4, 5].map((r) => (
           <button
@@ -1528,7 +1566,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
             }}
           >{r === 5 ? '5+' : r}</button>
         ))}
-      </div>
+      </div>}
       <div style={{ display: 'flex', gap: 8 }}>
         {(!isFocus || editingLogIndex != null) && <button
           type="button"
@@ -1539,8 +1577,8 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
           type="button"
           onClick={() => { tick(); confirmSetLog(); }}
           disabled={setLogsMutation.isPending}
-          style={{ flex: 1, height: 56, borderRadius: 'var(--r-lg)', border: 'none', background: 'var(--accent)', color: 'var(--on-accent)', fontWeight: 700, fontSize: 18, letterSpacing: '0.06em', textTransform: 'uppercase', cursor: 'pointer', opacity: setLogsMutation.isPending ? 0.7 : 1 }}
-        >{setLogsMutation.isPending ? 'Saving…' : editingLogIndex != null ? 'Save' : `Log Set ${nextSetNumber}`}</button>
+          style={{ flex: 1, height: 56, borderRadius: 'var(--r-lg)', border: 'none', background: logIsWarmup ? 'var(--yellow)' : 'var(--accent)', color: 'var(--on-accent)', fontWeight: 700, fontSize: 18, letterSpacing: '0.06em', textTransform: 'uppercase', cursor: 'pointer', opacity: setLogsMutation.isPending ? 0.7 : 1 }}
+        >{setLogsMutation.isPending ? 'Saving…' : editingLogIndex != null ? 'Save' : logIsWarmup ? `Log warm-up ${warmupLogs.length + 1}` : `Log Set ${nextSetNumber}`}</button>
       </div>
     </div>
   );
@@ -1556,7 +1594,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
                 onClick={() => !readOnly && openSetLogger(i, s)}
                 style={{ flex: 1, textAlign: 'left', background: 'none', border: 'none', cursor: readOnly ? 'default' : 'pointer', color: 'var(--text2)', fontSize: 13, fontFamily: 'var(--font-mono)', display: 'flex', gap: 6, flexWrap: 'wrap' }}
               >
-                <span style={{ color: 'var(--text3)' }}>Set {i + 1}</span>
+                <span style={{ color: s.isWarmup ? 'var(--yellow)' : 'var(--text3)' }}>{s.isWarmup ? 'Warm-up' : `Set ${effectiveSetLogs.slice(0, i + 1).filter((x) => !x.isWarmup).length}`}</span>
                 <span>{s.reps} reps</span>
                 {s.weight > 0 && <span>{s.weight}{ex.weightUnit || 'kg'}</span>}
                 {s.rir != null && <span style={{ color: 'var(--accent)' }}>RIR {s.rir === 5 ? '5+' : s.rir}</span>}
@@ -1611,7 +1649,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
         <>
           {effectiveSetLogs.length > 0 && (
             <span style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>
-              {effectiveSetLogs.map((s) => `${s.reps}${s.weight > 0 ? `@${s.weight}` : ''}${s.rir != null ? `/${s.rir === 5 ? '5+' : s.rir}` : ''}${s.isDropSet ? '↓' : ''}`).join(', ')} reps
+              {effectiveSetLogs.map((s) => `${s.isWarmup ? 'W ' : ''}${s.reps}${s.weight > 0 ? `@${s.weight}` : ''}${s.rir != null ? `/${s.rir === 5 ? '5+' : s.rir}` : ''}${s.isDropSet ? '↓' : ''}`).join(', ')} reps
             </span>
           )}
           {!readOnly && (
@@ -1816,7 +1854,11 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
   if (isFocus) {
     const targetSets = ex.sets || 0;
     const lastSets = lastSessionInfo?.setLogs || [];
-    const rowCount = Math.max(targetSets, effectiveSetLogs.length + (targetSetsReached ? 0 : 1), lastSets.length);
+    const rowCount = Math.max(targetSets, workingLogs.length + (targetSetsReached ? 0 : 1), lastSets.length);
+    // Index of each working set within effectiveSetLogs (warm-ups interleave), for editing.
+    const workingIdx = effectiveSetLogs.map((st, i) => (st.isWarmup ? null : i)).filter((i) => i != null);
+    const inWarmup = warmupPending || (logIsWarmup && editingLogIndex == null);
+    const showWarmupDots = warmupRamp.length > 0 && (ex.weight || 0) > 0 && (!warmupSkipped || warmupLogs.length > 0);
     const unit = ex.weightUnit || 'kg';
     const fmtSet = (s) => (s ? `${s.weight > 0 ? `${s.weight} × ` : ''}${s.reps}` : '—');
     const labelStyle = { fontSize: 'var(--fs-sm)', fontWeight: 700, color: 'var(--text2)', letterSpacing: '0.12em', textTransform: 'uppercase' };
@@ -1834,8 +1876,8 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
         <section aria-label="Current exercise" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 16px 8px', display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-              <span style={{ ...labelStyle, color: ex.category === 'warmup' ? 'var(--yellow)' : 'var(--text2)' }}>
-                {ex.category === 'warmup' ? 'Warm-up · ' : ''}{focusPosition ? `Exercise ${focusPosition.index} of ${focusPosition.total}` : ''}
+              <span style={{ ...labelStyle, color: ex.category === 'warmup' || inWarmup ? 'var(--yellow)' : 'var(--text2)' }}>
+                {ex.category === 'warmup' || inWarmup ? 'Warm-up · ' : ''}{focusPosition ? `Exercise ${focusPosition.index} of ${focusPosition.total}` : ''}
               </span>
               {prInfo && (
                 <span style={{ ...labelStyle, color: 'var(--red)', display: 'inline-flex', alignItems: 'center', gap: 4 }} title={`Previous best ${prInfo.prevWeight}${prInfo.prevUnit}`}>
@@ -1848,37 +1890,66 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{swappedPillEl}</div>
             )}
             {targetSets > 0 && !(ex.duration > 0) && (
-              <div aria-label={`${effectiveSetLogs.length} of ${targetSets} sets logged`} style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                {Array.from({ length: Math.max(targetSets, effectiveSetLogs.length) }, (_, i) => (
-                  <span key={i} style={{ width: 24, height: 8, borderRadius: 4, background: i < effectiveSetLogs.length ? 'var(--green)' : i === effectiveSetLogs.length ? 'var(--accent)' : 'var(--bg4)' }} />
+              <div aria-label={`${warmupLogs.length ? `${warmupLogs.length} warm-up sets, ` : ''}${workingLogs.length} of ${targetSets} sets logged`} style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                {showWarmupDots && warmupRamp.map((_, i) => (
+                  <span key={`w${i}`} style={{ width: inWarmup && i === warmupLogs.length ? 24 : 8, height: 8, borderRadius: 4, background: 'var(--yellow)', opacity: i < warmupLogs.length || (inWarmup && i === warmupLogs.length) ? 1 : 0.35 }} />
+                ))}
+                {Array.from({ length: Math.max(targetSets, workingLogs.length) }, (_, i) => (
+                  <span key={i} style={{ width: 24, height: 8, borderRadius: 4, background: i < workingLogs.length ? 'var(--green)' : i === workingLogs.length && !inWarmup ? 'var(--accent)' : 'var(--bg4)' }} />
                 ))}
                 <span style={{ fontSize: 'var(--fs-md)', fontWeight: 600, color: 'var(--text2)', marginLeft: 4 }}>
-                  {targetSetsReached ? 'Target sets done' : `Set ${nextSetNumber} of ${targetSets}`}
+                  {inWarmup ? `Warm-up ${warmupLogs.length + 1} of ${warmupRamp.length}` : targetSetsReached ? 'Target sets done' : `Set ${nextSetNumber} of ${targetSets}`}
                 </span>
               </div>
             )}
           </div>
 
           {lastSwapHintEl}
-          {warmupEl}
+          {inWarmup && (
+            <div style={{ background: 'var(--bg2)', borderRadius: 'var(--r-lg)', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={labelStyle}>Ramp to {ex.weight} {unit}</span>
+                <span style={labelStyle}>Tap to load</span>
+              </div>
+              {warmupRamp.map((step, i) => {
+                const done = i < warmupLogs.length;
+                const current = i === warmupLogs.length;
+                return (
+                  <button key={i} type="button" disabled={done} onClick={() => openSetLogger(null, null, false, i)}
+                    style={{ minHeight: 48, borderRadius: 12, border: 'none', padding: '0 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontFamily: 'var(--font-mono)', fontSize: 17, cursor: done ? 'default' : 'pointer', background: current ? 'rgba(var(--yellow-rgb), 0.14)' : 'var(--bg3)', color: done ? 'var(--text2)' : 'var(--text)' }}>
+                    <span style={{ color: current ? 'var(--yellow)' : 'var(--text2)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {done && <Check size={14} strokeWidth={3} aria-hidden="true" />}W{i + 1} · {step.pct}%
+                    </span>
+                    <span>{done ? `${warmupLogs[i].weight} × ${warmupLogs[i].reps}` : `${rampWeight(step)} × ${step.reps}`}</span>
+                  </button>
+                );
+              })}
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--font-mono)', fontSize: 15, color: 'var(--text2)', padding: '0 12px' }}>
+                <span>Then {targetSets} set{targetSets === 1 ? '' : 's'}</span><span>{ex.weight} × {ex.untilFailure ? 'failure' : ex.reps}</span>
+              </div>
+            </div>
+          )}
           {ex.notes && !editingNotes && (
             <p style={{ margin: 0, fontSize: 'var(--fs-md)', color: 'var(--text2)', display: 'flex', gap: 6 }}><StickyNote size={15} style={{ flexShrink: 0, marginTop: 2 }} aria-hidden="true" />{ex.notes}</p>
           )}
           {notesEditorEl}
 
-          {!(ex.duration > 0) && rowCount > 0 && (
+          {!inWarmup && !(ex.duration > 0) && rowCount > 0 && (
             <div style={{ background: 'var(--bg2)', borderRadius: 'var(--r-lg)', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={labelStyle}>This time</span>
                 <span style={labelStyle}>Last time</span>
               </div>
+              {warmupLogs.length > 0 && (
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--yellow)' }}>Warm-up {warmupLogs.map((w) => `${w.weight}×${w.reps}`).join(' · ')}</span>
+              )}
               {Array.from({ length: rowCount }, (_, i) => {
-                const done = effectiveSetLogs[i];
-                const isNext = i === effectiveSetLogs.length && !targetSetsReached;
+                const done = workingLogs[i];
+                const isNext = i === workingLogs.length && !targetSetsReached;
                 return (
                   <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontFamily: 'var(--font-mono)', fontSize: 17 }}>
                     {done ? (
-                      <button type="button" onClick={() => !readOnly && openSetLogger(i, done)} aria-label={`Edit set ${i + 1}`} style={{ background: 'none', border: 'none', padding: '4px 0', color: 'var(--text)', fontFamily: 'inherit', fontSize: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                      <button type="button" onClick={() => !readOnly && openSetLogger(workingIdx[i], done)} aria-label={`Edit set ${i + 1}`} style={{ background: 'none', border: 'none', padding: '4px 0', color: 'var(--text)', fontFamily: 'inherit', fontSize: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'baseline', gap: 8 }}>
                         {i + 1} · {fmtSet(done)}
                         {done.rir != null && <span style={{ fontSize: 13, color: 'var(--text2)' }}>RIR {done.rir === 5 ? '5+' : done.rir}</span>}
                         {done.isDropSet && <span style={{ fontSize: 13, color: 'var(--text2)' }}>drop</span>}
@@ -1908,6 +1979,9 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
               </button>
             </>
           ) : editingSetsReps ? setsRepsEditorEl : setLogFormEl)}
+          {!restSlot && inWarmup && (
+            <button type="button" className="btn btn-ghost" style={{ minHeight: 48, fontSize: 'var(--fs-md)' }} onClick={skipWarmup}>Skip warm-up</button>
+          )}
           {!restSlot && !readOnly && (
             <button type="button" onClick={() => setShowFocusOptions(true)} style={{ alignSelf: 'center', minHeight: 44, padding: '0 16px', background: 'none', border: 'none', color: 'var(--text2)', fontSize: 'var(--fs-md)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
               <MoreHorizontal size={18} aria-hidden="true" /> Exercise options
@@ -2643,11 +2717,11 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
           let resolvedWeight = ex.weight || 0;
           let resolvedReps = ex.reps || 10;
           if (ex.setLogs && ex.setLogs.length > 0) {
-            const setsWithWeight = ex.setLogs.filter((s) => s.weight > 0);
+            const setsWithWeight = workingSets(ex.setLogs).filter((s) => s.weight > 0);
             if (setsWithWeight.length > 0) {
               resolvedWeight = setsWithWeight[setsWithWeight.length - 1].weight;
             }
-            const setsWithReps = ex.setLogs.filter((s) => s.reps > 0);
+            const setsWithReps = workingSets(ex.setLogs).filter((s) => s.reps > 0);
             if (setsWithReps.length > 0) {
               resolvedReps = setsWithReps[0].reps;
             }
