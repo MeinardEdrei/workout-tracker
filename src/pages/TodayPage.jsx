@@ -21,6 +21,7 @@ import { WheelPicker, WheelPickerWrapper } from '@ncdai/react-wheel-picker';
 import ConfirmModal from '../components/ConfirmModal';
 import Toast from '../components/Toast';
 import { SkeletonCards } from '../components/Skeleton';
+import { localDateStr } from '../utils/localDate';
 
 // Keyboard activation for tap-to-edit text that isn't a <button> (so it can
 // keep flowing inline): Enter / Space behave like a tap.
@@ -34,7 +35,7 @@ function activateOnKey(e) {
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const MON_FIRST_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const TODAY_DOW = new Date().getDay();
-const TODAY_STR = new Date().toISOString().slice(0, 10);
+const TODAY_STR = localDateStr();
 
 // Compat shim: before this date-keying fix shipped, progress was stamped
 // with real "today" regardless of which day it was actually for (doing a
@@ -3582,7 +3583,7 @@ function ConsistencyCard({ logs, activeSplit }) {
     for (let i = 0; i < 7; i++) {
       const d = new Date(monday);
       d.setDate(d.getDate() + i);
-      const dateStr = d.toISOString().slice(0, 10);
+      const dateStr = localDateStr(d);
       const isDone = logsByDate.has(dateStr);
       if (isDone) thisWeekDone++;
       weekDays.push({ label: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i], isDone, isToday: dateStr === TODAY_STR });
@@ -3789,7 +3790,7 @@ export default function TodayPage() {
   function getDateForIndex(index) {
     const d = new Date();
     d.setDate(d.getDate() + (index - todayIndex));
-    return d.toISOString().slice(0, 10);
+    return localDateStr(d);
   }
 
   // For the auto-completion effect below, which iterates the real (sparse)
@@ -3805,7 +3806,7 @@ export default function TodayPage() {
         const d = new Date();
         const todayWd = TODAY_DOW === 0 ? 6 : TODAY_DOW - 1;
         d.setDate(d.getDate() + (wd - todayWd));
-        return d.toISOString().slice(0, 10);
+        return localDateStr(d);
       }
     }
     return getDateForIndex(indexInRealArray);

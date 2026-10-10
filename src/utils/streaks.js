@@ -1,3 +1,5 @@
+import { localDateStr, parseLocalDate } from './localDate';
+
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 // Computes the current day-streak and week-streak from a user's workout
@@ -27,7 +29,7 @@ export function computeStreak(logs, activeSplit) {
   }
 
   const now = new Date();
-  const todayStr = now.toISOString().slice(0, 10);
+  const todayStr = localDateStr(now);
 
   const logsByDate = new Map();
   (logs || []).forEach((l) => logsByDate.set(l.date, true));
@@ -42,7 +44,7 @@ export function computeStreak(logs, activeSplit) {
 
   const logsByWeek = new Map();
   (logs || []).forEach((l) => {
-    const ws = getISOWeekString(new Date(l.date));
+    const ws = getISOWeekString(parseLocalDate(l.date));
     logsByWeek.set(ws, (logsByWeek.get(ws) || 0) + 1);
   });
 
@@ -67,7 +69,7 @@ export function computeStreak(logs, activeSplit) {
     streakDays++;
   }
   dDay.setDate(dDay.getDate() - 1);
-  checkDayStr = dDay.toISOString().slice(0, 10);
+  checkDayStr = localDateStr(dDay);
   for (let guard = 0; guard < 3650; guard++) {
     if (logsByDate.has(checkDayStr)) {
       streakDays++;
@@ -75,7 +77,7 @@ export function computeStreak(logs, activeSplit) {
       break;
     }
     dDay.setDate(dDay.getDate() - 1);
-    checkDayStr = dDay.toISOString().slice(0, 10);
+    checkDayStr = localDateStr(dDay);
   }
 
   return { streakDays, streakWeeks };

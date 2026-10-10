@@ -1,3 +1,5 @@
+import { localDateStr } from '../utils/localDate';
+
 // Guest storage — mirrors the shape of src/api/index.js but uses localStorage.
 // All functions return Promises so they're drop-in replacements for fetch calls.
 
@@ -10,7 +12,7 @@ const SPLITS_KEY = () => `${currentPrefix}_splits`;
 const LOGS_KEY = () => `${currentPrefix}_logs`;
 const VERSIONS_KEY = () => `${currentPrefix}_versions`;
 const MAX_VERSIONS_PER_SPLIT = 50;
-const TODAY = () => new Date().toISOString().slice(0, 10);
+const TODAY = () => localDateStr();
 const uid = () => crypto.randomUUID();
 
 function readVersions() {
@@ -616,10 +618,10 @@ export function getWeekLogs() {
   const diffToMon = dow === 0 ? -6 : 1 - dow;
   const mon = new Date(now);
   mon.setDate(now.getDate() + diffToMon);
-  const monStr = mon.toISOString().slice(0, 10);
+  const monStr = localDateStr(mon);
   const sun = new Date(mon);
   sun.setDate(mon.getDate() + 6);
-  const sunStr = sun.toISOString().slice(0, 10);
+  const sunStr = localDateStr(sun);
   const logs = readLogs()
     .filter((l) => l.date >= monStr && l.date <= sunStr)
     .sort((a, b) => (a.date > b.date ? 1 : -1));

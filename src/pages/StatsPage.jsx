@@ -10,6 +10,7 @@ import { computeStreak } from '../utils/streaks';
 import { convertWeight } from '../utils/weight';
 import ConfirmModal from '../components/ConfirmModal';
 import { SkeletonCards } from '../components/Skeleton';
+import { localDateStr } from '../utils/localDate';
 
 const LOGS_STALE = 2 * 60 * 1000;
 const DOW_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
@@ -34,7 +35,7 @@ function ChevronRightSmall() {
 
 function MonthCalendar({ year, month, logDates }) {
   const today = new Date();
-  const todayStr = today.toISOString().slice(0, 10);
+  const todayStr = localDateStr(today);
   const firstDay = new Date(year, month, 1);
   // Monday-first: convert Sunday(0) → 6, Monday(1) → 0, etc.
   const startDow = (firstDay.getDay() + 6) % 7;
@@ -108,7 +109,7 @@ function YearHeatmap({ year, logDates }) {
   while (cursor <= endDate) {
     const week = [];
     for (let d = 0; d < 7; d++) {
-      const dateStr = cursor.toISOString().slice(0, 10);
+      const dateStr = localDateStr(cursor);
       week.push({ dateStr, inYear: cursor.getFullYear() === year });
       cursor.setDate(cursor.getDate() + 1);
     }
@@ -124,7 +125,7 @@ function YearHeatmap({ year, logDates }) {
     }
   });
 
-  const todayStr = today.toISOString().slice(0, 10);
+  const todayStr = localDateStr(today);
 
   return (
     <div style={{ overflowX: 'auto', paddingBottom: 4 }}>
@@ -275,9 +276,9 @@ function WeekStrip({ weekLogs }) {
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(monday);
     d.setDate(monday.getDate() + i);
-    const dateStr = d.toISOString().slice(0, 10);
+    const dateStr = localDateStr(d);
     const logged = weekLogs.some((l) => l.date === dateStr);
-    const isToday = dateStr === now.toISOString().slice(0, 10);
+    const isToday = dateStr === localDateStr(now);
     return { label: DOW_LABELS[i], logged, isToday };
   });
 
@@ -314,8 +315,8 @@ function getLastNWeeks(n) {
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekStart.getDate() + 6);
     return {
-      startStr: weekStart.toISOString().slice(0, 10),
-      endStr: weekEnd.toISOString().slice(0, 10),
+      startStr: localDateStr(weekStart),
+      endStr: localDateStr(weekEnd),
       isCurrent: i === n - 1,
       label: `${weekStart.getMonth() + 1}/${weekStart.getDate()}`,
     };
@@ -1009,7 +1010,7 @@ function BackupModal({ logs, splits, storage, queryClient, onClose }) {
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    const dateStr = new Date().toISOString().slice(0, 10);
+    const dateStr = localDateStr();
     link.href = url;
     link.download = `workout_logs_${dateStr}.csv`;
     link.click();
@@ -1028,7 +1029,7 @@ function BackupModal({ logs, splits, storage, queryClient, onClose }) {
     const blob = new Blob([jsonStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    const dateStr = new Date().toISOString().slice(0, 10);
+    const dateStr = localDateStr();
     link.href = url;
     link.download = `workout_tracker_backup_${dateStr}.json`;
     link.click();
@@ -1438,7 +1439,11 @@ export default function StatsPage() {
   // Skipped days keep a log so the streak isn't broken (see computeStreak below),
   // but shouldn't inflate "workouts completed" counts or volume totals.
   const workoutLogs = logs.filter((l) => !l.skipped);
-  const { data: weekLogs = [] } = useQuery({ queryKey: ['logs', 'week', storageKey], queryFn: storage.getWeekLogs, staleTime: LOGS_STALE });
+  // This week (Mon–Sun) in the user's local calendar, derived from the logs
+  // already loaded — the old /api/logs/week computed the week on the server
+  // clock (UTC), which shifted the boundaries for anyone east of UTC.
+  const [thisWeek] = getLastNWeeks(1);
+  const weekLogs = logs.filter((l) => l.date >= thisWeek.startStr && l.date <= thisWeek.endStr);
   const { data: splits = [] } = useQuery({ queryKey: ['splits', storageKey], queryFn: storage.getSplits, staleTime: LOGS_STALE });
   const activeSplit = splits.find((s) => s.isActive) || splits[0] || null;
 

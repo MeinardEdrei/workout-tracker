@@ -1,6 +1,7 @@
 import { useState, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, Dumbbell, Copy, Download, Share2, X } from 'lucide-react';
+import { localDateStr } from '../utils/localDate';
 
 const DAYS_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -13,7 +14,7 @@ function getWeekDates() {
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(mon);
     d.setDate(mon.getDate() + i);
-    return d.toISOString().slice(0, 10);
+    return localDateStr(d);
   });
 }
 
@@ -88,7 +89,7 @@ export default function StatsShareModal({ logs, onClose }) {
   const cardRef = useRef(null);
 
   const weekDates = getWeekDates();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateStr();
   const logByDate = useMemo(() => {
     const map = {};
     (logs || []).forEach((l) => { map[l.date] = l; });
