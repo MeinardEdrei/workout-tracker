@@ -8,6 +8,8 @@ import DailyShareCard from '../components/DailyShareCard';
 import BodyMap from '../components/BodyMap';
 import { MusclePill } from '../components/MusclePill';
 import ExerciseThumbnail from '../components/ExerciseThumbnail';
+import RepeatButton from '../components/RepeatButton';
+import { tick } from '../utils/haptics';
 import { isSyncExcluded, excludeFromSync } from '../utils/syncPrefs';
 import { computeStreak } from '../utils/streaks';
 import { getActiveRestTimer, getAllActiveRestTimers, setActiveRestTimer, clearActiveRestTimer, secondsRemaining } from '../utils/restTimer';
@@ -1426,105 +1428,101 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
 
   const restRemaining = restEndsAt == null ? null : secondsRemaining(restEndsAt, restNow);
 
-  // The active reps+weight+RIR entry form
+  // The active reps+weight+RIR entry form. Sized for a sweaty thumb mid-set:
+  // 52px −/+ that repeat when held, number keypads, 44px RIR and a 56px Log.
+  const stepBtnStyle = {
+    width: 52, height: 52, borderRadius: '50%', border: 'none', flexShrink: 0,
+    background: 'var(--bg3)', color: 'var(--text)', fontSize: 26, fontWeight: 600, cursor: 'pointer',
+  };
+  const numberInputStyle = {
+    flex: 1, minWidth: 0, height: 52, textAlign: 'center', fontSize: 28, fontWeight: 500,
+    fontFamily: 'var(--font-mono)', color: 'var(--text)', background: 'transparent', border: 'none', padding: 0,
+  };
+  const unitStyle = { fontSize: 'var(--fs-sm)', fontWeight: 700, color: 'var(--text2)', letterSpacing: '0.08em', textTransform: 'uppercase', width: 40 };
+  const decimalInput = (v) => v.replace(',', '.');
   const setLogFormEl = (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: isHero ? 8 : 6, width: '100%', padding: isHero ? '10px' : '6px 8px', borderRadius: 8, background: 'var(--bg3)', border: logIsDropSet ? '1px solid var(--accent)' : '1px solid var(--border2)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', padding: 12, borderRadius: 'var(--r-lg)', background: 'var(--bg2)', boxShadow: logIsDropSet ? 'inset 0 0 0 1.5px var(--accent)' : 'none' }}>
       <button
         type="button"
+        aria-pressed={logIsDropSet}
         onClick={() => setLogIsDropSet((v) => !v)}
         style={{
-          background: logIsDropSet ? 'rgba(var(--accent-rgb), 0.15)' : 'transparent',
-          border: logIsDropSet ? '1px solid var(--accent)' : '1px dashed var(--border2)',
-          borderRadius: 6,
-          padding: '2px 8px',
-          alignSelf: 'center',
-          cursor: 'pointer',
-          display: 'flex', alignItems: 'center', gap: 4,
-          color: logIsDropSet ? 'var(--accent)' : 'var(--text3)',
-          fontSize: isHero ? 10 : 9,
-          fontWeight: 800,
-          letterSpacing: '0.06em',
-          textTransform: 'uppercase',
+          minHeight: 40, padding: '0 14px', alignSelf: 'center', cursor: 'pointer',
+          borderRadius: 20, border: 'none',
+          background: logIsDropSet ? 'rgba(var(--accent-rgb), 0.15)' : 'var(--bg3)',
+          color: logIsDropSet ? 'var(--accent)' : 'var(--text2)',
+          fontSize: 'var(--fs-sm)', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+          display: 'flex', alignItems: 'center', gap: 6,
         }}
-        title="Toggle Drop Set"
       >
-        <span>↓ Drop Set</span>
-        {logIsDropSet && <span style={{ fontSize: 8, opacity: 0.8 }}>(active)</span>}
+        ↓ Drop set{logIsDropSet ? ' · on' : ''}
       </button>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: isHero ? 8 : 4 }}>
-        <button type="button" onClick={() => adjustLogWeight(-weightStep)} style={{ width: isHero ? 34 : 26, height: isHero ? 34 : 26, borderRadius: isHero ? 8 : 6, border: '1px solid var(--border2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: isHero ? 18 : 13, fontWeight: 900, cursor: 'pointer' }}>−</button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, height: 64, padding: '0 6px', borderRadius: 'var(--r-lg)', background: 'var(--bg)' }}>
+        <RepeatButton aria-label="Decrease weight (hold to repeat)" onStep={(n) => adjustLogWeight(-(n >= 10 ? 2 : 1) * weightStep)} style={stepBtnStyle}>−</RepeatButton>
         <input
-          type="number"
-          min="0"
-          step="0.5"
+          type="text"
+          inputMode="decimal"
+          aria-label={`Weight in ${ex.weightUnit || 'kg'}`}
           value={logWeightVal}
-          onChange={(e) => setLogWeightVal(e.target.value)}
+          onChange={(e) => setLogWeightVal(decimalInput(e.target.value))}
           onFocus={(e) => e.target.select()}
-          style={{ width: isHero ? 64 : 46, height: isHero ? 34 : 26, textAlign: 'center', fontSize: isHero ? 18 : 14, fontWeight: 900, fontFamily: 'var(--font-mono)', color: 'var(--text)', background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: isHero ? 8 : 6, padding: '0 4px' }}
+          style={numberInputStyle}
         />
-        <button type="button" onClick={() => adjustLogWeight(weightStep)} style={{ width: isHero ? 34 : 26, height: isHero ? 34 : 26, borderRadius: isHero ? 8 : 6, border: '1px solid var(--border2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: isHero ? 18 : 13, fontWeight: 900, cursor: 'pointer' }}>+</button>
-        <span style={{ fontSize: isHero ? 11 : 9, color: 'var(--text3)' }}>{ex.weightUnit || 'kg'}</span>
+        <span style={unitStyle}>{ex.weightUnit || 'kg'}</span>
+        <RepeatButton aria-label="Increase weight (hold to repeat)" onStep={(n) => adjustLogWeight((n >= 10 ? 2 : 1) * weightStep)} style={stepBtnStyle}>+</RepeatButton>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: isHero ? 8 : 4 }}>
-        <button type="button" onClick={() => setLogRepsVal((v) => String(Math.max(0, (+v || 0) - 1)))} style={{ width: isHero ? 34 : 26, height: isHero ? 34 : 26, borderRadius: isHero ? 8 : 6, border: '1px solid var(--border2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: isHero ? 18 : 13, fontWeight: 900, cursor: 'pointer' }}>−</button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, height: 64, padding: '0 6px', borderRadius: 'var(--r-lg)', background: 'var(--bg)' }}>
+        <RepeatButton aria-label="Decrease reps (hold to repeat)" onStep={() => setLogRepsVal((v) => String(Math.max(0, (+v || 0) - 1)))} style={stepBtnStyle}>−</RepeatButton>
         <input
-          type="number"
-          min="0"
-          step="1"
+          type="text"
+          inputMode="numeric"
+          aria-label="Reps"
           value={logRepsVal}
-          onChange={(e) => setLogRepsVal(e.target.value)}
+          onChange={(e) => setLogRepsVal(e.target.value.replace(/\D/g, ''))}
           onFocus={(e) => e.target.select()}
-          style={{ width: isHero ? 56 : 42, height: isHero ? 34 : 26, textAlign: 'center', fontSize: isHero ? 18 : 14, fontWeight: 900, fontFamily: 'var(--font-mono)', color: 'var(--text)', background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: isHero ? 8 : 6, padding: '0 4px' }}
+          style={numberInputStyle}
         />
-        <button type="button" onClick={() => setLogRepsVal((v) => String((+v || 0) + 1))} style={{ width: isHero ? 34 : 26, height: isHero ? 34 : 26, borderRadius: isHero ? 8 : 6, border: '1px solid var(--border2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: isHero ? 18 : 13, fontWeight: 900, cursor: 'pointer' }}>+</button>
-        <button
-          type="button"
-          onClick={() => setLogRepsVal((v) => String((+v || 0) + 5))}
-          title="Add 5 reps"
-          style={{ height: isHero ? 34 : 26, padding: '0 6px', borderRadius: isHero ? 8 : 6, border: '1px solid var(--border2)', background: 'var(--bg2)', color: 'var(--accent)', fontSize: isHero ? 11 : 9, fontWeight: 900, fontFamily: 'var(--font-mono)', cursor: 'pointer' }}
-        >
-          +5
-        </button>
-        <span style={{ fontSize: isHero ? 11 : 9, color: 'var(--text3)' }}>reps</span>
+        <span style={unitStyle}>reps</span>
+        <RepeatButton aria-label="Increase reps (hold to repeat)" onStep={() => setLogRepsVal((v) => String((+v || 0) + 1))} style={stepBtnStyle}>+</RepeatButton>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
-        {isHero && <div style={{ fontSize: 9, color: 'var(--text3)', fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>RIR</div>}
-        <div style={{ display: 'flex', gap: isHero ? 4 : 3 }}>
-          {[0, 1, 2, 3, 4, 5].map((r) => (
-            <button
-              key={r}
-              type="button"
-              onClick={() => setLogRirVal(r)}
-              title={r === 0 ? 'RIR 0 (to failure)' : `RIR ${r}`}
-              style={{
-                width: isHero ? 32 : 22, height: isHero ? 32 : 22, borderRadius: isHero ? 6 : 5, cursor: 'pointer',
-                border: logRirVal === r ? '1.5px solid var(--accent)' : '1px solid var(--border2)',
-                background: logRirVal === r ? 'rgba(var(--accent-rgb), 0.12)' : 'var(--bg2)',
-                color: logRirVal === r ? 'var(--accent)' : 'var(--text2)',
-                fontSize: isHero ? 12 : 9, fontWeight: 800, fontFamily: 'var(--font-mono)',
-              }}
-            >{r === 5 ? '5+' : r}</button>
-          ))}
-        </div>
+      <div role="radiogroup" aria-label="Reps in reserve" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <span style={{ ...unitStyle, width: 36, textAlign: 'center' }}>RIR</span>
+        {[0, 1, 2, 3, 4, 5].map((r) => (
+          <button
+            key={r}
+            type="button"
+            role="radio"
+            aria-checked={logRirVal === r}
+            aria-label={r === 0 ? 'RIR 0, to failure' : r === 5 ? 'RIR 5 or more' : `RIR ${r}`}
+            onClick={() => setLogRirVal(r)}
+            style={{
+              flex: 1, height: 44, borderRadius: 'var(--r-md)', cursor: 'pointer', border: 'none',
+              background: logRirVal === r ? 'var(--bg4)' : 'var(--bg3)',
+              boxShadow: logRirVal === r ? 'inset 0 0 0 1.5px var(--accent)' : 'none',
+              color: logRirVal === r ? 'var(--text)' : 'var(--text2)',
+              fontSize: 'var(--fs-md)', fontWeight: 500, fontFamily: 'var(--font-mono)',
+            }}
+          >{r === 5 ? '5+' : r}</button>
+        ))}
       </div>
-      <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
-        <button
-          type="button"
-          onClick={confirmSetLog}
-          disabled={setLogsMutation.isPending}
-          style={{ padding: isHero ? '6px 16px' : '4px 10px', borderRadius: 6, border: 'none', background: 'var(--accent)', color: 'var(--bg)', fontWeight: 900, fontSize: isHero ? 12 : 10, cursor: 'pointer' }}
-        >{editingLogIndex != null ? 'Save' : `Log Set ${nextSetNumber}`}</button>
+      <div style={{ display: 'flex', gap: 8 }}>
         <button
           type="button"
           onClick={closeSetLogger}
-          style={{ padding: isHero ? '6px 12px' : '4px 8px', borderRadius: 6, border: '1px solid var(--border2)', background: 'transparent', color: 'var(--text3)', fontWeight: 700, fontSize: isHero ? 12 : 10, cursor: 'pointer' }}
+          style={{ width: 96, height: 56, borderRadius: 'var(--r-lg)', border: 'none', background: 'var(--bg3)', color: 'var(--text)', fontWeight: 700, fontSize: 'var(--fs-md)', letterSpacing: '0.06em', textTransform: 'uppercase', cursor: 'pointer' }}
         >Cancel</button>
+        <button
+          type="button"
+          onClick={() => { tick(); confirmSetLog(); }}
+          disabled={setLogsMutation.isPending}
+          style={{ flex: 1, height: 56, borderRadius: 'var(--r-lg)', border: 'none', background: 'var(--accent)', color: 'var(--on-accent)', fontWeight: 700, fontSize: 18, letterSpacing: '0.06em', textTransform: 'uppercase', cursor: 'pointer', opacity: setLogsMutation.isPending ? 0.7 : 1 }}
+        >{setLogsMutation.isPending ? 'Saving…' : editingLogIndex != null ? 'Save' : `Log Set ${nextSetNumber}`}</button>
       </div>
     </div>
   );
 
   const setLoggerEl = isHero ? (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center', width: 'min(280px, 100%)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center', width: 'min(340px, 100%)' }}>
       {effectiveSetLogs.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: '100%' }}>
           {effectiveSetLogs.map((s, i) => (
