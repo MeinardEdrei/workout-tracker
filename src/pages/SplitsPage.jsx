@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useStorage } from '../hooks/useStorage';
@@ -9,11 +9,9 @@ import BrowseSplitsPage from './BrowseSplitsPage';
 import LeaderboardPage from '../components/LeaderboardPage';
 import { setSplitVisibility, reapplySplit as reapplySplitApi, getRanking } from '../api/index';
 import { X, Trophy, ArrowRight, RotateCcw, Upload } from 'lucide-react';
-import AiChatBubble from '../components/AiChatBubble';
 import { formatSplitAsText, formatSplitWithHistory } from '../utils/splitText';
 
 const API = import.meta.env.VITE_API_URL || '';
-const SHOW_AI_CHAT = false; // archived: unused feature, flip to re-enable
 
 function PlusIcon() {
   return (
@@ -472,188 +470,6 @@ function SplitHistoryModal({ split, onRevert, isReverting, onClose }) {
   );
 }
 
-/* ─── External Gemini API Helper ─── */
-async function callExternalGeminiApi(apiKey, systemPrompt, chatHistory, userText) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-  
-  const contents = chatHistory.map(m => ({
-    role: m.sender === 'user' ? 'user' : 'model',
-    parts: [{ text: m.text.replace(/\*✨.*\*/g, '').trim() }]
-  }));
-  
-  contents.push({
-    role: 'user',
-    parts: [{ text: userText.trim() }]
-  });
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents,
-      systemInstruction: {
-        parts: [{ text: systemPrompt }]
-      }
-    })
-  });
-
-  if (!response.ok) {
-    const errData = await response.json().catch(() => ({}));
-    throw new Error(errData.error?.message || `HTTP ${response.status}`);
-  }
-
-  const data = await response.json();
-  const reply = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!reply) {
-    throw new Error("Empty response from Gemini API.");
-  }
-  return reply.trim();
-}
-
-/* ─── Local AI Markdown Parser ─── */
-function parseBold(text) {
-  const parts = text.split(/\*\*(.*?)\*\*/g);
-  return parts.map((part, i) => i % 2 === 1 ? <strong key={i} style={{ color: 'var(--accent)', fontWeight: 700 }}>{part}</strong> : part);
-}
-
-function renderMarkdown(text) {
-  if (!text) return null;
-  return text.split('\n').map((line, i) => {
-    const cleanLine = line.trim();
-    if (cleanLine.startsWith('###')) {
-      return <h4 key={i} style={{ fontSize: 13, fontWeight: 800, color: 'var(--accent)', marginTop: 10, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.02em' }}>{cleanLine.replace('###', '').trim()}</h4>;
-    }
-    if (cleanLine.startsWith('-') || cleanLine.startsWith('*')) {
-      return (
-        <div key={i} style={{ display: 'flex', gap: 6, margin: '3px 0', fontSize: 13, color: 'var(--text)', lineHeight: 1.4 }}>
-          <span style={{ color: 'var(--accent)', flexShrink: 0 }}>•</span>
-          <span>{parseBold(cleanLine.substring(1).trim())}</span>
-        </div>
-      );
-    }
-    if (cleanLine.length === 0) return <div key={i} style={{ height: 6 }} />;
-    return <p key={i} style={{ fontSize: 13, color: 'var(--text2)', margin: '3px 0', lineHeight: 1.4 }}>{parseBold(cleanLine)}</p>;
-  });
-}
-
-/* ─── Heuristic Rule-Based local Split Analysis Engine ─── */
-function generateSplitsPageLocalResponse(query, splits) {
-  const q = query.toLowerCase();
-  const activeSplit = splits.find(s => s.isActive) || splits[0] || null;
-
-  if (q.includes("critique") || q.includes("is my split") || q.includes("review") || q.includes("opinion") || q.includes("good")) {
-    if (!activeSplit) {
-      return `### Split Critique
-You don't have any active split. Please create and activate a split so I can critique it!`;
-    }
-
-    const trainingDays = (activeSplit.days || []).filter(d => !d.isRest);
-    const restDays = (activeSplit.days || []).filter(d => d.isRest);
-    const numTraining = trainingDays.length;
-    const numRest = restDays.length;
-
-    let response = `### Critique of Active Split: **${activeSplit.name}**\n`;
-    response += `- **Weekly Structure:** You have **${numTraining} training days** and **${numRest} rest days** defined in this split.\n`;
-
-    if (numTraining === 0) {
-      response += `- ⚠️ This split has no training days yet! Tap Edit to add some days and exercises.\n`;
-      return response;
-    }
-
-    // Frequency analysis
-    if (numTraining <= 3) {
-      response += `- **Frequency (Moderate):** A ${numTraining}-day split is highly manageable and great for recovery. Ensure you focus on multi-joint compound movements (Squats, Deadlifts, Bench Press) to get the most out of each session.\n`;
-    } else if (numTraining === 4) {
-      response += `- **Frequency (Optimal):** 4 days is the golden standard for intermediate lifters (e.g. Upper/Lower split). It provides the perfect balance of training stimulus and 3 full days of rest.\n`;
-    } else if (numTraining === 5) {
-      response += `- **Frequency (High):** 5 training days per week is ideal for advanced lifters or those running specialized splits (e.g. Upper/Lower/Push/Pull/Legs). Ensure your nutrition and sleep are dialed in.\n`;
-    } else {
-      response += `- **Frequency (Very High):** ${numTraining} training days leaves very little room for recovery. Monitor your joints and fatigue levels closely; consider adding a scheduled rest day.\n`;
-    }
-
-    // Rest days check
-    if (numRest === 0) {
-      response += `- ⚠️ **Warning:** No rest days are explicitly marked in this split. Muscles grow during recovery, not in the gym! Try adding at least 1-2 rest days per week.\n`;
-    }
-
-    // Exercise count analysis
-    const totalExs = trainingDays.reduce((acc, d) => acc + (d.exercises || []).length, 0);
-    const avgExs = totalExs / numTraining;
-    if (avgExs > 6) {
-      response += `- **Volume (High):** You average **${avgExs.toFixed(1)} exercises** per training day. This might lead to junk volume. Try trimming down to 4-5 high-intensity exercises per workout.\n`;
-    } else if (avgExs < 3) {
-      response += `- **Volume (Low):** You average **${avgExs.toFixed(1)} exercises** per training day. Consider adding 1-2 accessory movements to target minor muscle groups (arms, calves, abs).\n`;
-    } else {
-      response += `- **Volume (Optimal):** Your average of **${avgExs.toFixed(1)} exercises** per workout is ideal for maintaining high intensity throughout the session.\n`;
-    }
-
-    return response;
-  }
-
-  if (q.includes("better") || q.includes("alternative")) {
-    if (!activeSplit) {
-      return `### Split Recommendations
-Since you don't have an active split, here are the standard recommendations:
-- **Beginners:** 3-Day Full Body split.
-- **Intermediate (4 Days/week):** Upper/Lower split (2x upper, 2x lower).
-- **Advanced (5-6 Days/week):** Push/Pull/Legs (PPL) split.`;
-    }
-
-    const name = activeSplit.name.toLowerCase();
-    if (name.includes("ppl") || name.includes("push") || name.includes("pull")) {
-      return `### Alternatives to your PPL Split
-Your active split **${activeSplit.name}** resembles a Push/Pull/Legs routine.
-- **Why change?** PPL requires 6 days/week to hit each muscle twice. If you miss days, your frequency drops.
-- **Better Alternative:** Switch to a **4-Day Upper/Lower** split. You get 3 rest days and still hit every muscle group twice a week.
-- **Bro Split Alternative:** Avoid switching to a "bro split" (chest day, back day, etc.) as training muscles only once a week is suboptimal for muscle growth.`;
-    } else if (name.includes("upper") || name.includes("lower")) {
-      return `### Alternatives to your Upper/Lower Split
-Your active split **${activeSplit.name}** resembles an Upper/Lower routine.
-- **Why change?** You want more variety or want to train 5-6 days a week.
-- **Better Alternative:** Try a **Push/Pull/Legs (PPL)** split (6 days/week) or **Upper/Lower/PPL** (5 days/week). This allows more direct focus on specific muscle groups in each session.`;
-    } else {
-      return `### How to Optimize Your Split
-For your split **${activeSplit.name}**, here are key guidelines:
-- **Frequency:** Make sure you target each muscle group at least 2 times per week. If your split only targets them once, it's a "bro split".
-- **Switch to Upper/Lower:** A 4-day Upper/Lower split is highly recommended if you want to optimize your time.
-- **Switch to PPL:** A 6-day Push/Pull/Legs split is best if you love being in the gym daily and want to isolate muscle groups.`;
-    }
-  }
-
-  if (q.includes("rest") || q.includes("recovery") || q.includes("program rest")) {
-    return `### How to Program Rest Days
-Rest days are when your body repairs micro-tears in muscle fibers, leading to growth and strength gains.
-- **Rule of Thumb:** Never train more than 3 consecutive days without a rest day.
-- **Optimal Schedule:** 
-  - For a 4-day split: Train 2 days, Rest 1, Train 2, Rest 2 (e.g., Upper/Lower/Rest/Upper/Lower/Rest/Rest).
-  - For a PPL split: Push/Pull/Legs/Rest/Push/Pull/Legs/Rest.
-- **Indicators you need rest:** Persistent joint soreness, drop in lifting strength, trouble sleeping, or general lack of motivation.`;
-  }
-
-  if (q.includes("popular") || q.includes("others") || q.includes("what do others")) {
-    return `### Popular Gym Splits
-Here is what the lifting community widely uses:
-1. **Push/Pull/Legs (PPL):**
-   - *Frequency:* 3 or 6 days/week.
-   - *Pros:* Excellent muscle group synergy (e.g. chest & triceps work together).
-2. **Upper/Lower:**
-   - *Frequency:* 4 days/week.
-   - *Pros:* Great recovery, allows high intensity on major compound movements.
-3. **Arnold Split (Chest/Back, Shoulders/Arms, Legs):**
-   - *Frequency:* 6 days/week.
-   - *Pros:* High arm/shoulder frequency, agonist/antagonist supersets (chest/back) save time.
-4. **Full Body:**
-   - *Frequency:* 3 days/week.
-   - *Pros:* High frequency per muscle, perfect for athletes and beginners.`;
-  }
-
-  return `### AI Split Coach Tips
-I'm here to help you program the perfect training routine! E.g.
-- Ask: **"Is my split too much volume?"** to analyze exercises count.
-- Ask: **"What's a better alternative?"** to explore other structures.
-- Ask: **"How to program rest?"** to optimize your recovery.`;
-}
-
 export default function SplitsPage() {
   const queryClient = useQueryClient();
   const { storage, storageKey } = useStorage();
@@ -663,7 +479,6 @@ export default function SplitsPage() {
   const [editingSplitId, setEditingSplitId] = useState(null);
   const [browsing, setBrowsing] = useState(false);
   const [viewingRanking, setViewingRanking] = useState(false);
-  const [showAiChat, setShowAiChat] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [menuOpenId, setMenuOpenId] = useState(null);
   const [menuAnchor, setMenuAnchor] = useState({ top: 0, right: 0, maxHeight: 400 });
@@ -758,24 +573,6 @@ export default function SplitsPage() {
 
   const [expandedSplitId, setExpandedSplitId] = useState(null);
   const [expandedDayIds, setExpandedDayIds] = useState(new Set());
-  const [chatHistory, setChatHistory] = useState(() => {
-    const saved = localStorage.getItem('ai_splits_chat_history');
-    if (saved) return JSON.parse(saved);
-    return [{
-      sender: 'coach',
-      text: "### AI Split Advisor\nWelcome! I can help you analyze your training splits, balance your workload, schedule rest days, or recommend alternative programs.\n\nHere are some things you can ask me:\n- **Is my split too much volume?**\n- **What's a better alternative for my split?**\n- **What do others usually do for this type of split?**\n- **How should I program rest days?**"
-    }];
-  });
-  const [inputText, setInputText] = useState('');
-  const [loadingAi, setLoadingAi] = useState(false);
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('user_gemini_api_key') || '');
-  const [showSettings, setShowSettings] = useState(false);
-  const messagesEndRef = useRef(null);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chatHistory, loadingAi]);
-
   function toggleExpandSplit(splitId) {
     setExpandedSplitId((prev) => (prev === splitId ? null : splitId));
   }
@@ -787,90 +584,6 @@ export default function SplitsPage() {
       else next.add(dayId);
       return next;
     });
-  }
-
-  async function handleSendAdvisorReply(textToSend) {
-    const text = textToSend || inputText;
-    if (!text.trim() || loadingAi) return;
-
-    const updatedHistory = [...chatHistory, { sender: 'user', text: text.trim() }];
-    setChatHistory(updatedHistory);
-    setInputText('');
-    setLoadingAi(true);
-
-    const splitsText = splits.map(s => {
-      const sortedDays = [...(s.days || [])].sort((a, b) => (a.dayOrder ?? 8) - (b.dayOrder ?? 8));
-      const daysStr = sortedDays.map(d => {
-        if (d.isRest) return `- ${d.name}: Rest Day`;
-        const exList = (d.exercises || []).map(e => {
-          const rStr = e.duration > 0 ? `${e.duration}${e.durationUnit || 'sec'}` : (e.untilFailure || !e.reps || e.reps === 0) ? 'Failure' : `${e.reps}`;
-          return `${e.name} (${e.sets}x${rStr}${e.weight > 0 ? ` @ ${e.weight}${e.weightUnit}` : ''})`;
-        }).join(', ');
-        return `- ${d.name} (${d.tag || 'No tag'}): ${exList || 'No exercises yet'}`;
-      }).join('\n');
-      return `Split Name: ${s.name}${s.isActive ? ' (ACTIVE SPLIT)' : ''}\nDays:\n${daysStr}`;
-    }).join('\n\n');
-
-    try {
-      let reply = '';
-      const hasAi = window.ai;
-      const externalApiKey = localStorage.getItem('user_gemini_api_key');
-
-      if (externalApiKey) {
-        const systemPrompt = `You are a professional strength coach and fitness programmer. Analyze the user's training splits and answer their question (whether it is about their splits, general fitness, or any general topics). Keep your answer under 150 words and format with clear markdown bullet points.
-
-Here are the user's current workout splits:
-${splitsText}`;
-
-        reply = await callExternalGeminiApi(externalApiKey, systemPrompt, chatHistory, text.trim());
-      } else if (hasAi) {
-        const promptText = `You are a professional strength coach and fitness programmer. Analyze the user's training splits and answer their question. Keep your answer under 120 words and format with clear markdown bullet points.
-
-Here are the user's current workout splits:
-${splitsText}
-
-Chat History:
-${chatHistory.map(m => `${m.sender === 'user' ? 'User' : 'Coach'}: ${m.text.replace(/\*✨.*\*/, '')}`).join('\n')}
-User: ${text.trim()}
-Coach:`;
-
-        let session = null;
-        if (window.ai.languageModel) {
-          session = await window.ai.languageModel.create({
-            systemPrompt: "You are a professional strength coach. You analyze workout splits and provide helpful, encouraging, and actionable recommendations in under 120 words using markdown bullet points."
-          });
-        } else if (window.ai.assistant) {
-          session = await window.ai.assistant.create();
-        } else if (window.ai.createTextSession) {
-          session = await window.ai.createTextSession();
-        }
-
-        if (session) {
-          reply = await session.prompt(promptText);
-          session.destroy?.();
-        }
-      }
-
-      if (reply && reply.trim()) {
-        const withTag = reply.trim() + (externalApiKey ? '\n\n*✨ Powered by Gemini (API Key)*' : '\n\n*✨ Powered by Gemini Nano (Offline)*');
-        const finalHistory = [...updatedHistory, { sender: 'coach', text: withTag }];
-        setChatHistory(finalHistory);
-        localStorage.setItem('ai_splits_chat_history', JSON.stringify(finalHistory));
-      } else {
-        const localReply = generateSplitsPageLocalResponse(text.trim(), splits) + '\n\n*✨ Powered by Local Analysis Engine*';
-        const finalHistory = [...updatedHistory, { sender: 'coach', text: localReply }];
-        setChatHistory(finalHistory);
-        localStorage.setItem('ai_splits_chat_history', JSON.stringify(finalHistory));
-      }
-    } catch (err) {
-      console.error("Gemini AI failed, falling back to local analysis:", err);
-      const localReply = generateSplitsPageLocalResponse(text.trim(), splits) + '\n\n*✨ Powered by Local Analysis Engine*';
-      const finalHistory = [...updatedHistory, { sender: 'coach', text: localReply }];
-      setChatHistory(finalHistory);
-      localStorage.setItem('ai_splits_chat_history', JSON.stringify(finalHistory));
-    } finally {
-      setLoadingAi(false);
-    }
   }
 
   const activateMutation = useMutation({ mutationFn: (id) => storage.activateSplit(id), onSuccess: invalidate });
@@ -1452,40 +1165,6 @@ Coach:`;
             );
           })}
         </div>
-      )}
-
-      {/* ── Floating AI Chat Bubble ── archived (unused): flip to re-enable ── */}
-      {SHOW_AI_CHAT && (
-      <AiChatBubble
-        title="AI Split Advisor"
-        messages={chatHistory}
-        loadingAi={loadingAi}
-        inputText={inputText}
-        onInputChange={setInputText}
-        onSend={handleSendAdvisorReply}
-        onRestart={() => {
-          const welcome = [{ sender: 'coach', text: "### AI Split Advisor\nWelcome! I can help you analyze your training splits, balance your workload, schedule rest days, or recommend alternative programs.\n\nHere are some things you can ask me:\n- **Is my split too much volume?**\n- **What's a better alternative for my split?**\n- **What do others usually do for this type of split?**\n- **How should I program rest days?**" }];
-          setChatHistory(welcome);
-          localStorage.setItem('ai_splits_chat_history', JSON.stringify(welcome));
-        }}
-        quickReplies={[
-          { label: 'Critique active split', prompt: 'Critique my active split' },
-          { label: 'Better split?', prompt: 'What is a better alternative for my split?' },
-          { label: 'Program rest?', prompt: 'How should I program rest days?' },
-          { label: 'Popular splits', prompt: 'What are the most popular training splits?' },
-        ]}
-        apiKey={apiKey}
-        onApiKeyChange={(val) => {
-          setApiKey(val);
-          if (val.trim()) localStorage.setItem('user_gemini_api_key', val.trim());
-          else localStorage.removeItem('user_gemini_api_key');
-        }}
-        showSettings={showSettings}
-        onToggleSettings={() => setShowSettings((v) => !v)}
-        messagesEndRef={messagesEndRef}
-        open={showAiChat}
-        onToggle={() => setShowAiChat((v) => !v)}
-      />
       )}
 
       {modal?.type === 'add' && (
