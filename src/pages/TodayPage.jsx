@@ -3073,7 +3073,11 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
       date: dateStr, splitName, dayName: day.name, dayTag: day.tag || '', durationSeconds,
       exercises: exercises.map((e) => {
         const checkedNow = matchesDay(e.lastCheckedDate, dateStr) && e.checked;
-        if (!checkedNow) {
+        // Sets logged on an exercise that was never ticked done (e.g. 2 of 3
+        // before running out of time) are real work — keep them instead of
+        // recording the exercise as skipped and dropping the sets.
+        const hasSetsToday = matchesDay(e.todaySetLogsDate, dateStr) && (e.todaySetLogs || []).length > 0;
+        if (!checkedNow && !hasSetsToday) {
           return { name: e.name, category: e.category || 'workout', muscleTargets: e.muscleTargets || [], skipped: true, sets: 0, reps: 0, weight: 0, setLogs: [] };
         }
         // A "just for today" swap means what was actually performed differs
@@ -3861,9 +3865,9 @@ export default function TodayPage() {
 
       if (savingDatesRef.current.has(dateStr)) return;
 
-      const checkedExs = (day.exercises || []).filter(
-        (e) => e.checked && e.lastCheckedDate === dateStr
-      );
+      const didWork = (e) => (e.checked && e.lastCheckedDate === dateStr)
+        || (e.todaySetLogsDate === dateStr && (e.todaySetLogs || []).length > 0);
+      const checkedExs = (day.exercises || []).filter(didWork);
 
       if (checkedExs.length > 0) {
         savingDatesRef.current.add(dateStr);
@@ -3872,11 +3876,10 @@ export default function TodayPage() {
           splitName: activeSplit.name,
           dayName: day.name,
           dayTag: day.tag || '',
-          // Same treatment as the manual Finish Workout flow: anything not
-          // checked for this date is recorded as skipped, not omitted.
+          // Same treatment as the manual Finish Workout flow: anything with
+          // no check and no logged sets for this date is recorded as skipped.
           exercises: (day.exercises || []).map((e) => {
-            const checkedOnDate = e.checked && e.lastCheckedDate === dateStr;
-            if (!checkedOnDate) {
+            if (!didWork(e)) {
               return { name: e.name, category: e.category || 'workout', muscleTargets: e.muscleTargets || [], skipped: true, sets: 0, reps: 0, weight: 0, setLogs: [] };
             }
             const swap = e.todaySwapDate === dateStr ? e.todaySwap : null;
