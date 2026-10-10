@@ -185,6 +185,7 @@ router.post('/:id/duplicate', async (req, res) => {
 const EXERCISE_IMPORT_FIELDS = [
   'name', 'sets', 'reps', 'untilFailure', 'weight', 'weightUnit', 'muscleTargets',
   'category', 'notes', 'duration', 'durationUnit', 'exerciseType', 'restSeconds', 'warmupRamp',
+  'setStyle', 'dropChain', 'dropNoRest', 'supersetGroup',
 ];
 const DAY_IMPORT_FIELDS = ['name', 'tag', 'isRest'];
 
@@ -733,6 +734,12 @@ router.post('/:id/days/:dayId/exercises', async (req, res) => {
       exerciseType: req.body.exerciseType || 'compound',
       restSeconds: req.body.restSeconds || 0,
       warmupRamp: req.body.warmupRamp || [],
+      duration: req.body.duration || 0,
+      durationUnit: req.body.durationUnit || 'sec',
+      setStyle: req.body.setStyle || 'straight',
+      dropChain: req.body.dropChain || [],
+      dropNoRest: req.body.dropNoRest !== false,
+      supersetGroup: req.body.supersetGroup || '',
     });
     await split.save();
     res.status(201).json(day.exercises[day.exercises.length - 1]);
@@ -794,11 +801,13 @@ router.put('/:id/days/:dayId/exercises/:exId', async (req, res) => {
     if (!day) return res.status(404).json({ error: 'Day not found' });
     const ex = day.exercises.id(req.params.exId);
     if (!ex) return res.status(404).json({ error: 'Exercise not found' });
-    const structuralFields = ['name', 'sets', 'reps', 'weight', 'weightUnit', 'muscleTargets', 'untilFailure', 'imageUrl', 'imageSource', 'placeholderUsed', 'category', 'notes', 'exerciseType', 'restSeconds', 'warmupRamp'];
+    // duration / durationUnit were missing here, so timed-exercise edits never
+    // reached the database for signed-in users.
+    const structuralFields = ['name', 'sets', 'reps', 'weight', 'weightUnit', 'muscleTargets', 'untilFailure', 'imageUrl', 'imageSource', 'placeholderUsed', 'category', 'notes', 'exerciseType', 'restSeconds', 'warmupRamp', 'duration', 'durationUnit', 'setStyle', 'dropChain', 'dropNoRest', 'supersetGroup'];
     // Only real template/structure edits get a version snapshot (for revert)
     // — weight/notes/duration are routine in-workout tracking edits made many
     // times per session and don't need a full split-tree copy each time.
-    const snapshotTriggerFields = ['name', 'muscleTargets', 'untilFailure', 'imageUrl', 'imageSource', 'placeholderUsed', 'category', 'exerciseType'];
+    const snapshotTriggerFields = ['name', 'muscleTargets', 'untilFailure', 'imageUrl', 'imageSource', 'placeholderUsed', 'category', 'exerciseType', 'setStyle', 'dropChain', 'supersetGroup'];
     if (snapshotTriggerFields.some((f) => req.body[f] !== undefined)) await snapshotVersion(split);
     const fields = [...structuralFields, 'todaySetLogs', 'todaySetLogsDate', 'checked', 'lastCheckedDate', 'skipped', 'lastSkippedDate', 'todaySwap', 'todaySwapDate', 'lastSwapName', 'lastSwapImageUrl', 'lastSwapMuscleTargets', 'lastSwapDate'];
     fields.forEach((f) => { if (req.body[f] !== undefined) ex[f] = req.body[f]; });

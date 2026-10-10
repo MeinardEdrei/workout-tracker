@@ -23,10 +23,17 @@ const ExerciseSchema = new mongoose.Schema({
   notes: { type: String, default: '' },
   duration: { type: Number, default: 0 },
   durationUnit: { type: String, enum: ['sec', 'min'], default: 'sec' },
+  // Set style: 'dropset' runs dropChain (e.g. 12.5 → 7.5 → 5 kg) straight
+  // through as one round; `sets` is the number of rounds. Exercises sharing a
+  // non-empty supersetGroup letter are done back to back as a superset.
+  setStyle: { type: String, enum: ['straight', 'dropset'], default: 'straight' },
+  dropChain: { type: [{ weight: Number, reps: Number }], default: [] },
+  dropNoRest: { type: Boolean, default: true },
+  supersetGroup: { type: String, default: '' },
   // Transient "today's actual performance" buffer — reset once lastCheckedDate-
   // style daily rollover happens, same idiom as checked/skipped. Written into
   // WorkoutLog.exercises[].setLogs (the permanent record) on Finish Workout.
-  todaySetLogs: { type: [{ reps: Number, rir: Number, weight: Number, isDropSet: { type: Boolean, default: false }, isWarmup: { type: Boolean, default: false } }], default: [] },
+  todaySetLogs: { type: [{ reps: Number, rir: Number, weight: Number, isDropSet: { type: Boolean, default: false }, isWarmup: { type: Boolean, default: false }, dropIndex: Number }], default: [] },
   todaySetLogsDate: { type: String, default: '' },
   // Temporary "just for today" substitute (e.g. machine in use, swap to
   // dumbbells) — same reset-by-date idiom as todaySetLogs, never touches
