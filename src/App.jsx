@@ -17,6 +17,7 @@ import CalculatorPage from './pages/CalculatorPage';
 import ProfilePage from './pages/ProfilePage';
 import { getPrimaryActiveRestTimer, setActiveRestTimer, clearActiveRestTimer, clearAllActiveRestTimers, secondsRemaining } from './utils/restTimer';
 import Toast from './components/Toast';
+import { useBackClose } from './hooks/useBackClose';
 
 const API = import.meta.env.VITE_API_URL || '';
 
@@ -541,6 +542,7 @@ export default function App() {
     return 'today';
   });
   const [showProfile, setShowProfile] = useState(false);
+  useBackClose(showProfile, () => setShowProfile(false));
 
   useEffect(() => {
     if (tab === 'admin' && !isAdmin && !loading) {

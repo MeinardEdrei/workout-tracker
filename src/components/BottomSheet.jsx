@@ -1,10 +1,12 @@
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useBackClose } from '../hooks/useBackClose';
 import { X } from 'lucide-react';
 
 // Slide-up panel anchored to the bottom of the screen, in thumb reach.
 // Closes on backdrop tap, the close button or Escape.
 export default function BottomSheet({ title, onClose, children, labelledBy = 'sheet-title' }) {
+  useBackClose(true, onClose);
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);

@@ -13,6 +13,7 @@ import BottomSheet, { SheetRow, SheetTile } from '../components/BottomSheet';
 import { formatSplitAsText, formatSplitWithHistory } from '../utils/splitText';
 import ConfirmModal from '../components/ConfirmModal';
 import Toast from '../components/Toast';
+import { useBackClose } from '../hooks/useBackClose';
 
 const API = import.meta.env.VITE_API_URL || '';
 
@@ -407,6 +408,10 @@ export default function SplitsPage() {
   const [editingSplitId, setEditingSplitId] = useState(null);
   const [browsing, setBrowsing] = useState(false);
   const [viewingRanking, setViewingRanking] = useState(false);
+  // Back gesture closes the editor / browse / leaderboard instead of leaving the app.
+  useBackClose(!!editingSplitId, () => setEditingSplitId(null));
+  useBackClose(browsing, () => setBrowsing(false));
+  useBackClose(viewingRanking, () => setViewingRanking(false));
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [menuOpenId, setMenuOpenId] = useState(null);
   const [copyChoiceOpen, setCopyChoiceOpen] = useState(false);

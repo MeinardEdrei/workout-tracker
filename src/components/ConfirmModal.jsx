@@ -1,9 +1,11 @@
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useBackClose } from '../hooks/useBackClose';
 
 // One confirm dialog for the whole app. tone="danger" (default) is for
 // destructive actions; tone="primary" for ordinary confirmations.
 export default function ConfirmModal({ title = 'Confirm', message, confirmLabel = 'Delete', tone = 'danger', onConfirm, onClose }) {
+  useBackClose(true, onClose);
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);

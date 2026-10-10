@@ -25,6 +25,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import ConfirmModal from '../components/ConfirmModal';
 import SharedToast from '../components/Toast';
+import { useBackClose } from '../hooks/useBackClose';
 
 /* ─── Constants ─── */
 const STANDARD_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday', 'Rest'];
@@ -2402,6 +2403,8 @@ function SplitEditorInner({ split, onBack, onSplitUpdated }) {
     [...(split.days || [])].sort((a, b) => (a.dayOrder ?? 8) - (b.dayOrder ?? 8))
   );
   const [activeDayId, setActiveDayId] = useState(null);
+  // Back from a day's exercise list returns to the day list, not out of the editor.
+  useBackClose(!!activeDayId, () => setActiveDayId(null));
   const [modal, setModal] = useState(null);
   const [deleteToast, setDeleteToast] = useState(null);
   const [swappingDay, setSwappingDay] = useState(null);
