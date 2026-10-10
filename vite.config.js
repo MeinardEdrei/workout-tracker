@@ -7,7 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'prompt',
-      includeAssets: ['favicon.svg', 'icon-192x192.png', 'icon-512x512.png'],
+      includeAssets: ['favicon.svg', 'icon-192x192.png', 'icon-512x512.png', 'icon-maskable-512x512.png', 'apple-touch-icon.png'],
       manifest: {
         name: 'Workout Tracker',
         short_name: 'Workout',
@@ -28,7 +28,15 @@ export default defineConfig({
             src: 'icon-512x512.png',
             sizes: '512x512',
             type: 'image/png',
-            purpose: 'any maskable'
+            purpose: 'any'
+          },
+          {
+            // Full-bleed background with the barbell inside the 80% safe zone,
+            // so Android's circle / squircle masks don't crop it.
+            src: 'icon-maskable-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable'
           }
         ]
       },
