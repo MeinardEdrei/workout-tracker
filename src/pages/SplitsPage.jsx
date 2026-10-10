@@ -10,6 +10,8 @@ import LeaderboardPage from '../components/LeaderboardPage';
 import { setSplitVisibility, reapplySplit as reapplySplitApi, getRanking } from '../api/index';
 import { X, Trophy, ArrowRight, RotateCcw, Upload } from 'lucide-react';
 import { formatSplitAsText, formatSplitWithHistory } from '../utils/splitText';
+import ConfirmModal from '../components/ConfirmModal';
+import Toast from '../components/Toast';
 
 const API = import.meta.env.VITE_API_URL || '';
 
@@ -240,21 +242,6 @@ function NewSplitModal({ onConfirm, onClose, onBrowse }) {
             <button type="submit" className="btn btn-accent">Create</button>
           </div>
         </form>
-      </div>
-    </div>
-  );
-}
-
-function ConfirmModal({ message, onConfirm, onClose }) {
-  return (
-    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal">
-        <div className="modal-title">Confirm</div>
-        <div style={{ color: 'var(--text2)', fontSize: 14, marginBottom: 4 }}>{message}</div>
-        <div className="modal-actions">
-          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
-          <button className="btn btn-danger" onClick={onConfirm}>Delete</button>
-        </div>
       </div>
     </div>
   );
@@ -708,46 +695,17 @@ export default function SplitsPage() {
     <div>
       {/* Generic toast */}
       {toast && (
-        <div style={{
-          position: 'fixed', bottom: 'var(--above-nav)', left: '50%', transform: 'translateX(-50%)',
-          background: 'var(--bg2)', border: `1px solid ${toast.type === 'error' ? 'var(--red)' : 'var(--accent)'}`,
-          color: 'var(--text)', padding: '8px 14px', borderRadius: 20,
-          fontSize: 12, fontWeight: 600, zIndex: 400, whiteSpace: 'nowrap',
-          display: 'flex', alignItems: 'center', gap: 7,
-          animation: 'fadeIn 0.15s ease',
-        }}>
-          {toast.message}
-          <button onClick={() => setToast(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', display: 'flex' }}><X size={14} /></button>
-        </div>
+        <Toast tone={toast.type === 'error' ? 'error' : 'success'} onDismiss={() => setToast(null)}>{toast.message}</Toast>
       )}
 
       {/* Sign-in status toast */}
       {signingIn && (
-        <div style={{
-          position: 'fixed', bottom: 'var(--above-nav)', left: '50%', transform: 'translateX(-50%)',
-          background: 'var(--bg2)', border: '1px solid var(--border)',
-          color: 'var(--text3)', padding: '8px 14px', borderRadius: 20,
-          fontSize: 12, fontWeight: 500, zIndex: 200, whiteSpace: 'nowrap',
-          display: 'flex', alignItems: 'center', gap: 7,
-          animation: 'fadeIn 0.15s ease',
-        }}>
-          <InlineSpinner /> Opening Google Sign In…
-        </div>
+        <Toast tone="loading">Opening Google Sign In…</Toast>
       )}
 
       {/* Sign-in timeout error toast */}
       {signInFailed && (
-        <div style={{
-          position: 'fixed', bottom: 'var(--above-nav)', left: '50%', transform: 'translateX(-50%)',
-          background: 'var(--bg2)', border: '1px solid var(--red)',
-          color: 'var(--text)', padding: '10px 16px', borderRadius: 10,
-          fontSize: 13, fontWeight: 600, zIndex: 300, maxWidth: 300,
-          display: 'flex', alignItems: 'center', gap: 8,
-          animation: 'fadeIn 0.15s ease',
-        }}>
-          <span style={{ flex: 1 }}>Sign in failed. Please try again.</span>
-          <button onClick={() => setSignInFailed(false)} style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', flexShrink: 0 }}><X size={14} /></button>
-        </div>
+        <Toast tone="error" onDismiss={() => setSignInFailed(false)}>Sign in failed. Please try again.</Toast>
       )}
 
       {/* ── Page header ─────────────────────────────────────────────────────── */}

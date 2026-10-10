@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import { Check } from 'lucide-react';
+import ConfirmModal from '../components/ConfirmModal';
 import {
   getAdminUsers, deleteAdminUser,
   getAllowedEmails, addAllowedEmail, deleteAllowedEmail,
@@ -35,21 +36,6 @@ function LinkIcon() {
       <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
       <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
     </svg>
-  );
-}
-
-function ConfirmModal({ message, onConfirm, onClose }) {
-  return (
-    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal">
-        <div className="modal-title">Confirm</div>
-        <div style={{ color: 'var(--text2)', fontSize: 14, marginBottom: 4 }}>{message}</div>
-        <div className="modal-actions">
-          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
-          <button className="btn btn-danger" onClick={onConfirm}>Delete</button>
-        </div>
-      </div>
-    </div>
   );
 }
 

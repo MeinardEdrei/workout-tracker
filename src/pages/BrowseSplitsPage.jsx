@@ -4,6 +4,7 @@ import { getPublicSplits } from '../api/index';
 import { useAuth } from '../context/AuthContext';
 import { useStorage } from '../hooks/useStorage';
 import { X, Check, ArrowLeft, ArrowRight } from 'lucide-react';
+import SharedToast from '../components/Toast';
 
 function BackIcon() {
   return (
@@ -44,17 +45,7 @@ function InlineSpinner() {
 
 function Toast({ message, type = 'success', onClose }) {
   return (
-    <div style={{
-      position: 'fixed', bottom: 'var(--above-nav)', left: '50%', transform: 'translateX(-50%)',
-      background: 'var(--bg2)', border: `1px solid ${type === 'error' ? 'var(--red)' : 'var(--accent)'}`,
-      color: 'var(--text)', padding: '8px 14px', borderRadius: 20,
-      fontSize: 12, fontWeight: 600, zIndex: 400, whiteSpace: 'nowrap',
-      display: 'flex', alignItems: 'center', gap: 7,
-      animation: 'fadeIn 0.15s ease',
-    }}>
-      {message}
-      <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', display: 'flex' }}><X size={14} /></button>
-    </div>
+    <SharedToast tone={type === 'error' ? 'error' : 'success'} onDismiss={onClose}>{message}</SharedToast>
   );
 }
 

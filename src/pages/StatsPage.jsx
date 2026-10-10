@@ -8,6 +8,7 @@ import { normKey, findDuplicatePairs } from '../utils/matchExercise';
 import { X, TrendingUp, TrendingDown, ArrowRight, RotateCcw, BarChart3, FolderOpen, Download, Tag, Pencil, Check, Flame, Minus, Trophy, Ban } from 'lucide-react';
 import { computeStreak } from '../utils/streaks';
 import { convertWeight } from '../utils/weight';
+import ConfirmModal from '../components/ConfirmModal';
 
 const LOGS_STALE = 2 * 60 * 1000;
 const DOW_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
@@ -37,24 +38,6 @@ function ChevronIcon({ open }) {
     </svg>
   );
 }
-
-function ConfirmModal({ message, onConfirm, onClose }) {
-  return createPortal(
-    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal">
-        <div className="modal-title">Confirm</div>
-        <div style={{ color: 'var(--text2)', fontSize: 14, marginBottom: 4 }}>{message}</div>
-        <div className="modal-actions">
-          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
-          <button className="btn btn-danger" onClick={onConfirm}>Delete</button>
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
-}
-
-
 
 /* ─── Activity Tracker (Monthly + Yearly) ─── */
 function ChevronLeftSmall() {

@@ -18,6 +18,8 @@ import { ensureSessionStart, getSessionStart, clearSessionStart, formatSessionDu
 import { createPortal } from 'react-dom';
 import { X, Check, RotateCcw, Trophy, BarChart3, StickyNote, Dumbbell, Moon, PartyPopper, Flame, ChevronDown, CalendarDays, SkipForward, MoreHorizontal, Ban, Clock, AlertCircle } from 'lucide-react';
 import { WheelPicker, WheelPickerWrapper } from '@ncdai/react-wheel-picker';
+import ConfirmModal from '../components/ConfirmModal';
+import Toast from '../components/Toast';
 
 // Keyboard activation for tap-to-edit text that isn't a <button> (so it can
 // keep flowing inline): Enter / Space behave like a tap.
@@ -1763,6 +1765,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
         <ConfirmModal
           message={`You logged ${heavierWeightPrompt.loggedWeight}${ex.weightUnit || 'kg'} on ${ex.name}, above your target of ${heavierWeightPrompt.targetWeight}${ex.weightUnit || 'kg'}. Update the target weight?`}
           confirmLabel="Update Target"
+          tone="primary"
           onConfirm={() => { weightMutation.mutate({ weight: heavierWeightPrompt.loggedWeight, unit: ex.weightUnit || 'kg' }); setHeavierWeightPrompt(null); }}
           onClose={() => setHeavierWeightPrompt(null)}
         />
@@ -1771,6 +1774,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
         <ConfirmModal
           message={`You logged ${higherRepsPrompt.loggedReps} reps on ${ex.name}, above your target of ${higherRepsPrompt.targetReps} reps. Update the target reps?`}
           confirmLabel="Update Target"
+          tone="primary"
           onConfirm={() => {
             setsRepsMutation.mutate({ sets: ex.sets ?? 3, reps: higherRepsPrompt.loggedReps });
             setHigherRepsPrompt(null);
@@ -2087,23 +2091,6 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
       {weightEditorEl}
       {modalsEl}
     </div>
-  );
-}
-
-/* ─── Generic Confirmation Modal ─── */
-function ConfirmModal({ message, onConfirm, onClose, confirmLabel = 'Finish' }) {
-  return createPortal(
-    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal">
-        <div className="modal-title">Confirm</div>
-        <div style={{ color: 'var(--text2)', fontSize: 14, marginBottom: 16 }}>{message}</div>
-        <div className="modal-actions">
-          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
-          <button className="btn btn-accent" onClick={onConfirm}>{confirmLabel}</button>
-        </div>
-      </div>
-    </div>,
-    document.body
   );
 }
 
@@ -3592,6 +3579,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
               ? `Skip this day? You'll lose the ${checkedCount} exercise${checkedCount === 1 ? '' : 's'} already marked done.`
               : "Skip this day? It won't count as a workout, but it won't break your streak either."
           }
+          confirmLabel="Skip day"
           onConfirm={handleSkipDay}
           onClose={() => setShowConfirmSkipDay(false)}
         />
@@ -4030,17 +4018,7 @@ export default function TodayPage() {
         </>
       )}
       {toast && (
-        <div role={toast.type === 'error' ? 'alert' : 'status'} style={{
-          position: 'fixed', bottom: 'var(--above-nav)', left: '50%', transform: 'translateX(-50%)',
-          zIndex: 1000, background: 'var(--bg2)', border: `1.5px solid ${toast.type === 'error' ? 'var(--red)' : 'var(--accent)'}`,
-          borderRadius: 30, padding: '10px 20px', color: 'var(--text)',
-          fontSize: 13, fontWeight: 700, boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
-          display: 'flex', alignItems: 'center', gap: 10, animation: 'fadeIn 0.2s ease'
-        }}>
-          {toast.Icon && <toast.Icon size={16} style={{ color: toast.type === 'error' ? 'var(--red)' : 'var(--accent)', flexShrink: 0 }} />}
-          {toast.message}
-          <button aria-label="Dismiss" onClick={() => setToast(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', display: 'flex' }}><X size={14} /></button>
-        </div>
+        <Toast tone={toast.type === 'error' ? 'error' : 'success'} icon={toast.Icon} onDismiss={() => setToast(null)}>{toast.message}</Toast>
       )}
     </div>
   );

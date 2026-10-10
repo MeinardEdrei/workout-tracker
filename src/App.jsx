@@ -16,6 +16,7 @@ import AdminPage from './pages/AdminPage';
 import CalculatorPage from './pages/CalculatorPage';
 import ProfilePage from './pages/ProfilePage';
 import { getPrimaryActiveRestTimer, setActiveRestTimer, clearActiveRestTimer, clearAllActiveRestTimers, secondsRemaining } from './utils/restTimer';
+import Toast from './components/Toast';
 
 const API = import.meta.env.VITE_API_URL || '';
 
@@ -304,24 +305,11 @@ function AuthErrorToast() {
   const { authError, dismissAuthError } = useAuth();
   if (!authError) return null;
   return (
-    <div style={{
-      position: 'fixed', bottom: 'var(--above-nav)', left: '50%', transform: 'translateX(-50%)',
-      background: 'var(--bg2)', border: '1px solid var(--red)',
-      color: 'var(--text)', padding: '12px 16px', borderRadius: 10,
-      fontSize: 13, fontWeight: 600, zIndex: 300, maxWidth: 320, textAlign: 'center',
-      display: 'flex', alignItems: 'center', gap: 8,
-      animation: 'fadeIn 0.15s ease',
-    }}>
-      <span style={{ flex: 1 }}>
-        {authError === 'not_allowed'
-          ? 'Access restricted. You are not on the allowed list.'
-          : 'Sign-in failed. Please try again.'}
-      </span>
-      <button
-        onClick={dismissAuthError}
-        style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', flexShrink: 0 }}
-      ><X size={14} /></button>
-    </div>
+    <Toast tone="error" onDismiss={dismissAuthError}>
+      {authError === 'not_allowed'
+        ? 'Access restricted. You are not on the allowed list.'
+        : 'Sign-in failed. Please try again.'}
+    </Toast>
   );
 }
 
@@ -358,31 +346,12 @@ function AuthCorner({ onOpenProfile }) {
     <>
       {/* Sign-in status toast */}
       {signingIn && (
-        <div style={{
-          position: 'fixed', bottom: 'var(--above-nav)', left: '50%', transform: 'translateX(-50%)',
-          background: 'var(--bg2)', border: '1px solid var(--border)',
-          color: 'var(--text3)', padding: '8px 14px', borderRadius: 20,
-          fontSize: 12, fontWeight: 500, zIndex: 200, whiteSpace: 'nowrap',
-          display: 'flex', alignItems: 'center', gap: 7,
-          animation: 'fadeIn 0.15s ease',
-        }}>
-          <InlineSpinner /> Opening Google Sign In…
-        </div>
+        <Toast tone="loading">Opening Google Sign In…</Toast>
       )}
 
       {/* Sign-in timeout error toast */}
       {signInFailed && (
-        <div style={{
-          position: 'fixed', bottom: 'var(--above-nav)', left: '50%', transform: 'translateX(-50%)',
-          background: 'var(--bg2)', border: '1px solid var(--red)',
-          color: 'var(--text)', padding: '10px 16px', borderRadius: 10,
-          fontSize: 13, fontWeight: 600, zIndex: 300, maxWidth: 300,
-          display: 'flex', alignItems: 'center', gap: 8,
-          animation: 'fadeIn 0.15s ease',
-        }}>
-          <span style={{ flex: 1 }}>Sign in failed. Please try again.</span>
-          <button onClick={() => setSignInFailed(false)} style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', flexShrink: 0 }}><X size={14} /></button>
-        </div>
+        <Toast tone="error" onDismiss={() => setSignInFailed(false)}>Sign in failed. Please try again.</Toast>
       )}
 
       {/* Sign in button or avatar */}
@@ -707,49 +676,15 @@ export default function App() {
 
       {/* Sync Status Toast */}
       {syncState?.status === 'syncing' && (
-        <div style={{
-          position: 'fixed', bottom: 'var(--above-nav)', left: '50%', transform: 'translateX(-50%)',
-          background: 'var(--bg2)', border: '1px solid var(--accent)',
-          color: 'var(--text)', padding: '12px 20px', borderRadius: 12,
-          fontSize: 13, fontWeight: 600, zIndex: 300, minWidth: 260, textAlign: 'center',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-          boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
-          animation: 'fadeIn 0.2s ease',
-        }}>
-          <InlineSpinner />
-          <span>Syncing {syncState.count} offline changes…</span>
-        </div>
+        <Toast tone="loading">Syncing {syncState.count} offline changes…</Toast>
       )}
 
       {syncState?.status === 'success' && (
-        <div style={{
-          position: 'fixed', bottom: 'var(--above-nav)', left: '50%', transform: 'translateX(-50%)',
-          background: 'rgba(10, 40, 20, 0.95)', border: '1px solid var(--green)',
-          color: 'var(--green)', padding: '12px 20px', borderRadius: 12,
-          fontSize: 13, fontWeight: 700, zIndex: 300, minWidth: 260, textAlign: 'center',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-          boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
-          animation: 'fadeIn 0.2s ease',
-        }}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
-          <span>All changes synced successfully!</span>
-        </div>
+        <Toast tone="success">All changes synced.</Toast>
       )}
 
       {syncState?.status === 'error' && (
-        <div style={{
-          position: 'fixed', bottom: 'var(--above-nav)', left: '50%', transform: 'translateX(-50%)',
-          background: 'rgba(40, 10, 10, 0.95)', border: '1px solid var(--red)',
-          color: 'var(--red)', padding: '12px 20px', borderRadius: 12,
-          fontSize: 13, fontWeight: 700, zIndex: 300, minWidth: 260, textAlign: 'center',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-          boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
-          animation: 'fadeIn 0.2s ease',
-        }}>
-          <span>Sync failed. Retrying later.</span>
-        </div>
+        <Toast tone="error">Sync failed. Retrying later.</Toast>
       )}
 
       {/* Auth error toast is global — shows on every tab */}

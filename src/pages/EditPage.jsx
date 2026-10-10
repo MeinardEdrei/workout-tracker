@@ -23,6 +23,8 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import ConfirmModal from '../components/ConfirmModal';
+import SharedToast from '../components/Toast';
 
 /* ─── Constants ─── */
 const STANDARD_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday', 'Rest'];
@@ -140,16 +142,7 @@ function XSmallIcon() {
 function Toast({ message, type = 'error' }) {
   if (!message) return null;
   return (
-    <div style={{
-      position: 'fixed', bottom: 'var(--above-nav)', left: '50%', transform: 'translateX(-50%)',
-      background: type === 'error' ? 'var(--red)' : 'var(--bg3)',
-      color: '#fff', padding: '10px 16px', borderRadius: 8,
-      fontSize: 13, fontWeight: 600, zIndex: 400, maxWidth: 300,
-      textAlign: 'center', pointerEvents: 'none',
-      animation: 'fadeIn 0.15s ease',
-    }}>
-      {message}
-    </div>
+    <SharedToast tone={type === 'error' ? 'error' : 'success'}>{message}</SharedToast>
   );
 }
 
@@ -198,22 +191,6 @@ function TextModal({ title, initial = '', placeholder, onConfirm, onClose }) {
             <button type="submit" className="btn btn-accent">Save</button>
           </div>
         </form>
-      </div>
-    </div>,
-    document.body
-  );
-}
-
-function ConfirmModal({ message, onConfirm, onClose }) {
-  return createPortal(
-    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal">
-        <div className="modal-title">Delete?</div>
-        <div style={{ color: 'var(--text2)', fontSize: 14, marginBottom: 4 }}>{message}</div>
-        <div className="modal-actions">
-          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
-          <button className="btn btn-danger" onClick={onConfirm}>Delete</button>
-        </div>
       </div>
     </div>,
     document.body
@@ -2136,6 +2113,7 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
       )}
       {deleteConfirm && (
         <ConfirmModal
+          title="Delete?"
           message={`Delete "${ex.name}"?`}
           onConfirm={() => { setDeleteConfirm(false); onDelete(ex._id); }}
           onClose={() => setDeleteConfirm(false)}
@@ -2369,24 +2347,10 @@ function DayEditor({ day, split, onBack, onDayUpdated }) {
       </div>
 
       {reorderError && (
-        <div style={{
-          position: 'fixed', bottom: 'var(--above-nav)', left: '50%', transform: 'translateX(-50%)',
-          background: 'var(--red)', color: '#fff', padding: '10px 16px',
-          borderRadius: 8, fontSize: 13, fontWeight: 600, zIndex: 200,
-          maxWidth: 320, textAlign: 'center',
-        }}>
-          {reorderError}
-        </div>
+        <SharedToast tone="error">{reorderError}</SharedToast>
       )}
       {deleteToast && (
-        <div style={{
-          position: 'fixed', bottom: 'var(--above-nav)', left: '50%', transform: 'translateX(-50%)',
-          background: 'var(--bg3)', color: '#fff', padding: '10px 16px',
-          borderRadius: 8, fontSize: 13, fontWeight: 600, zIndex: 200,
-          maxWidth: 320, textAlign: 'center',
-        }}>
-          {deleteToast}
-        </div>
+        <SharedToast tone="info">{deleteToast}</SharedToast>
       )}
 
       {isRest ? (
@@ -2656,14 +2620,7 @@ function SplitEditorInner({ split, onBack, onSplitUpdated }) {
       )}
 
       {deleteToast && (
-        <div style={{
-          position: 'fixed', bottom: 'var(--above-nav)', left: '50%', transform: 'translateX(-50%)',
-          background: 'var(--bg3)', color: '#fff', padding: '10px 16px',
-          borderRadius: 8, fontSize: 13, fontWeight: 600, zIndex: 200,
-          maxWidth: 320, textAlign: 'center',
-        }}>
-          {deleteToast}
-        </div>
+        <SharedToast tone="info">{deleteToast}</SharedToast>
       )}
 
       {modal === 'addDay' && (
@@ -2671,6 +2628,7 @@ function SplitEditorInner({ split, onBack, onSplitUpdated }) {
       )}
       {modal?.type === 'deleteDay' && (
         <ConfirmModal
+          title="Delete?"
           message={`Delete "${modal.day.name}" and all its exercises?`}
           onConfirm={() => handleDeleteDay(modal.day)}
           onClose={() => setModal(null)}
@@ -2696,6 +2654,7 @@ function SplitEditorInner({ split, onBack, onSplitUpdated }) {
       )}
       {pendingCopy && (
         <ConfirmModal
+          title="Delete?"
           message={`"${pendingCopy.targetDay.name}" already has ${pendingCopy.targetDay.exercises.length} exercise${pendingCopy.targetDay.exercises.length === 1 ? '' : 's'}. Replace them with "${pendingCopy.sourceDay.name}"'s exercises?`}
           onConfirm={() => copyDayMutation.mutate({ sourceDayId: pendingCopy.sourceDay._id, targetDayId: pendingCopy.targetDay._id })}
           onClose={() => setPendingCopy(null)}

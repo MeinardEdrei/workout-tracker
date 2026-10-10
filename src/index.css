@@ -189,6 +189,9 @@ html, body, #root {
 .btn-danger { background: transparent; color: var(--red); border: 1px solid transparent; }
 .btn-danger:active { background: rgba(var(--red-rgb), 0.1); }
 
+.btn-danger-solid { background: rgba(var(--red-rgb), 0.14); color: var(--red); }
+.btn-danger-solid:active { background: rgba(var(--red-rgb), 0.24); }
+
 .btn-icon {
   padding: 8px;
   background: transparent;
