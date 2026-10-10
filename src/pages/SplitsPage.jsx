@@ -646,8 +646,8 @@ export default function SplitsPage() {
       )}
 
       {/* ── Page header ─────────────────────────────────────────────────────── */}
-      {/* Override the global 80px right padding — auth lives inside this header */}
-      <div className="page-header" style={{ padding: '24px 20px 16px' }}>
+      {/* Auth lives inside this header, so App sets a normal right gutter here */}
+      <div className="page-header">
         {/* Left: title + count */}
         <div style={{ minWidth: 0 }}>
           <h1 className="page-title">Splits</h1>

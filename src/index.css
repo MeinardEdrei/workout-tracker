@@ -142,7 +142,9 @@ html, body, #root {
 .nav-btn svg { width: 22px; height: 22px; }
 
 .page-header {
-  padding: calc(24px + env(safe-area-inset-top, 0px)) 80px 16px 20px;
+  /* Right padding clears the floating sign-in / avatar corner when App shows it
+     (it sets --auth-corner-space); otherwise it's a normal gutter. */
+  padding: calc(24px + env(safe-area-inset-top, 0px)) var(--auth-corner-space, 20px) 16px 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;

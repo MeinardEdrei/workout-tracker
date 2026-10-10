@@ -255,6 +255,20 @@ function AuthErrorToast() {
 function AuthCorner({ onOpenProfile }) {
   const { user, isLoggedIn, isAdmin, logout } = useAuth();
   const [showMenu, setShowMenu] = useState(false);
+  const cornerRef = useRef(null);
+  // Reserve exactly this corner's width (plus its 14px inset and an 8px gap)
+  // as the right padding of page headers, so header buttons never sit under
+  // it — the "Sign in" pill and the avatar are different widths.
+  useEffect(() => {
+    const el = cornerRef.current;
+    if (!el) return undefined;
+    const root = document.documentElement.style;
+    const update = () => root.setProperty('--auth-corner-space', `${Math.ceil(el.getBoundingClientRect().width) + 14 + 8}px`);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => { ro.disconnect(); root.setProperty('--auth-corner-space', '20px'); };
+  }, []);
   const [signingIn, setSigningIn] = useState(false);
   const [signInFailed, setSignInFailed] = useState(false);
   const signInTimer = useRef(null);
@@ -293,7 +307,7 @@ function AuthCorner({ onOpenProfile }) {
       )}
 
       {/* Sign in button or avatar */}
-      <div style={{ position: 'absolute', top: 12, right: 14, zIndex: 50 }}>
+      <div ref={cornerRef} style={{ position: 'absolute', top: 12, right: 14, zIndex: 50 }}>
         {isLoggedIn ? (
           <>
             <button
