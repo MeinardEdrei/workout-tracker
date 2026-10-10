@@ -141,7 +141,7 @@ function Toast({ message, type = 'error' }) {
   if (!message) return null;
   return (
     <div style={{
-      position: 'fixed', bottom: 90, left: '50%', transform: 'translateX(-50%)',
+      position: 'fixed', bottom: 'var(--above-nav)', left: '50%', transform: 'translateX(-50%)',
       background: type === 'error' ? 'var(--red)' : 'var(--bg3)',
       color: '#fff', padding: '10px 16px', borderRadius: 8,
       fontSize: 13, fontWeight: 600, zIndex: 400, maxWidth: 300,
@@ -2370,7 +2370,7 @@ function DayEditor({ day, split, onBack, onDayUpdated }) {
 
       {reorderError && (
         <div style={{
-          position: 'fixed', bottom: 80, left: '50%', transform: 'translateX(-50%)',
+          position: 'fixed', bottom: 'var(--above-nav)', left: '50%', transform: 'translateX(-50%)',
           background: 'var(--red)', color: '#fff', padding: '10px 16px',
           borderRadius: 8, fontSize: 13, fontWeight: 600, zIndex: 200,
           maxWidth: 320, textAlign: 'center',
@@ -2380,7 +2380,7 @@ function DayEditor({ day, split, onBack, onDayUpdated }) {
       )}
       {deleteToast && (
         <div style={{
-          position: 'fixed', bottom: 80, left: '50%', transform: 'translateX(-50%)',
+          position: 'fixed', bottom: 'var(--above-nav)', left: '50%', transform: 'translateX(-50%)',
           background: 'var(--bg3)', color: '#fff', padding: '10px 16px',
           borderRadius: 8, fontSize: 13, fontWeight: 600, zIndex: 200,
           maxWidth: 320, textAlign: 'center',
@@ -2657,7 +2657,7 @@ function SplitEditorInner({ split, onBack, onSplitUpdated }) {
 
       {deleteToast && (
         <div style={{
-          position: 'fixed', bottom: 80, left: '50%', transform: 'translateX(-50%)',
+          position: 'fixed', bottom: 'var(--above-nav)', left: '50%', transform: 'translateX(-50%)',
           background: 'var(--bg3)', color: '#fff', padding: '10px 16px',
           borderRadius: 8, fontSize: 13, fontWeight: 600, zIndex: 200,
           maxWidth: 320, textAlign: 'center',

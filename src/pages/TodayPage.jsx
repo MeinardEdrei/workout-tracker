@@ -3976,7 +3976,7 @@ export default function TodayPage() {
       )}
       {toast && (
         <div style={{
-          position: 'fixed', bottom: 76, left: '50%', transform: 'translateX(-50%)',
+          position: 'fixed', bottom: 'var(--above-nav)', left: '50%', transform: 'translateX(-50%)',
           zIndex: 1000, background: 'var(--bg2)', border: '1.5px solid var(--accent)',
           borderRadius: 30, padding: '10px 20px', color: 'var(--text)',
           fontSize: 13, fontWeight: 700, boxShadow: '0 8px 32px rgba(0,0,0,0.6)',

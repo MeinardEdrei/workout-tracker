@@ -709,7 +709,7 @@ export default function SplitsPage() {
       {/* Generic toast */}
       {toast && (
         <div style={{
-          position: 'fixed', bottom: 76, left: '50%', transform: 'translateX(-50%)',
+          position: 'fixed', bottom: 'var(--above-nav)', left: '50%', transform: 'translateX(-50%)',
           background: 'var(--bg2)', border: `1px solid ${toast.type === 'error' ? 'var(--red)' : 'var(--accent)'}`,
           color: 'var(--text)', padding: '8px 14px', borderRadius: 20,
           fontSize: 12, fontWeight: 600, zIndex: 400, whiteSpace: 'nowrap',
@@ -724,7 +724,7 @@ export default function SplitsPage() {
       {/* Sign-in status toast */}
       {signingIn && (
         <div style={{
-          position: 'fixed', bottom: 76, left: '50%', transform: 'translateX(-50%)',
+          position: 'fixed', bottom: 'var(--above-nav)', left: '50%', transform: 'translateX(-50%)',
           background: 'var(--bg2)', border: '1px solid var(--border)',
           color: 'var(--text3)', padding: '8px 14px', borderRadius: 20,
           fontSize: 12, fontWeight: 500, zIndex: 200, whiteSpace: 'nowrap',
@@ -738,7 +738,7 @@ export default function SplitsPage() {
       {/* Sign-in timeout error toast */}
       {signInFailed && (
         <div style={{
-          position: 'fixed', bottom: 76, left: '50%', transform: 'translateX(-50%)',
+          position: 'fixed', bottom: 'var(--above-nav)', left: '50%', transform: 'translateX(-50%)',
           background: 'var(--bg2)', border: '1px solid var(--red)',
           color: 'var(--text)', padding: '10px 16px', borderRadius: 10,
           fontSize: 13, fontWeight: 600, zIndex: 300, maxWidth: 300,

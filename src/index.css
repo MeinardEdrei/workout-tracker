@@ -40,6 +40,10 @@
   --blue-rgb: 91, 141, 224;
   --yellow-rgb: 232, 181, 58;
   --nav-height: 64px;
+  /* Clears the bottom nav and the iPhone home indicator; use for any
+     fixed toast or banner that floats above the nav. */
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --above-nav: calc(var(--nav-height) + var(--safe-bottom) + 12px);
   --font-display: 'Barlow Condensed', sans-serif;
   --font-mono: 'DM Mono', monospace;
 }
@@ -71,7 +75,7 @@ html, body, #root {
 .page {
   flex: 1;
   overflow-y: auto;
-  padding-bottom: calc(var(--nav-height) + 16px);
+  padding-bottom: calc(var(--nav-height) + var(--safe-bottom) + 16px);
   min-height: 0;
   height: 100%;
 }
@@ -83,7 +87,8 @@ html, body, #root {
   transform: translateX(-50%);
   width: 100%;
   max-width: 480px;
-  height: var(--nav-height);
+  height: calc(var(--nav-height) + var(--safe-bottom));
+  padding-bottom: var(--safe-bottom);
   background: var(--bg2);
   border-top: 1px solid var(--border);
   display: flex;
@@ -113,7 +118,7 @@ html, body, #root {
 .nav-btn svg { width: 22px; height: 22px; }
 
 .page-header {
-  padding: 24px 80px 16px 20px;
+  padding: calc(24px + env(safe-area-inset-top, 0px)) 80px 16px 20px;
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;

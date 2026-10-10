@@ -129,7 +129,7 @@ function ActiveRestBanner({ onJumpToToday }) {
       onClick={handleBannerClick}
       style={{
         position: 'fixed',
-        bottom: 'calc(var(--nav-height) + 10px)',
+        bottom: 'var(--above-nav)',
         left: '50%',
         transform: 'translateX(-50%)',
         width: 'calc(100% - 24px)',
@@ -305,7 +305,7 @@ function AuthErrorToast() {
   if (!authError) return null;
   return (
     <div style={{
-      position: 'fixed', bottom: 76, left: '50%', transform: 'translateX(-50%)',
+      position: 'fixed', bottom: 'var(--above-nav)', left: '50%', transform: 'translateX(-50%)',
       background: 'var(--bg2)', border: '1px solid var(--red)',
       color: 'var(--text)', padding: '12px 16px', borderRadius: 10,
       fontSize: 13, fontWeight: 600, zIndex: 300, maxWidth: 320, textAlign: 'center',
@@ -359,7 +359,7 @@ function AuthCorner({ onOpenProfile }) {
       {/* Sign-in status toast */}
       {signingIn && (
         <div style={{
-          position: 'fixed', bottom: 76, left: '50%', transform: 'translateX(-50%)',
+          position: 'fixed', bottom: 'var(--above-nav)', left: '50%', transform: 'translateX(-50%)',
           background: 'var(--bg2)', border: '1px solid var(--border)',
           color: 'var(--text3)', padding: '8px 14px', borderRadius: 20,
           fontSize: 12, fontWeight: 500, zIndex: 200, whiteSpace: 'nowrap',
@@ -373,7 +373,7 @@ function AuthCorner({ onOpenProfile }) {
       {/* Sign-in timeout error toast */}
       {signInFailed && (
         <div style={{
-          position: 'fixed', bottom: 76, left: '50%', transform: 'translateX(-50%)',
+          position: 'fixed', bottom: 'var(--above-nav)', left: '50%', transform: 'translateX(-50%)',
           background: 'var(--bg2)', border: '1px solid var(--red)',
           color: 'var(--text)', padding: '10px 16px', borderRadius: 10,
           fontSize: 13, fontWeight: 600, zIndex: 300, maxWidth: 300,
@@ -523,7 +523,7 @@ function ReloadPrompt() {
   return (
     <div style={{
       position: 'fixed',
-      bottom: 'calc(var(--nav-height) + 12px)',
+      bottom: 'var(--above-nav)',
       left: '50%',
       transform: 'translateX(-50%)',
       width: 'calc(100% - 32px)',
@@ -708,7 +708,7 @@ export default function App() {
       {/* Sync Status Toast */}
       {syncState?.status === 'syncing' && (
         <div style={{
-          position: 'fixed', bottom: 76, left: '50%', transform: 'translateX(-50%)',
+          position: 'fixed', bottom: 'var(--above-nav)', left: '50%', transform: 'translateX(-50%)',
           background: 'var(--bg2)', border: '1px solid var(--accent)',
           color: 'var(--text)', padding: '12px 20px', borderRadius: 12,
           fontSize: 13, fontWeight: 600, zIndex: 300, minWidth: 260, textAlign: 'center',
@@ -723,7 +723,7 @@ export default function App() {
 
       {syncState?.status === 'success' && (
         <div style={{
-          position: 'fixed', bottom: 76, left: '50%', transform: 'translateX(-50%)',
+          position: 'fixed', bottom: 'var(--above-nav)', left: '50%', transform: 'translateX(-50%)',
           background: 'rgba(10, 40, 20, 0.95)', border: '1px solid var(--green)',
           color: 'var(--green)', padding: '12px 20px', borderRadius: 12,
           fontSize: 13, fontWeight: 700, zIndex: 300, minWidth: 260, textAlign: 'center',
@@ -740,7 +740,7 @@ export default function App() {
 
       {syncState?.status === 'error' && (
         <div style={{
-          position: 'fixed', bottom: 76, left: '50%', transform: 'translateX(-50%)',
+          position: 'fixed', bottom: 'var(--above-nav)', left: '50%', transform: 'translateX(-50%)',
           background: 'rgba(40, 10, 10, 0.95)', border: '1px solid var(--red)',
           color: 'var(--red)', padding: '12px 20px', borderRadius: 12,
           fontSize: 13, fontWeight: 700, zIndex: 300, minWidth: 260, textAlign: 'center',

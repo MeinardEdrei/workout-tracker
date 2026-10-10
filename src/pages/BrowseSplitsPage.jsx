@@ -45,7 +45,7 @@ function InlineSpinner() {
 function Toast({ message, type = 'success', onClose }) {
   return (
     <div style={{
-      position: 'fixed', bottom: 76, left: '50%', transform: 'translateX(-50%)',
+      position: 'fixed', bottom: 'var(--above-nav)', left: '50%', transform: 'translateX(-50%)',
       background: 'var(--bg2)', border: `1px solid ${type === 'error' ? 'var(--red)' : 'var(--accent)'}`,
       color: 'var(--text)', padding: '8px 14px', borderRadius: 20,
       fontSize: 12, fontWeight: 600, zIndex: 400, whiteSpace: 'nowrap',
