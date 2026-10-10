@@ -17,7 +17,8 @@ router.post('/', async (req, res) => {
     const totalVolume = Math.round((exercises || []).reduce((sum, ex) => {
       // Prefer real per-set weight/reps when logged, fall back to the flat sets*reps*weight estimate
       if (ex.setLogs?.length) {
-        return sum + ex.setLogs.reduce((s, l) => s + (l.reps || 0) * toKg(l.weight || ex.weight || 0, ex.weightUnit), 0);
+        // Warm-up sets don't count toward volume.
+        return sum + ex.setLogs.filter((l) => !l.isWarmup).reduce((s, l) => s + (l.reps || 0) * toKg(l.weight || ex.weight || 0, ex.weightUnit), 0);
       }
       return sum + (ex.sets || 0) * (ex.reps || 0) * toKg(ex.weight || 0, ex.weightUnit);
     }, 0));

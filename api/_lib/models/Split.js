@@ -26,7 +26,7 @@ const ExerciseSchema = new mongoose.Schema({
   // Transient "today's actual performance" buffer — reset once lastCheckedDate-
   // style daily rollover happens, same idiom as checked/skipped. Written into
   // WorkoutLog.exercises[].setLogs (the permanent record) on Finish Workout.
-  todaySetLogs: { type: [{ reps: Number, rir: Number, weight: Number, isDropSet: { type: Boolean, default: false } }], default: [] },
+  todaySetLogs: { type: [{ reps: Number, rir: Number, weight: Number, isDropSet: { type: Boolean, default: false }, isWarmup: { type: Boolean, default: false } }], default: [] },
   todaySetLogsDate: { type: String, default: '' },
   // Temporary "just for today" substitute (e.g. machine in use, swap to
   // dumbbells) — same reset-by-date idiom as todaySetLogs, never touches

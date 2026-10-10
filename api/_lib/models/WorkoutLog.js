@@ -12,7 +12,8 @@ const LogExerciseSchema = new mongoose.Schema({
   durationUnit: { type: String, enum: ['sec', 'min'], default: 'sec' },
   isLastWeekWorkout: { type: Boolean, default: false },
   muscleTargets: { type: [String], default: [] },
-  setLogs: { type: [{ reps: Number, rir: Number, weight: Number, isDropSet: { type: Boolean, default: false } }], default: [] },
+  // isWarmup sets are kept for the record but excluded from volume / PRs.
+  setLogs: { type: [{ reps: Number, rir: Number, weight: Number, isDropSet: { type: Boolean, default: false }, isWarmup: { type: Boolean, default: false } }], default: [] },
   skipped: { type: Boolean, default: false },
   // Set when this entry was logged under a temporary "just for today" swap —
   // holds the originally-planned exercise name so history/PRs for it aren't
