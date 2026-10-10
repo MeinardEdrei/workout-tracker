@@ -1806,7 +1806,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
                 </span>
               )}
               {prInfo && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 800, letterSpacing: '0.04em', color: '#ffd700', background: 'rgba(255,215,0,0.1)', border: '1px solid rgba(255,215,0,0.3)', padding: '2px 7px', borderRadius: 10, textTransform: 'uppercase' }} title={`Previous PR: ${prInfo.prevWeight}${prInfo.prevUnit}`}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 800, letterSpacing: '0.04em', color: 'var(--red)', background: 'rgba(var(--red-rgb), 0.1)', border: '1px solid rgba(var(--red-rgb), 0.3)', padding: '2px 7px', borderRadius: 10, textTransform: 'uppercase' }} title={`Previous PR: ${prInfo.prevWeight}${prInfo.prevUnit}`}>
                   <Trophy size={11} /> PR {prInfo.diff ? `(${prInfo.diff})` : ''}
                 </span>
               )}
@@ -1963,9 +1963,9 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
             <span
               style={{
                 fontSize: 10, fontWeight: 800, letterSpacing: '0.04em',
-                color: '#ffd700',
-                background: 'rgba(255,215,0,0.1)',
-                border: '1px solid rgba(255,215,0,0.3)',
+                color: 'var(--red)',
+                background: 'rgba(var(--red-rgb), 0.1)',
+                border: '1px solid rgba(var(--red-rgb), 0.3)',
                 padding: '2px 7px', borderRadius: 10,
                 display: 'inline-flex', alignItems: 'center', gap: 3,
                 textTransform: 'uppercase',
