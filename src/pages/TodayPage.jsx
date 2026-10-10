@@ -19,6 +19,15 @@ import { createPortal } from 'react-dom';
 import { X, Check, RotateCcw, Trophy, BarChart3, StickyNote, Dumbbell, Moon, PartyPopper, Flame, ChevronDown, CalendarDays, SkipForward, MoreHorizontal, Ban, Clock, AlertCircle } from 'lucide-react';
 import { WheelPicker, WheelPickerWrapper } from '@ncdai/react-wheel-picker';
 
+// Keyboard activation for tap-to-edit text that isn't a <button> (so it can
+// keep flowing inline): Enter / Space behave like a tap.
+function activateOnKey(e) {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    e.currentTarget.click();
+  }
+}
+
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const MON_FIRST_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const TODAY_DOW = new Date().getDay();
@@ -1240,6 +1249,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
     </div>
   ) : (
     <div
+      role="button" tabIndex={readOnly ? -1 : 0} onKeyDown={activateOnKey}
       onClick={() => !readOnly && setEditingWeight(true)}
       title={readOnly ? '' : 'Tap to update weight'}
       style={{
@@ -1284,7 +1294,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
       {ex.duration > 0 ? (
         <>
           <input
-            type="number" min="1" max="999" value={durationVal} onChange={(e) => setDurationVal(e.target.value)}
+            type="number" inputMode="numeric" min="1" max="999" value={durationVal} onChange={(e) => setDurationVal(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') setsRepsMutation.mutate({ sets: setsVal, duration: durationVal, durationUnit: durationUnitVal });
               if (e.key === 'Escape') { setEditingSetsReps(false); setSetsVal(String(ex.sets ?? 3)); setDurationVal(String(ex.duration ?? 0)); setDurationUnitVal(ex.durationUnit || 'sec'); }
@@ -1298,7 +1308,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
         </>
       ) : (
         <input
-          type="number" min="0" max="999" value={repsVal} onChange={(e) => setRepsVal(e.target.value)}
+          type="number" inputMode="numeric" min="0" max="999" value={repsVal} onChange={(e) => setRepsVal(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') setsRepsMutation.mutate({ sets: setsVal, reps: repsVal });
             if (e.key === 'Escape') { setEditingSetsReps(false); setSetsVal(String(ex.sets ?? 3)); setRepsVal(String(ex.reps ?? 0)); }
@@ -1712,6 +1722,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
     </div>
   ) : ex.notes ? (
     <div
+      role="button" tabIndex={readOnly ? -1 : 0} onKeyDown={activateOnKey}
       onClick={() => !readOnly && setEditingNotes(true)}
       style={{ fontSize: 11, color: 'var(--text2)', fontStyle: 'italic', cursor: readOnly ? 'default' : 'pointer', background: 'rgba(255,255,255,0.02)', padding: '3px 6px', borderRadius: 4, border: '1px solid var(--border)' }}
       title={readOnly ? '' : 'Tap to edit note'}
@@ -1838,6 +1849,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
 
         {effectiveSkipped ? (
           <div
+            role="button" tabIndex={readOnly ? -1 : 0} onKeyDown={activateOnKey}
             onClick={() => !readOnly && skipMutation.mutate()}
             title={readOnly ? '' : 'Tap to undo skip'}
             style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--text3)', fontFamily: 'var(--font-mono)', cursor: readOnly ? 'default' : 'pointer' }}
@@ -1847,6 +1859,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
         ) : ex.duration > 0 ? (
           editingSetsReps ? setsRepsEditorEl : (
             <div
+              role="button" tabIndex={readOnly ? -1 : 0} onKeyDown={activateOnKey}
               onClick={() => !readOnly && setEditingSetsReps(true)}
               title={readOnly ? '' : 'Tap to edit sets & duration'}
               style={{ fontSize: 15, color: 'var(--text2)', fontFamily: 'var(--font-mono)', cursor: readOnly ? 'default' : 'pointer' }}
@@ -1925,24 +1938,29 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
       {/* Circular checkbox — doubles as "tap to undo" when skipped, so there's
           one consistent tap target instead of a dead checkbox next to a
           separate "Skipped" text affordance. */}
-      <div
+      <button
+        type="button"
+        disabled={readOnly}
+        aria-pressed={effectiveSkipped ? undefined : effectiveChecked}
+        aria-label={effectiveSkipped ? `Undo skip for ${ex.name}` : effectiveChecked ? `Mark ${ex.name} not done` : `Mark ${ex.name} done`}
         onClick={() => {
           if (readOnly) return;
+          tick();
           if (effectiveSkipped) { if (!skipMutation.isPending) skipMutation.mutate(); return; }
           if (!toggleMutation.isPending) toggleMutation.mutate();
         }}
         title={effectiveSkipped ? 'Tap to undo skip' : isAutoChecked ? 'Auto-completed — target sets logged. Tap to undo.' : undefined}
         style={{
-          width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
-          border: `2px solid ${isAutoChecked ? 'var(--good, #35d07f)' : effectiveChecked ? 'var(--accent)' : 'var(--border2)'}`,
-          background: isAutoChecked ? 'var(--good, #35d07f)' : effectiveChecked ? 'var(--accent)' : 'transparent',
+          width: 44, height: 44, borderRadius: '50%', flexShrink: 0, padding: 0,
+          border: `2px solid ${effectiveChecked ? 'var(--green)' : 'var(--border2)'}`,
+          background: effectiveChecked ? 'var(--green)' : 'transparent',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           cursor: readOnly ? 'default' : 'pointer',
           transition: 'all 0.15s',
         }}
       >
         {effectiveChecked ? <CheckIcon /> : effectiveSkipped ? <Ban size={16} color="var(--text3)" /> : null}
-      </div>
+      </button>
 
       {/* Thumbnail */}
       <ExerciseThumbnail imageUrl={ex.imageUrl} name={ex.name} size={48} />
@@ -1999,6 +2017,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
         <div style={{ display: 'flex', alignItems: 'center', marginTop: 2, flexWrap: 'wrap', gap: 4 }}>
           {effectiveSkipped ? (
             <div
+              role="button" tabIndex={readOnly ? -1 : 0} onKeyDown={activateOnKey}
               onClick={() => !readOnly && skipMutation.mutate()}
               title={readOnly ? '' : 'Tap to undo skip'}
               style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)', cursor: readOnly ? 'default' : 'pointer' }}
@@ -2008,6 +2027,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
           ) : ex.duration > 0 ? (
             editingSetsReps ? setsRepsEditorEl : (
               <div
+                role="button" tabIndex={readOnly ? -1 : 0} onKeyDown={activateOnKey}
                 onClick={() => !readOnly && setEditingSetsReps(true)}
                 title={readOnly ? '' : 'Tap to edit sets & duration'}
                 style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)', cursor: readOnly ? 'default' : 'pointer', display: 'inline-block' }}
@@ -2037,6 +2057,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
           </div>
         ) : ex.notes ? (
           <div
+            role="button" tabIndex={readOnly ? -1 : 0} onKeyDown={activateOnKey}
             onClick={() => !readOnly && setEditingNotes(true)}
             style={{ fontSize: 11, color: 'var(--text2)', fontStyle: 'italic', marginTop: 4, cursor: readOnly ? 'default' : 'pointer', background: 'rgba(255,255,255,0.02)', padding: '3px 6px', borderRadius: 4, border: '1px solid var(--border)' }}
             title={readOnly ? '' : 'Tap to edit note'}
@@ -2455,18 +2476,18 @@ function AddExerciseFromOtherDaysModal({ splitDays, logs, onConfirm, onClose }) 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
               <div>
                 <label className="label">Sets</label>
-                <input className="input" type="number" min="1" max="20" value={form.sets} onChange={(e) => setForm(f => ({ ...f, sets: +e.target.value }))} style={{ width: '100%' }} />
+                <input className="input" type="number" inputMode="numeric" min="1" max="20" value={form.sets} onChange={(e) => setForm(f => ({ ...f, sets: +e.target.value }))} style={{ width: '100%' }} />
               </div>
               <div>
                 <label className="label">Reps</label>
-                <input className="input" type="number" min="0" max="100" value={form.reps} onChange={(e) => setForm(f => ({ ...f, reps: +e.target.value }))} style={{ width: '100%' }} />
+                <input className="input" type="number" inputMode="numeric" min="0" max="100" value={form.reps} onChange={(e) => setForm(f => ({ ...f, reps: +e.target.value }))} style={{ width: '100%' }} />
               </div>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 10, marginBottom: 16 }}>
               <div>
                 <label className="label">Weight</label>
-                <input className="input" type="number" step="any" min="0" value={form.weight} onChange={(e) => setForm(f => ({ ...f, weight: +e.target.value }))} style={{ width: '100%' }} />
+                <input className="input" type="number" inputMode="decimal" step="any" min="0" value={form.weight} onChange={(e) => setForm(f => ({ ...f, weight: +e.target.value }))} style={{ width: '100%' }} />
               </div>
               <div>
                 <label className="label">Unit</label>
@@ -2745,19 +2766,19 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
             <div>
               <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>sets</div>
-              <input className="input" type="number" min="0" step="1" value={form.sets} onChange={(e) => setForm(f => ({ ...f, sets: e.target.value }))} />
+              <input className="input" type="number" inputMode="numeric" min="0" step="1" value={form.sets} onChange={(e) => setForm(f => ({ ...f, sets: e.target.value }))} />
             </div>
             <div>
               <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>reps</div>
               {form.untilFailure ? (
                 <div style={{ height: 44, display: 'flex', alignItems: 'center', padding: '0 10px', borderRadius: 8, border: '1px solid var(--border2)', fontSize: 11, fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.05em' }}>TO FAILURE</div>
               ) : (
-                <input className="input" type="number" min="0" step="1" value={form.reps} onChange={(e) => setForm(f => ({ ...f, reps: e.target.value }))} />
+                <input className="input" type="number" inputMode="numeric" min="0" step="1" value={form.reps} onChange={(e) => setForm(f => ({ ...f, reps: e.target.value }))} />
               )}
             </div>
             <div>
               <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>weight</div>
-              <input className="input" type="number" min="0" step="0.5" value={form.weight} onChange={(e) => setForm(f => ({ ...f, weight: e.target.value }))} />
+              <input className="input" type="number" inputMode="decimal" min="0" step="0.5" value={form.weight} onChange={(e) => setForm(f => ({ ...f, weight: e.target.value }))} />
             </div>
           </div>
 
