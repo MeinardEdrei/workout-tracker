@@ -952,15 +952,17 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
   // instead of silently going stale once the real calendar date moves on.
   // Goes through the generic updateExercise endpoint (not the dedicated
   // toggle/skip routes, which hardcode the server's own "today").
+  // The target state is decided once, at tap time, and passed through as the
+  // mutation variable. Re-deriving it from render state inside mutationFn is
+  // wrong: onMutate's optimistic update re-renders first, React Query hands
+  // the in-flight mutation the new closure, and the save would flip it back.
   const toggleMutation = useMutation({
-    mutationFn: () => {
-      const nextChecked = !effectiveChecked;
+    mutationFn: (nextChecked) => {
       const patch = { checked: nextChecked, lastCheckedDate: dateStr, skipped: nextChecked ? false : rawEx.skipped };
       if (localOnly) return Promise.resolve({ ...rawEx, ...patch });
       return storage.updateExercise(splitId, dayId, rawEx._id, patch);
     },
-    onMutate: () => {
-      const nextChecked = !effectiveChecked;
+    onMutate: (nextChecked) => {
       if (nextChecked) ensureSessionStart(dayId, dateStr);
       onToggle({ ...rawEx, checked: nextChecked, lastCheckedDate: dateStr, skipped: nextChecked ? false : rawEx.skipped });
     },
@@ -977,14 +979,12 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
   });
 
   const skipMutation = useMutation({
-    mutationFn: () => {
-      const nextSkipped = !effectiveSkipped;
+    mutationFn: (nextSkipped) => {
       const patch = { skipped: nextSkipped, lastSkippedDate: dateStr, checked: nextSkipped ? false : rawEx.checked };
       if (localOnly) return Promise.resolve({ ...rawEx, ...patch });
       return storage.updateExercise(splitId, dayId, rawEx._id, patch);
     },
-    onMutate: () => {
-      const nextSkipped = !effectiveSkipped;
+    onMutate: (nextSkipped) => {
       onToggle({ ...rawEx, skipped: nextSkipped, lastSkippedDate: dateStr, checked: nextSkipped ? false : rawEx.checked });
     },
     onSuccess: (updated) => {
@@ -1698,7 +1698,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
           </button>
         )}
         <button
-          onClick={() => { setShowActionsMenu(false); skipMutation.mutate(); }}
+          onClick={() => { setShowActionsMenu(false); skipMutation.mutate(!effectiveSkipped); }}
           style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer', color: effectiveSkipped ? 'var(--accent)' : 'var(--text)', fontSize: 13, fontWeight: 600, textAlign: 'left' }}
         >
           <Ban size={14} /> {effectiveSkipped ? 'Undo Skip' : 'Skip Exercise'}
@@ -1850,7 +1850,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
         {effectiveSkipped ? (
           <div
             role="button" tabIndex={readOnly ? -1 : 0} onKeyDown={activateOnKey}
-            onClick={() => !readOnly && skipMutation.mutate()}
+            onClick={() => !readOnly && skipMutation.mutate(!effectiveSkipped)}
             title={readOnly ? '' : 'Tap to undo skip'}
             style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--text3)', fontFamily: 'var(--font-mono)', cursor: readOnly ? 'default' : 'pointer' }}
           >
@@ -1891,7 +1891,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
           )
         ) : effectiveSkipped ? (
           <button
-            onClick={() => !skipMutation.isPending && skipMutation.mutate()}
+            onClick={() => !skipMutation.isPending && skipMutation.mutate(!effectiveSkipped)}
             disabled={skipMutation.isPending}
             style={{
               marginTop: 4, width: '100%', padding: 'clamp(10px, 2vh, 16px)', borderRadius: 14,
@@ -1904,7 +1904,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
           </button>
         ) : (
           <button
-            onClick={() => !toggleMutation.isPending && toggleMutation.mutate()}
+            onClick={() => !toggleMutation.isPending && toggleMutation.mutate(!effectiveChecked)}
             disabled={toggleMutation.isPending}
             style={{
               marginTop: 4, width: '100%', padding: 'clamp(10px, 2vh, 16px)', borderRadius: 14, border: 'none',
@@ -1946,8 +1946,8 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
         onClick={() => {
           if (readOnly) return;
           tick();
-          if (effectiveSkipped) { if (!skipMutation.isPending) skipMutation.mutate(); return; }
-          if (!toggleMutation.isPending) toggleMutation.mutate();
+          if (effectiveSkipped) { if (!skipMutation.isPending) skipMutation.mutate(!effectiveSkipped); return; }
+          if (!toggleMutation.isPending) toggleMutation.mutate(!effectiveChecked);
         }}
         title={effectiveSkipped ? 'Tap to undo skip' : isAutoChecked ? 'Auto-completed — target sets logged. Tap to undo.' : undefined}
         style={{
@@ -2018,7 +2018,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
           {effectiveSkipped ? (
             <div
               role="button" tabIndex={readOnly ? -1 : 0} onKeyDown={activateOnKey}
-              onClick={() => !readOnly && skipMutation.mutate()}
+              onClick={() => !readOnly && skipMutation.mutate(!effectiveSkipped)}
               title={readOnly ? '' : 'Tap to undo skip'}
               style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)', cursor: readOnly ? 'default' : 'pointer' }}
             >
