@@ -425,6 +425,63 @@ function WeeklyVolumeChart({ logs }) {
   );
 }
 
+// Hard sets per muscle for the current Mon–Sun week, against the common
+// 10–20 sets/week hypertrophy range. Every logged set counts once for each
+// muscle the exercise targets; muscles the active split trains but that got
+// no sets yet show as 0 so gaps are visible.
+const SET_RANGE = [10, 20];
+function MuscleVolumeCard({ logs, split }) {
+  const [week] = getLastNWeeks(1);
+  const counts = {};
+  for (const muscle of (split?.days || []).flatMap((d) => (d.exercises || []).flatMap((e) => e.muscleTargets || []))) counts[muscle] = 0;
+  for (const log of logs) {
+    if (log.skipped || log.date < week.startStr || log.date > week.endStr) continue;
+    for (const ex of log.exercises || []) {
+      if (ex.skipped) continue;
+      const sets = ex.setLogs?.length || ex.sets || 0;
+      for (const muscle of ex.muscleTargets || []) counts[muscle] = (counts[muscle] || 0) + sets;
+    }
+  }
+  const rows = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  if (rows.length === 0) return null;
+  const scaleMax = Math.max(SET_RANGE[1] + 4, ...rows.map(([, n]) => n));
+  const pct = (n) => `${(n / scaleMax) * 100}%`;
+  const under = rows.filter(([, n]) => n < SET_RANGE[0]).map(([m]) => m);
+
+  return (
+    <section style={chartCardStyle}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+        <h3 style={{ ...chartTitleStyle, margin: 0 }}>Hard sets / muscle</h3>
+        <span style={{ fontSize: 'var(--fs-sm)', fontWeight: 700, color: 'var(--text2)', letterSpacing: '0.12em' }}>THIS WEEK</span>
+      </div>
+      <div style={{ display: 'flex', gap: 16, fontSize: 'var(--fs-md)', color: 'var(--text2)', marginBottom: 12 }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 12, height: 12, borderRadius: 6, background: 'var(--green)' }} />In range {SET_RANGE[0]}–{SET_RANGE[1]}</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 12, height: 12, borderRadius: 6, background: 'var(--iron)' }} />Under</span>
+      </div>
+      <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {rows.map(([muscle, n]) => {
+          const inRange = n >= SET_RANGE[0] && n <= SET_RANGE[1];
+          return (
+            <li key={muscle} aria-label={`${muscle}: ${n} sets${inRange ? ', in range' : n < SET_RANGE[0] ? ', under range' : ', above range'}`} style={{ display: 'grid', gridTemplateColumns: '96px 1fr', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 14, fontWeight: 600, textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{muscle}</span>
+              <span style={{ position: 'relative', height: 16, display: 'block' }}>
+                <span aria-hidden="true" style={{ position: 'absolute', top: -4, bottom: -4, left: pct(SET_RANGE[0]), width: `calc(${pct(SET_RANGE[1])} - ${pct(SET_RANGE[0])})`, background: 'rgba(var(--green-rgb), 0.08)' }} />
+                <span aria-hidden="true" style={{ position: 'absolute', top: 2, height: 12, left: 0, width: n > 0 ? pct(n) : 4, borderRadius: 6, background: inRange ? 'var(--green)' : n > SET_RANGE[1] ? 'var(--text2)' : 'var(--iron)' }} />
+                <span style={{ position: 'absolute', top: -1, left: `calc(${n > 0 ? pct(n) : '4px'} + 8px)`, fontFamily: 'var(--font-mono)', fontSize: 12, color: inRange ? 'var(--text)' : 'var(--text2)' }}>{n}</span>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      {under.length > 0 && (
+        <p style={{ margin: '12px 0 0', fontSize: 'var(--fs-md)', color: 'var(--text2)' }}>
+          Under range: {under.slice(0, 4).join(', ')}{under.length > 4 ? ` +${under.length - 4} more` : ''}.
+        </p>
+      )}
+    </section>
+  );
+}
+
 function buildProgressionMap(logs) {
   const map = {};
   // logs are sorted newest-first; iterate so earliest entries win on dedupe
@@ -1586,6 +1643,9 @@ export default function StatsPage() {
             ref={(el) => { panelRefs.current[1] = el; }}
             style={{ flex: '0 0 100%', scrollSnapAlign: 'start', scrollSnapStop: 'always', minWidth: 0 }}
           >
+              <SectionLabel>Weekly sets by muscle</SectionLabel>
+              <MuscleVolumeCard logs={workoutLogs} split={activeSplit} />
+
               {/* ── Activity Tracker ── */}
               {logs.length > 0 && (
                 <>
@@ -1618,7 +1678,7 @@ export default function StatsPage() {
                   <div style={{ borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg2)', marginBottom: 10, overflow: 'hidden' }}>
                     {(showAllPRs ? personalRecords : personalRecords.slice(0, 5)).map((pr, i, arr) => (
                       <div key={pr.name} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                        <Trophy size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                        <Trophy size={14} style={{ color: 'var(--red)', flexShrink: 0 }} />
                         <div style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-display)', textTransform: 'uppercase', letterSpacing: '0.01em', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {pr.name}
                         </div>
