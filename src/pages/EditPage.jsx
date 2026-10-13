@@ -28,6 +28,7 @@ import SharedToast from '../components/Toast';
 import { useBackClose } from '../hooks/useBackClose';
 import { SkeletonCards } from '../components/Skeleton';
 import { workingSets } from '../utils/sets';
+import { dropChainOf, supersetTag } from '../utils/setStyle';
 
 /* ─── Constants ─── */
 const STANDARD_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday', 'Rest'];
@@ -1246,8 +1247,26 @@ function EditExerciseModal({ ex, splitId, dayId, splitDays, onConfirm, onClose, 
     warmupRamp: ex.warmupRamp || [],
     duration: ex.duration ?? 0,
     durationUnit: ex.durationUnit || 'sec',
+    setStyle: ex.setStyle || 'straight',
+    dropChain: ex.dropChain || [],
+    dropNoRest: ex.dropNoRest !== false,
   });
   const [isDuration, setIsDuration] = useState(ex.duration > 0);
+  // Superset partner: another exercise on this day sharing ex.supersetGroup.
+  const dayExercises = (splitDays.find((d) => d._id === dayId)?.exercises || []).filter((e) => e._id !== ex._id);
+  const currentPartner = ex.supersetGroup ? dayExercises.find((e) => e.supersetGroup === ex.supersetGroup) : null;
+  const [styleChoice, setStyleChoice] = useState(ex.supersetGroup ? 'superset' : (ex.setStyle || 'straight'));
+  const [partnerId, setPartnerId] = useState(currentPartner?._id || '');
+  const chooseStyle = (style) => {
+    setStyleChoice(style);
+    if (style === 'dropset' && !(form.dropChain || []).length) {
+      const w = +form.weight || 0;
+      const r = +form.reps || 10;
+      const step = (form.weightUnit || 'kg') === 'lbs' ? 5 : 2.5;
+      const at = (f) => Math.max(step, Math.round((w * f) / step) * step);
+      setForm((f) => ({ ...f, dropChain: w > 0 ? [{ weight: w, reps: r }, { weight: at(0.6), reps: r }, { weight: at(0.4), reps: r }] : [{ weight: 0, reps: r }, { weight: 0, reps: r }] }));
+    }
+  };
   const [suggestions, setSuggestions] = useState([]);
   // form.name starts pre-filled with the existing exercise's name, so the
   // suggestions effect below must not fire until the user actually edits it.
@@ -1497,6 +1516,10 @@ function EditExerciseModal({ ex, splitId, dayId, splitDays, onConfirm, onClose, 
       weight: finalWeight,
       weightUnit: finalWeightUnit,
       muscleTargets: finalMuscleTargets,
+      setStyle: styleChoice === 'dropset' && !isDuration ? 'dropset' : 'straight',
+      dropChain: styleChoice === 'dropset' && !isDuration ? (form.dropChain || []).map((d) => ({ weight: +d.weight || 0, reps: +d.reps || 0 })).filter((d) => d.reps > 0) : (form.dropChain || []),
+      dropNoRest: form.dropNoRest !== false,
+      supersetPartnerId: styleChoice === 'superset' ? partnerId : '',
     });
   }
 
@@ -1572,7 +1595,7 @@ function EditExerciseModal({ ex, splitId, dayId, splitDays, onConfirm, onClose, 
 
           <div style={{ display: 'grid', gridTemplateColumns: isDuration ? '1fr 1.5fr 1fr' : '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
             <div>
-              <div style={{ ...LABEL, marginBottom: 4 }}>sets</div>
+              <div style={{ ...LABEL, marginBottom: 4 }}>{styleChoice === 'dropset' && !isDuration ? 'rounds' : 'sets'}</div>
               <input className="input" type="number" inputMode="numeric" min="0" step="1" value={form.sets} onChange={(e) => setForm(f => ({ ...f, sets: e.target.value }))} />
             </div>
             <div>
@@ -1601,6 +1624,50 @@ function EditExerciseModal({ ex, splitId, dayId, splitDays, onConfirm, onClose, 
             <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
               <button type="button" className={`btn ${!form.untilFailure ? 'btn-accent' : 'btn-ghost'}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setForm(f => ({ ...f, untilFailure: false }))}>Specific reps</button>
               <button type="button" className={`btn ${form.untilFailure ? 'btn-accent' : 'btn-ghost'}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setForm(f => ({ ...f, untilFailure: true }))}>Until failure</button>
+            </div>
+          )}
+
+          {!isDuration && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ ...LABEL, marginBottom: 4 }}>Set style</div>
+              <div role="radiogroup" aria-label="Set style" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 4, background: 'var(--bg3)', borderRadius: 12, padding: 4 }}>
+                {[['straight', 'Straight'], ['dropset', 'Drop set'], ['superset', 'Superset']].map(([id, lbl]) => (
+                  <button key={id} type="button" role="radio" aria-checked={styleChoice === id} onClick={() => chooseStyle(id)}
+                    style={{ height: 40, borderRadius: 9, border: 'none', background: styleChoice === id ? 'var(--accent)' : 'transparent', color: styleChoice === id ? 'var(--on-accent)' : 'var(--text2)', fontSize: 13, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', cursor: 'pointer' }}>
+                    {lbl}
+                  </button>
+                ))}
+              </div>
+
+              {styleChoice === 'dropset' && (
+                <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ fontSize: 12, color: 'var(--text2)' }}>Each round runs the chain straight through. "Rounds" above sets how many times.</div>
+                  {(form.dropChain || []).map((d, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <span style={{ width: 56, fontSize: 12, fontWeight: 700, color: 'var(--text2)', letterSpacing: '0.08em' }}>{i === 0 ? 'TOP' : `DROP ${i}`}</span>
+                      <input className="input" type="number" inputMode="decimal" min="0" step="0.5" aria-label={`Drop ${i + 1} weight`} style={{ flex: 1, minWidth: 0 }} value={d.weight} onChange={(e) => setForm(f => ({ ...f, dropChain: f.dropChain.map((x, idx) => (idx === i ? { ...x, weight: e.target.value } : x)) }))} />
+                      <span style={{ fontSize: 12, color: 'var(--text2)' }}>{form.weightUnit || 'kg'} ×</span>
+                      <input className="input" type="number" inputMode="numeric" min="1" step="1" aria-label={`Drop ${i + 1} reps`} style={{ width: 64 }} value={d.reps} onChange={(e) => setForm(f => ({ ...f, dropChain: f.dropChain.map((x, idx) => (idx === i ? { ...x, reps: e.target.value } : x)) }))} />
+                      <button type="button" aria-label={`Remove drop ${i + 1}`} onClick={() => setForm(f => ({ ...f, dropChain: f.dropChain.filter((_, idx) => idx !== i) }))} style={{ width: 36, height: 36, background: 'none', border: 'none', color: 'var(--text2)', cursor: 'pointer' }}>✕</button>
+                    </div>
+                  ))}
+                  <button type="button" className="btn btn-ghost" style={{ minHeight: 40 }} onClick={() => setForm(f => ({ ...f, dropChain: [...(f.dropChain || []), { weight: 0, reps: +f.reps || 10 }] }))}>+ Add drop</button>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 44, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={form.dropNoRest !== false} onChange={(e) => setForm(f => ({ ...f, dropNoRest: e.target.checked }))} style={{ width: 20, height: 20, accentColor: 'var(--green)' }} />
+                    <span style={{ fontSize: 14 }}>No rest between drops <span style={{ color: 'var(--text2)' }}>· timer starts after the last drop</span></span>
+                  </label>
+                </div>
+              )}
+
+              {styleChoice === 'superset' && (
+                <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ fontSize: 12, color: 'var(--text2)' }}>Done back to back with no rest; rest starts after the partner's set.</div>
+                  <select className="select" style={{ width: '100%', margin: 0 }} aria-label="Superset partner" value={partnerId} onChange={(e) => setPartnerId(e.target.value)}>
+                    <option value="">Choose a partner exercise…</option>
+                    {dayExercises.map((e) => <option key={e._id} value={e._id}>{e.name}{e.supersetGroup && e._id !== currentPartner?._id ? ` (in superset ${e.supersetGroup})` : ''}</option>)}
+                  </select>
+                </div>
+              )}
             </div>
           )}
 
@@ -1842,14 +1909,36 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
     const oldUntilFailure = !!ex.untilFailure;
     const newUntilFailure = isDurationBased ? false : isFailure;
 
+    // Superset grouping: both exercises share a letter; anyone left alone in
+    // the old group gets unlinked.
+    const { supersetPartnerId = '', ...formFields } = updatedForm;
+    const dayExs = splitDays.find((d) => d._id === dayId)?.exercises || [];
+    const oldGroup = ex.supersetGroup || '';
+    const partner = supersetPartnerId ? dayExs.find((e) => e._id === supersetPartnerId) : null;
+    let newGroup = '';
+    if (partner) {
+      const used = new Set(dayExs.filter((e) => e._id !== ex._id && e._id !== partner._id).map((e) => e.supersetGroup).filter(Boolean));
+      newGroup = (oldGroup && !used.has(oldGroup) && oldGroup) || (partner.supersetGroup && !used.has(partner.supersetGroup) && partner.supersetGroup)
+        || 'ABCDEFGHIJ'.split('').find((l) => !used.has(l)) || 'Z';
+    }
+    const groupFixes = [];
+    if (partner && partner.supersetGroup !== newGroup) groupFixes.push([partner._id, newGroup]);
+    for (const e of dayExs) {
+      if (e._id === ex._id || e._id === partner?._id) continue;
+      if ((oldGroup && e.supersetGroup === oldGroup) || (partner?.supersetGroup && e.supersetGroup === partner.supersetGroup)) groupFixes.push([e._id, '']);
+    }
+
     try {
       const updated = await storage.updateExercise(splitId, dayId, ex._id, {
-        ...updatedForm,
+        ...formFields,
         sets: newSets,
         reps: newReps,
         untilFailure: newUntilFailure,
         weight: newWeight,
+        supersetGroup: newGroup,
       });
+      for (const [id, group] of groupFixes) await storage.updateExercise(splitId, dayId, id, { supersetGroup: group });
+      if (groupFixes.length) queryClient.invalidateQueries({ queryKey: ['splits'] });
       onUpdate(updated);
       setEditing(false);
 
@@ -1952,6 +2041,8 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
   }
 
   const weightLabel = ex.weight > 0 ? ` · ${ex.weight}${ex.weightUnit}` : '';
+  const dropChain = dropChainOf(ex);
+  const ssTag = supersetTag(ex, splitDays?.find((d) => d._id === dayId)?.exercises || []);
   const repsLabel = ex.duration > 0
     ? `${ex.duration}${ex.durationUnit || 'sec'}`
     : ((ex.untilFailure || !ex.reps || ex.reps === 0) ? 'Until Failure' : `${ex.reps} reps`);
@@ -1971,8 +2062,16 @@ function ExerciseEditRow({ ex, index, splitId, dayId, splitDays, onUpdate, onDel
           {index + 1}. {ex.name}
         </div>
         <div style={{ fontSize: 11, color: 'var(--text2)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
-          {ex.sets}×{repsLabel}{weightLabel}
+          {dropChain
+            ? `${ex.sets} rounds · ${dropChain.map((d) => d.weight).join(' → ')}${ex.weightUnit || 'kg'} ×${dropChain[0].reps}`
+            : `${ex.sets}×${repsLabel}${weightLabel}`}
         </div>
+        {(dropChain || ssTag) && (
+          <div style={{ display: 'flex', gap: 4, marginTop: 5 }}>
+            {ssTag && <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', padding: '2px 6px', borderRadius: 4, background: 'rgba(var(--blue-rgb), 0.16)', color: 'var(--blue)' }}>SUPERSET {ssTag}</span>}
+            {dropChain && <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', padding: '2px 6px', borderRadius: 4, background: 'var(--bg3)', color: 'var(--text2)' }}>DROP SET · {dropChain.length} DROPS</span>}
+          </div>
+        )}
         {ex.muscleTargets?.length > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 5 }}>
             {ex.muscleTargets.map((t) => <MusclePill key={t} target={t} />)}
