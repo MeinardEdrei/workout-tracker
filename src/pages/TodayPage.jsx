@@ -4,7 +4,7 @@ import { useStorage } from '../hooks/useStorage';
 import * as api from '../api/index.js';
 import { capitalizeWords, formatLastUsed } from '../utils/textFormat';
 import { findBestMatch } from '../utils/matchExercise';
-import DailyShareCard from '../components/DailyShareCard';
+import WorkoutSummary from '../components/share/WorkoutSummary';
 import BodyMap from '../components/BodyMap';
 import { MusclePill } from '../components/MusclePill';
 import ExerciseThumbnail from '../components/ExerciseThumbnail';
@@ -263,79 +263,6 @@ function ExerciseHistoryModal({ exName, logs, onClose }) {
       </div>
     </div>,
     document.body
-  );
-}
-
-async function captureAndShare(ref, filename, title) {
-  const html2canvas = (await import('html2canvas')).default;
-  const canvas = await html2canvas(ref.current, { backgroundColor: '#121110', scale: 2, useCORS: true, logging: false });
-  canvas.toBlob(async (blob) => {
-    const file = new File([blob], filename, { type: 'image/png' });
-    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-      await navigator.share({ files: [file], title });
-    } else {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = filename; a.click();
-      URL.revokeObjectURL(url);
-    }
-  }, 'image/png');
-}
-
-function CompletionScreen({ log, onClose, onShare, sharing }) {
-  const vol = log.totalVolume > 0
-    ? log.totalVolume >= 1000 ? `${(log.totalVolume / 1000).toFixed(1)}k kg` : `${log.totalVolume} kg`
-    : null;
-  const totalSets = (log.exercises || []).reduce((acc, ex) => acc + Number(ex.sets || 0), 0);
-  const durationLabel = formatSessionDuration(log.durationSeconds);
-
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300, animation: 'fadeIn 0.2s ease', padding: 16 }}>
-      <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 20, width: '100%', maxWidth: 440, padding: '24px 20px 28px', animation: 'scaleIn 0.25s ease', display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ display: 'flex', justifyContent: 'center', color: 'var(--accent)', marginBottom: 4 }}><Trophy size={36} /></div>
-          <div style={{ fontSize: 22, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--accent)' }}>Workout Complete!</div>
-          <div style={{ fontSize: 13, color: 'var(--text2)', marginTop: 2 }}>{log.dayName}{log.dayTag ? ` · ${log.dayTag}` : ''}</div>
-        </div>
-
-        {/* Stats Dashboard */}
-        <div style={{ display: 'flex', gap: 8 }}>
-          <div style={{ flex: 1, background: 'var(--bg3)', borderRadius: 10, padding: '10px 8px', border: '1px solid var(--border)', textAlign: 'center' }}>
-            <div style={{ fontSize: 9, color: 'var(--text3)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 2 }}>Exercises</div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)' }}>{log.exercises.filter((ex) => !ex.skipped).length}</div>
-          </div>
-          <div style={{ flex: 1, background: 'var(--bg3)', borderRadius: 10, padding: '10px 8px', border: '1px solid var(--border)', textAlign: 'center' }}>
-            <div style={{ fontSize: 9, color: 'var(--text3)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 2 }}>Sets</div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)' }}>{totalSets}</div>
-          </div>
-          {vol && (
-            <div style={{ flex: 1, background: 'var(--bg3)', borderRadius: 10, padding: '10px 8px', border: '1px solid var(--border)', textAlign: 'center' }}>
-              <div style={{ fontSize: 9, color: 'var(--text3)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 2 }}>Volume</div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--accent)' }}>{vol}</div>
-            </div>
-          )}
-          {durationLabel && (
-            <div style={{ flex: 1, background: 'var(--bg3)', borderRadius: 10, padding: '10px 8px', border: '1px solid var(--border)', textAlign: 'center' }}>
-              <div style={{ fontSize: 9, color: 'var(--text3)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 2 }}>Time</div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--accent)' }}>{durationLabel}</div>
-            </div>
-          )}
-        </div>
-
-        {/* Dynamic Muscle Scanner Map */}
-        {/* <div style={{ background: 'var(--bg)', borderRadius: 12, padding: '14px 10px', display: 'flex', justifyContent: 'center', border: '1px solid var(--border)' }}>
-          <BodyMap exercises={log.exercises} size={90} />
-        </div> */}
-
-        {/* Action Buttons */}
-        <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-          <button className="btn btn-ghost" style={{ flex: 1 }} onClick={onClose}>Close</button>
-          <button className="btn btn-accent" style={{ flex: 1, gap: 8 }} onClick={onShare} disabled={sharing}>
-            <Share size={16} aria-hidden="true" />{sharing ? 'Sharing…' : 'Share Card'}
-          </button>
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -3251,8 +3178,6 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
   const [open, setOpen] = useState(defaultOpen || isScreen);
   const [exercises, setExercises] = useState(day.exercises || []);
   const [completedLog, setCompletedLog] = useState(null);
-  const [sharing, setSharing] = useState(false);
-  const shareCardRef = useRef(null);
   const [showConfirmFinish, setShowConfirmFinish] = useState(false);
   const [showConfirmSkipDay, setShowConfirmSkipDay] = useState(false);
   // Persisted (not plain useState) so switching between pager/overview view
@@ -3519,10 +3444,12 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
     setShowConfirmSkipDay(false);
   }
 
-  async function handleShare() {
-    setSharing(true);
-    try { await captureAndShare(shareCardRef, `workout-${dateStr}.png`, `${day.name} — Workout Complete`); }
-    finally { setSharing(false); }
+  // The note is written after the log exists; re-saving upserts by date.
+  async function saveSessionNote(notes) {
+    const { date, splitName: sn, dayName, dayTag, exercises: exs, durationSeconds, skipped } = completedLog;
+    const saved = await storage.saveLog({ date, splitName: sn, dayName, dayTag, exercises: exs, durationSeconds, skipped, notes });
+    setCompletedLog((cur) => (cur ? { ...cur, notes: saved.notes ?? notes } : cur));
+    queryClient.invalidateQueries({ queryKey: ['logs'] });
   }
 
 
@@ -3810,11 +3737,21 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
               Workout Logged
             </div>
           )}
+          {logForDate.notes && !isSkippedDay && (
+            <div style={{ fontSize: 'var(--fs-md)', color: 'var(--text)', textAlign: 'center', margin: '4px 0', display: 'flex', gap: 6 }}>
+              <StickyNote size={15} style={{ flexShrink: 0, marginTop: 2, color: 'var(--text2)' }} aria-hidden="true" />{logForDate.notes}
+            </div>
+          )}
           <div style={{ fontSize: 11, color: 'var(--text2)', textAlign: 'center' }}>
             {isSkippedDay
               ? "This day is marked skipped — it won't count as a workout, but your streak is safe."
               : 'This workout is locked. To modify it, delete its log in the Stats tab.'}
           </div>
+          {!isSkippedDay && (
+            <button type="button" className="btn btn-ghost" style={{ minHeight: 44, marginTop: 8, gap: 8 }} onClick={(e) => { e.stopPropagation(); setCompletedLog(logForDate); }}>
+              <Share size={16} aria-hidden="true" /> Summary &amp; share
+            </button>
+          )}
         </div>
       )}
 
@@ -4061,8 +3998,9 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
         </FocusWorkout>,
         document.body
       )}
-      {completedLog && <DailyShareCard log={completedLog} cardRef={shareCardRef} />}
-      {completedLog && <CompletionScreen log={completedLog} onClose={() => setCompletedLog(null)} onShare={handleShare} sharing={sharing} />}
+      {completedLog && (
+        <WorkoutSummary log={completedLog} logs={logs} onClose={() => setCompletedLog(null)} onSaveNote={saveSessionNote} onShowToast={onShowToast} />
+      )}
       {showConfirmFinish && (
         <FinishWorkoutModal
           message={
