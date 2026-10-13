@@ -48,6 +48,8 @@ const ExerciseSchema = new mongoose.Schema({
       untilFailure: Boolean,
       weight: Number,
       weightUnit: String,
+      duration: Number,
+      durationUnit: String,
       notes: String,
     },
     default: null,

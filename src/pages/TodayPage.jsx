@@ -29,6 +29,9 @@ import { localDateStr } from '../utils/localDate';
 import { workingSets } from '../utils/sets';
 import { dropChainOf, supersetMembers } from '../utils/setStyle';
 import { searchExerciseLibrary } from '../utils/exerciseLibrary';
+import WeightSyncModal from '../components/WeightSyncModal';
+import SwapExerciseModal from '../components/SwapExerciseModal';
+import { findMatchingExercise, getLastExercisePerformance } from '../utils/exerciseHistory';
 import { useWakeLock } from '../hooks/useWakeLock';
 
 // Keyboard activation for tap-to-edit text that isn't a <button> (so it can
@@ -64,82 +67,6 @@ function convertWeight(weight, fromUnit, toUnit) {
   if (fromUnit === 'kg' && toUnit === 'lbs') return weight * 2.20462;
   if (fromUnit === 'lbs' && toUnit === 'kg') return weight / 2.20462;
   return weight;
-}
-
-function findMatchingExercise(name, splitDays, pastExercises) {
-  if (!name) return null;
-  const targetName = name.trim().toLowerCase();
-  if (splitDays) {
-    for (const d of splitDays) {
-      const found = (d.exercises || []).find(e => e.name && e.name.trim().toLowerCase() === targetName);
-      if (found) return found;
-    }
-  }
-  if (pastExercises) {
-    const found = pastExercises.find(e => e.name && e.name.trim().toLowerCase() === targetName);
-    if (found) return found;
-  }
-  return null;
-}
-
-function getLastExercisePerformance(name, logs, splitDays) {
-  if (!name) return null;
-  const targetName = name.trim().toLowerCase();
-
-  // 1. Look in logs (most recent first)
-  if (logs && logs.length > 0) {
-    const sortedLogs = [...logs].sort((a, b) => (b.date > a.date ? 1 : -1));
-    for (const log of sortedLogs) {
-      const match = (log.exercises || []).find((e) => (e.name || '').trim().toLowerCase() === targetName);
-      if (match) {
-        let weight = match.weight || 0;
-        let reps = match.reps || 10;
-        if (match.setLogs && match.setLogs.length > 0) {
-          const setsWithWeight = workingSets(match.setLogs).filter((s) => s.weight > 0);
-          if (setsWithWeight.length > 0) {
-            weight = setsWithWeight[setsWithWeight.length - 1].weight;
-          }
-          const setsWithReps = workingSets(match.setLogs).filter((s) => s.reps > 0);
-          if (setsWithReps.length > 0) {
-            reps = setsWithReps[0].reps;
-          }
-        }
-        return {
-          name: match.name,
-          weight,
-          weightUnit: match.weightUnit || 'kg',
-          reps,
-          sets: match.sets || 3,
-          untilFailure: !!match.untilFailure,
-          muscleTargets: match.muscleTargets || [],
-          imageUrl: match.imageUrl || '',
-          notes: match.notes || '',
-        };
-      }
-    }
-  }
-
-  // 2. Look in split template days
-  if (splitDays) {
-    for (const d of splitDays) {
-      const found = (d.exercises || []).find(e => e.name && e.name.trim().toLowerCase() === targetName);
-      if (found) {
-        return {
-          name: found.name,
-          weight: found.weight || 0,
-          weightUnit: found.weightUnit || 'kg',
-          reps: found.reps || 10,
-          sets: found.sets || 3,
-          untilFailure: !!found.untilFailure,
-          muscleTargets: found.muscleTargets || [],
-          imageUrl: found.imageUrl || '',
-          notes: found.notes || '',
-        };
-      }
-    }
-  }
-
-  return null;
 }
 
 function getExercisePRs(logs, currentDateStr = '') {
@@ -262,118 +189,6 @@ function ExerciseHistoryModal({ exName, logs, onClose }) {
 
         <div className="modal-actions" style={{ marginTop: 16 }}>
           <button className="btn btn-ghost" onClick={onClose}>Close</button>
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
-}
-
-function WeightSyncModal({ 
-  exName, 
-  oldWeight, oldUnit, newWeight, newUnit, 
-  oldSets, newSets, oldReps, newReps, oldUntilFailure, newUntilFailure, 
-  oldMuscleTargets = [], newMuscleTargets = [],
-  oldCategory, newCategory,
-  otherDays, otherSplits = [], onSync, onSkip, onExclude
-}) {
-  useBackClose(true, onSkip);
-  const oldWInNewUnit = convertWeight(oldWeight ?? 0, oldUnit || 'kg', newUnit || 'kg');
-  const delta = (newWeight ?? 0) - oldWInNewUnit;
-  const weightChanged = Math.abs(delta) >= 0.01;
-  const setsRepsChanged = (oldSets !== undefined && newSets !== undefined && oldSets !== newSets) ||
-                          (oldReps !== undefined && newReps !== undefined && oldReps !== newReps) ||
-                          (oldUntilFailure !== undefined && newUntilFailure !== undefined && oldUntilFailure !== newUntilFailure);
-
-  const tagsChanged = oldMuscleTargets.length !== newMuscleTargets.length ||
-                      !oldMuscleTargets.every(t => newMuscleTargets.includes(t)) ||
-                      !newMuscleTargets.every(t => oldMuscleTargets.includes(t));
-
-  const categoryChanged = oldCategory !== undefined && newCategory !== undefined && oldCategory !== newCategory;
-
-  const isIncrease = delta > 0;
-  const directionColor = isIncrease ? 'var(--green)' : 'var(--red)';
-  const deltaFormatted = Math.abs(delta).toFixed(1).replace(/\.0$/, '');
-
-  const oldRepsStr = (oldUntilFailure || oldReps === 0) ? 'Failure' : `${oldReps}`;
-  const newRepsStr = (newUntilFailure || newReps === 0) ? 'Failure' : `${newReps}`;
-
-  return createPortal(
-    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onSkip()}>
-      <div className="modal">
-        <div className="modal-title" style={{ fontSize: 16 }}>Sync Exercise Changes?</div>
-        <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 12, lineHeight: 1.5 }}>
-          <strong style={{ color: 'var(--text)' }}>{exName}</strong>
-          
-          {weightChanged && (
-            <div style={{ marginTop: 4 }}>
-              Weight:{' '}
-              <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text)' }}>{oldWeight}{oldUnit}</span>
-              {' → '}
-              <span style={{ fontFamily: 'var(--font-mono)', color: directionColor, fontWeight: 700 }}>{newWeight}{newUnit}</span>
-              {' '}
-              <span style={{
-                fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
-                background: isIncrease ? 'rgba(var(--green-rgb), 0.12)' : 'rgba(var(--red-rgb), 0.12)',
-                color: directionColor, padding: '2px 6px', borderRadius: 4,
-              }}>
-                {isIncrease ? `+${deltaFormatted}${newUnit} increase` : `-${deltaFormatted}${newUnit} decrease`}
-              </span>
-            </div>
-          )}
-
-          {setsRepsChanged && (
-            <div style={{ marginTop: 4 }}>
-              Sets & Reps:{' '}
-              <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text)' }}>{oldSets}×{oldRepsStr}</span>
-              {' → '}
-              <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent)', fontWeight: 700 }}>{newSets}×{newRepsStr}</span>
-            </div>
-          )}
-
-          {tagsChanged && (
-            <div style={{ marginTop: 4 }}>
-              Targets:{' '}
-              <span style={{ color: 'var(--text)' }}>{oldMuscleTargets.length > 0 ? oldMuscleTargets.join(', ') : 'None'}</span>
-              {' → '}
-              <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{newMuscleTargets.length > 0 ? newMuscleTargets.join(', ') : 'None'}</span>
-            </div>
-          )}
-
-          {categoryChanged && (
-            <div style={{ marginTop: 4 }}>
-              Category:{' '}
-              <span style={{ color: 'var(--text)', textTransform: 'capitalize' }}>{oldCategory}</span>
-              {' → '}
-              <span style={{ color: 'var(--accent)', fontWeight: 700, textTransform: 'capitalize' }}>{newCategory}</span>
-            </div>
-          )}
-        </div>
-        <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 16 }}>
-          This exercise also appears in{' '}
-          <strong style={{ color: 'var(--text2)' }}>
-            {otherDays.map((d) => d.dayName).join(', ')}
-            {otherDays.length > 0 && otherSplits.length > 0 ? ', ' : ''}
-            {otherSplits.map((d) => `${d.dayName} (${d.splitName})`).join(', ')}
-          </strong>
-          . Sync these changes there too?
-        </div>
-        <div className="modal-actions" style={{ flexWrap: 'wrap' }}>
-          <button
-            className="btn btn-ghost"
-            style={{ fontSize: 11, color: 'var(--text3)' }}
-            onClick={onExclude}
-            title="Stop asking to sync this exercise in the future"
-          >
-            Never sync this exercise
-          </button>
-          <button className="btn btn-ghost" onClick={onSkip}>Keep separate</button>
-          <button
-            className="btn btn-accent"
-            onClick={onSync}
-          >
-            Sync to all days
-          </button>
         </div>
       </div>
     </div>,
@@ -1835,6 +1650,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
         <SwapExerciseModal
           splitDays={splitDays}
           currentExName={ex.name}
+          todayOption
           onConfirm={(updatedData, isPermanent) => {
             const targetNotes = updatedData.notes !== undefined ? updatedData.notes : '';
             if (isPermanent) {
@@ -1849,6 +1665,8 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
                 untilFailure: updatedData.untilFailure,
                 weight: updatedData.weight,
                 weightUnit: updatedData.weightUnit,
+                duration: updatedData.duration || 0,
+                durationUnit: updatedData.durationUnit || 'sec',
                 notes: targetNotes,
               });
             }
@@ -2462,8 +2280,8 @@ function AddExerciseFromOtherDaysModal({ splitDays, logs, onConfirm, onClose }) 
           if (!combined.some(c => c.name.toLowerCase() === dbName.toLowerCase())) {
             combined.push({
               name: dbName,
-              muscleTargets: typeof db === 'string' ? [] : (db.muscleTargets || []),
               imageUrl: dbImg,
+              muscleTargets: typeof db === 'string' ? [] : (db.muscleTargets || []),
               isCustom: false
             });
           }
@@ -2769,315 +2587,6 @@ function AddExerciseFromOtherDaysModal({ splitDays, logs, onConfirm, onClose }) 
   );
 }
 
-function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
-  useBackClose(true, onClose);
-  const { storage, storageKey } = useStorage();
-  const [form, setForm] = useState({ name: '', sets: 3, reps: 10, weight: 0, weightUnit: 'kg', notes: '', muscleTargets: [], untilFailure: false });
-  const [suggestions, setSuggestions] = useState([]);
-  const [isPermanent, setIsPermanent] = useState(false);
-
-  const { data: logs = [] } = useQuery({
-    queryKey: ['logs', storageKey],
-    queryFn: storage.getLogs,
-  });
-
-  const pastExercises = useMemo(() => {
-    const list = [];
-    const seen = new Set();
-    const sortedLogs = [...(logs || [])].sort((a, b) => (b.date > a.date ? 1 : -1));
-    sortedLogs.forEach((log) => {
-      (log.exercises || []).forEach((ex) => {
-        if (!ex.name) return;
-        const lowerName = ex.name.trim().toLowerCase();
-        if (!seen.has(lowerName)) {
-          seen.add(lowerName);
-          let resolvedWeight = ex.weight || 0;
-          let resolvedReps = ex.reps || 10;
-          if (ex.setLogs && ex.setLogs.length > 0) {
-            const setsWithWeight = workingSets(ex.setLogs).filter((s) => s.weight > 0);
-            if (setsWithWeight.length > 0) {
-              resolvedWeight = setsWithWeight[setsWithWeight.length - 1].weight;
-            }
-            const setsWithReps = workingSets(ex.setLogs).filter((s) => s.reps > 0);
-            if (setsWithReps.length > 0) {
-              resolvedReps = setsWithReps[0].reps;
-            }
-          }
-          list.push({
-            name: ex.name.trim(),
-            imageUrl: ex.imageUrl || '',
-            muscleTargets: ex.muscleTargets || [],
-            sets: ex.sets || 3,
-            reps: resolvedReps,
-            weight: resolvedWeight,
-            weightUnit: ex.weightUnit || 'kg',
-            notes: ex.notes || '',
-            untilFailure: ex.untilFailure || false,
-            date: log.date || '',
-            isCustom: true
-          });
-        }
-      });
-    });
-    return list;
-  }, [logs]);
-
-  useEffect(() => {
-    const q = form.name.trim();
-    if (q.length < 2) { setSuggestions([]); return; }
-    const timer = setTimeout(async () => {
-      try {
-        const userMatches = pastExercises.filter(e => 
-          e.name.toLowerCase().includes(q.toLowerCase())
-        );
-        const dbMatches = await api.suggestExercises(q);
-        const combined = [...userMatches];
-        dbMatches.forEach(db => {
-          const dbName = typeof db === 'string' ? db : db.name;
-          const dbImg = typeof db === 'string' ? null : db.imageUrl;
-          if (!combined.some(c => c.name.toLowerCase() === dbName.toLowerCase())) {
-            combined.push({
-              name: dbName,
-              imageUrl: dbImg,
-              isCustom: false
-            });
-          }
-        });
-        setSuggestions(combined.slice(0, 10));
-      } catch {
-        const userMatches = pastExercises.filter(e => 
-          e.name.toLowerCase().includes(q.toLowerCase())
-        );
-        setSuggestions(userMatches.slice(0, 10));
-      }
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [form.name, pastExercises]);
-
-  function handleSelectSuggestion(s) {
-    const match = findMatchingExercise(s.name, splitDays, pastExercises);
-    const perf = getLastExercisePerformance(s.name, logs, splitDays);
-    const finalMuscleTargets = (match && match.muscleTargets && match.muscleTargets.length > 0)
-      ? match.muscleTargets
-      : (perf?.muscleTargets?.length ? perf.muscleTargets : (s.muscleTargets && s.muscleTargets.length > 0 ? s.muscleTargets : []));
-    const finalNotes = (match && match.notes !== undefined) ? match.notes : (perf?.notes || s.notes || '');
-
-    const resolvedWeight = (match && match.weight > 0)
-      ? match.weight
-      : (perf?.weight > 0 ? perf.weight : (s.weight > 0 ? s.weight : 0));
-    const resolvedUnit = match?.weightUnit || perf?.weightUnit || s.weightUnit || 'kg';
-    const resolvedReps = match?.reps ?? perf?.reps ?? s.reps ?? 10;
-    const resolvedSets = match?.sets ?? perf?.sets ?? s.sets ?? 3;
-
-    if (match) {
-      setForm({
-        name: s.name,
-        sets: resolvedSets,
-        reps: resolvedReps,
-        weight: resolvedWeight,
-        weightUnit: resolvedUnit,
-        notes: finalNotes,
-        muscleTargets: finalMuscleTargets,
-        untilFailure: !!match.untilFailure,
-        imageUrl: match.imageUrl || s.imageUrl || '',
-        placeholderUsed: match.placeholderUsed || false,
-      });
-    } else if (s.isCustom) {
-      setForm({
-        name: s.name,
-        sets: resolvedSets,
-        reps: resolvedReps,
-        weight: resolvedWeight,
-        weightUnit: resolvedUnit,
-        notes: finalNotes,
-        muscleTargets: finalMuscleTargets,
-        untilFailure: s.untilFailure,
-        imageUrl: s.imageUrl || '',
-        placeholderUsed: s.placeholderUsed || false,
-      });
-    } else {
-      setForm(f => ({
-        ...f,
-        name: s.name,
-        sets: resolvedSets,
-        reps: resolvedReps,
-        weight: resolvedWeight,
-        weightUnit: resolvedUnit,
-        notes: finalNotes,
-        imageUrl: s.imageUrl || '',
-        placeholderUsed: false,
-        muscleTargets: finalMuscleTargets
-      }));
-    }
-    setSuggestions([]);
-  }
-
-  function submit(e) {
-    e.preventDefault();
-    if (!form.name.trim()) return;
-    const name = form.name.trim();
-    const match = findMatchingExercise(name, splitDays, pastExercises);
-    const perf = getLastExercisePerformance(name, logs, splitDays);
-
-    const finalMuscleTargets = (form.muscleTargets && form.muscleTargets.length > 0)
-      ? form.muscleTargets
-      : (match ? match.muscleTargets || [] : (perf?.muscleTargets || []));
-
-    const finalWeight = (form.weight !== undefined && +form.weight !== 0)
-      ? +form.weight
-      : (match && match.weight > 0 ? match.weight : (perf?.weight ?? 0));
-
-    const finalWeightUnit = form.weightUnit || match?.weightUnit || perf?.weightUnit || 'kg';
-
-    const numReps = (form.reps !== undefined && +form.reps !== 0)
-      ? +form.reps
-      : (match?.reps ?? perf?.reps ?? 10);
-    const isFailure = form.untilFailure || numReps === 0;
-    const finalNotes = form.notes !== undefined ? form.notes : (match?.notes || perf?.notes || '');
-
-    onConfirm({
-      ...form,
-      name,
-      sets: +form.sets || 3,
-      reps: isFailure ? 0 : numReps,
-      untilFailure: isFailure,
-      weight: finalWeight,
-      weightUnit: finalWeightUnit,
-      notes: finalNotes,
-      muscleTargets: finalMuscleTargets,
-      imageUrl: form.imageUrl || match?.imageUrl || perf?.imageUrl || '',
-    }, isPermanent);
-  }
-
-  return createPortal(
-    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal">
-        <div className="modal-title">Swap Exercise</div>
-        <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 12 }}>
-          Swapping: <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{currentExName}</span>
-        </div>
-        <form onSubmit={submit}>
-          <div style={{ position: 'relative', marginBottom: 12 }}>
-            <input
-              className="input"
-              value={form.name}
-              onChange={(e) => setForm(f => ({ ...f, name: capitalizeWords(e.target.value) }))}
-              onBlur={() => setTimeout(() => setSuggestions([]), 150)}
-              placeholder="Search or enter new exercise name"
-              autoFocus
-              autoComplete="off"
-              style={{ width: '100%', margin: 0 }}
-            />
-            {suggestions.length > 0 && (
-              <div style={{ 
-                position: 'absolute', top: '100%', left: 0, right: 0, 
-                background: 'var(--bg2)', border: '1px solid var(--border)', 
-                borderRadius: 8, zIndex: 150, overflow: 'hidden', marginTop: 2,
-                boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
-              }}>
-                {suggestions.map((s, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      handleSelectSuggestion(s);
-                    }}
-                    style={{ 
-                      display: 'flex', width: '100%', alignItems: 'center', gap: 10,
-                      textAlign: 'left', padding: '8px 12px', fontSize: 13, 
-                      background: 'none', border: 'none', color: 'var(--text)', 
-                      cursor: 'pointer', borderBottom: '1px solid var(--border)' 
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg3)'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
-                  >
-                    <ExerciseThumbnail imageUrl={s.imageUrl} name={s.name} size={28} />
-                    <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <span style={{ textTransform: 'uppercase', fontSize: 12, fontWeight: 700 }}>{s.name}</span>
-                      {s.isCustom && formatLastUsed(s) && (
-                        <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text3)' }}>
-                          Last: {formatLastUsed(s)}
-                        </span>
-                      )}
-                    </span>
-                    {s.isCustom && (
-                      <span style={{
-                        fontSize: 8, fontWeight: 800, color: 'var(--accent)',
-                        background: 'rgba(var(--accent-rgb), 0.08)', border: '1px solid rgba(var(--accent-rgb), 0.2)',
-                        padding: '2px 6px', borderRadius: 4, textTransform: 'uppercase', letterSpacing: '0.04em',
-                        flexShrink: 0
-                      }}>
-                        History
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
-            <div>
-              <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>sets</div>
-              <input className="input" type="number" inputMode="numeric" min="0" step="1" value={form.sets} onChange={(e) => setForm(f => ({ ...f, sets: e.target.value }))} />
-            </div>
-            <div>
-              <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>reps</div>
-              {form.untilFailure ? (
-                <div style={{ height: 44, display: 'flex', alignItems: 'center', padding: '0 10px', borderRadius: 8, border: '1px solid var(--border2)', fontSize: 11, fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.05em' }}>TO FAILURE</div>
-              ) : (
-                <input className="input" type="number" inputMode="numeric" min="0" step="1" value={form.reps} onChange={(e) => setForm(f => ({ ...f, reps: e.target.value }))} />
-              )}
-            </div>
-            <div>
-              <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>weight</div>
-              <input className="input" type="number" inputMode="decimal" min="0" step="0.5" value={form.weight} onChange={(e) => setForm(f => ({ ...f, weight: e.target.value }))} />
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-            <button type="button" className={`btn ${!form.untilFailure ? 'btn-accent' : 'btn-ghost'}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setForm(f => ({ ...f, untilFailure: false }))}>Specific reps</button>
-            <button type="button" className={`btn ${form.untilFailure ? 'btn-accent' : 'btn-ghost'}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setForm(f => ({ ...f, untilFailure: true }))}>Until failure</button>
-          </div>
-
-          <select className="select" style={{ width: '100%', marginBottom: 12 }} value={form.weightUnit} onChange={(e) => setForm(f => ({ ...f, weightUnit: e.target.value }))}>
-            <option value="kg">kg</option>
-            <option value="lbs">lbs</option>
-          </select>
-
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>Note (optional)</div>
-            <input
-              className="input"
-              value={form.notes || ''}
-              onChange={(e) => setForm(f => ({ ...f, notes: e.target.value }))}
-              placeholder="e.g. seat 4, neutral grip..."
-              style={{ width: '100%', margin: 0 }}
-            />
-          </div>
-
-          <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
-            <button type="button" className={`btn ${!isPermanent ? 'btn-accent' : 'btn-ghost'}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setIsPermanent(false)}>Just for today</button>
-            <button type="button" className={`btn ${isPermanent ? 'btn-accent' : 'btn-ghost'}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setIsPermanent(true)}>Change permanently</button>
-          </div>
-          {!isPermanent && (
-            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: -10, marginBottom: 12 }}>
-              Only applies to today's session — {currentExName} stays in your plan for next time.
-            </div>
-          )}
-
-          <div className="modal-actions" style={{ marginTop: 16 }}>
-            <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
-            <button type="submit" className="btn btn-accent">Swap</button>
-          </div>
-        </form>
-      </div>
-    </div>,
-    document.body
-  );
-}
-
 // Same big centered card as the hero exercise, but for rest days — the
 // "picture" slot becomes a rest icon instead of an exercise thumbnail.
 function RestDayCard({ dayName, implicit }) {
@@ -3332,10 +2841,10 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
     setExercises((prev) => prev.map((e) => (e._id === updated._id ? updated : e)));
   }
 
+  const isCompleted = !!logForDate;
   // Screen stays on from the first logged set until the workout is finished
   // (or the session is over 6 hours old and clearly abandoned).
   useWakeLock(currentDurationSeconds > 0 && !isCompleted && !day.isRest);
-  const isCompleted = !!logForDate;
   const isSkippedDay = !!logForDate?.skipped;
   const isPast = dateStr < TODAY_STR;
   const isFuture = dateStr > TODAY_STR;
