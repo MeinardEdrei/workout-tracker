@@ -29,6 +29,7 @@ import { localDateStr } from '../utils/localDate';
 import { workingSets } from '../utils/sets';
 import { dropChainOf, supersetMembers } from '../utils/setStyle';
 import { searchExerciseLibrary } from '../utils/exerciseLibrary';
+import { useWakeLock } from '../hooks/useWakeLock';
 
 // Keyboard activation for tap-to-edit text that isn't a <button> (so it can
 // keep flowing inline): Enter / Space behave like a tap.
@@ -3331,6 +3332,9 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
     setExercises((prev) => prev.map((e) => (e._id === updated._id ? updated : e)));
   }
 
+  // Screen stays on from the first logged set until the workout is finished
+  // (or the session is over 6 hours old and clearly abandoned).
+  useWakeLock(currentDurationSeconds > 0 && !isCompleted && !day.isRest);
   const isCompleted = !!logForDate;
   const isSkippedDay = !!logForDate?.skipped;
   const isPast = dateStr < TODAY_STR;
