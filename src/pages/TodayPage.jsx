@@ -27,6 +27,7 @@ import Toast from '../components/Toast';
 import { SkeletonCards } from '../components/Skeleton';
 import { localDateStr } from '../utils/localDate';
 import { workingSets } from '../utils/sets';
+import { dropChainOf, supersetMembers } from '../utils/setStyle';
 
 // Keyboard activation for tap-to-edit text that isn't a <button> (so it can
 // keep flowing inline): Enter / Space behave like a tap.
@@ -529,7 +530,7 @@ function CategoryHeader({ type }) {
   );
 }
 
-function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, readOnly, isCompleted, dateStr, logs, onShowToast, localOnly, variant = 'compact', onPromote, focusPosition, restSlot }) {
+function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, readOnly, isCompleted, dateStr, logs, onShowToast, localOnly, variant = 'compact', onPromote, focusPosition, restSlot, superset }) {
   const isHero = variant === 'hero';
   // 'focus' = the full-screen workout logger (FocusWorkout); it reuses all of
   // this row's state and mutations with a thumb-zone layout.
@@ -787,7 +788,13 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
   // the target, volume, PRs or "last time".
   const workingLogs = effectiveSetLogs.filter((s) => !s.isWarmup);
   const warmupLogs = effectiveSetLogs.filter((s) => s.isWarmup);
-  const isAutoChecked = effectiveChecked && ex.sets > 0 && workingLogs.length >= ex.sets;
+  // Drop chain: one "round" = the whole chain straight through; ex.sets
+  // counts rounds. dropStep is where in the chain the next set falls.
+  const dropChain = dropChainOf(ex);
+  const chainLen = dropChain ? dropChain.length : 1;
+  const doneUnits = dropChain ? Math.floor(workingLogs.length / chainLen) : workingLogs.length;
+  const dropStep = dropChain ? workingLogs.length % chainLen : 0;
+  const isAutoChecked = effectiveChecked && ex.sets > 0 && doneUnits >= ex.sets;
   const warmupRamp = ex.warmupRamp || [];
   const warmupPending = !readOnly && !isCompleted && warmupRamp.length > 0 && (ex.weight || 0) > 0
     && workingLogs.length === 0 && warmupLogs.length < warmupRamp.length && !warmupSkipped;
@@ -1025,7 +1032,8 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
   // is redundant. The checkbox itself still works as a manual override.
   function autoCompleteFields(nextSetLogs) {
     if (!(ex.sets > 0)) return {};
-    const done = nextSetLogs.filter((s) => !s.isWarmup).length >= ex.sets;
+    const working = nextSetLogs.filter((s) => !s.isWarmup).length;
+    const done = (dropChain ? Math.floor(working / chainLen) : working) >= ex.sets;
     return { checked: done, lastCheckedDate: done ? dateStr : ex.lastCheckedDate };
   }
 
@@ -1361,7 +1369,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
   // an occasional admin action, not the primary one; what the user actually
   // taps during a set is this reps stepper + RIR pill grid.
   const nextSetNumber = workingLogs.length + 1;
-  const targetSetsReached = workingLogs.length >= (ex.sets || 0);
+  const targetSetsReached = doneUnits >= (ex.sets || 0);
 
   const weightStep = (ex.weightUnit || 'kg') === 'lbs' ? 5 : 2.5;
 
@@ -1409,6 +1417,16 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
     const initialWStr = String(resolvedWeight);
     setLogWeightVal(initialWStr);
 
+    // Drop chain: a new set loads the chain's planned step, or what you
+    // actually used at that step in an earlier round today.
+    if (dropChain && !existingEntry) {
+      const prevRound = workingLogs.length >= chainLen ? workingLogs[workingLogs.length - chainLen] : null;
+      setLogWeightVal(String(prevRound?.weight ?? dropChain[dropStep].weight));
+      setLogRepsVal(String(prevRound?.reps ?? dropChain[dropStep].reps));
+      setLogIsDropSet(dropStep > 0);
+      setLoggingSet(true);
+      return;
+    }
     const initialW = +initialWStr || 0;
     const autoDrop = (isDropSet || existingEntry?.isDropSet) ||
       (existingIndex == null && workingLogs.length > 0 && lastLoggedWeight != null && lastLoggedWeight > 0 && initialW < lastLoggedWeight);
@@ -1421,7 +1439,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
     setLogWeightVal((v) => {
       const nextW = Math.max(0, (+v || 0) + delta);
       // Auto-detect drop set when weight drops below previous set
-      if (!logIsWarmup && editingLogIndex == null && workingLogs.length > 0 && lastLoggedWeight != null && lastLoggedWeight > 0) {
+      if (!dropChain && !logIsWarmup && editingLogIndex == null && workingLogs.length > 0 && lastLoggedWeight != null && lastLoggedWeight > 0) {
         if (nextW < lastLoggedWeight && nextW > 0) {
           setLogIsDropSet(true);
         } else if (nextW >= lastLoggedWeight) {
@@ -1450,18 +1468,32 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
 
   const REST_DEFAULTS = { compound: 120, isolation: 90, core: 60 };
   const WARMUP_REST_SECONDS = 45;
+  // What happens after the set being logged now (new working sets only).
+  const loggingNew = editingLogIndex == null && !logIsWarmup;
+  const midChain = loggingNew && !!dropChain && ex.dropNoRest !== false && dropStep < chainLen - 1;
+  const nextDrop = midChain ? dropChain[dropStep + 1] : null;
+  // Superset: rest only once every partner has caught up to this round.
+  const ssPartnersBehind = loggingNew && superset && !midChain
+    ? superset.members.filter((m) => m._id !== rawEx._id && !m.finished && m.units < doneUnits + (dropChain ? (dropStep === chainLen - 1 ? 1 : 0) : 1))
+    : [];
+  const midSuperset = ssPartnersBehind.length > 0;
 
   function confirmSetLog() {
-    const entry = { reps: Math.max(0, +logRepsVal || 0), rir: logIsWarmup ? null : logRirVal, weight: Math.max(0, +logWeightVal || 0), isDropSet: logIsWarmup ? false : logIsDropSet, isWarmup: logIsWarmup };
     const isNewSet = editingLogIndex == null;
+    const entry = { reps: Math.max(0, +logRepsVal || 0), rir: logIsWarmup ? null : logRirVal, weight: Math.max(0, +logWeightVal || 0), isDropSet: logIsWarmup ? false : logIsDropSet, isWarmup: logIsWarmup };
+    if (dropChain && !logIsWarmup) {
+      if (isNewSet) { entry.dropIndex = dropStep; entry.isDropSet = dropStep > 0; }
+      else { entry.dropIndex = effectiveSetLogs[editingLogIndex]?.dropIndex; entry.isDropSet = !!effectiveSetLogs[editingLogIndex]?.isDropSet; }
+    }
     if (isNewSet) ensureSessionStart(dayId, dateStr);
     const next = isNewSet
       ? [...effectiveSetLogs, entry]
       : effectiveSetLogs.map((s, idx) => (idx === editingLogIndex ? entry : s));
     setLogsMutation.mutate(next);
     closeSetLogger();
-    // Auto-start rest timer
-    if (isNewSet) {
+    // Auto-start rest timer — except mid drop chain (straight into the next
+    // drop) and mid superset round (straight to the partner).
+    if (isNewSet && !midChain && !midSuperset) {
       const seconds = entry.isWarmup ? WARMUP_REST_SECONDS : ex.restSeconds > 0 ? ex.restSeconds : (REST_DEFAULTS[ex.exerciseType] || REST_DEFAULTS.compound);
       const endsAt = Date.now() + seconds * 1000;
       setActiveRestTimer({ splitId, dayId, exerciseId: rawEx._id, exerciseName: rawEx.name, restEndsAt: endsAt });
@@ -1469,12 +1501,12 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
       setRestNow(Date.now());
     }
     // Prompt if logged weight is heavier than target
-    if (!entry.isWarmup && !entry.isDropSet && entry.weight > (ex.weight || 0) && !effectiveSwap && !heavierWeightPromptedRef.current) {
+    if (!dropChain && !entry.isWarmup && !entry.isDropSet && entry.weight > (ex.weight || 0) && !effectiveSwap && !heavierWeightPromptedRef.current) {
       heavierWeightPromptedRef.current = true;
       setHeavierWeightPrompt({ loggedWeight: entry.weight, targetWeight: ex.weight || 0 });
     }
     // Prompt if logged reps significantly exceed target (e.g. 60 vs 10 reps on calves)
-    if (!entry.isWarmup && !entry.isDropSet && entry.reps > (ex.reps || 0) && !effectiveSwap && !higherRepsPromptedRef.current) {
+    if (!dropChain && !entry.isWarmup && !entry.isDropSet && entry.reps > (ex.reps || 0) && !effectiveSwap && !higherRepsPromptedRef.current) {
       higherRepsPromptedRef.current = true;
       setHigherRepsPrompt({ loggedReps: entry.reps, targetReps: ex.reps || 0 });
     }
@@ -1503,12 +1535,17 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
   const decimalInput = (v) => v.replace(',', '.');
   // Next-set suggestion (double progression + RIR). Hidden when it would just
   // repeat the plan, while warming up, or when editing an already-logged set.
-  const suggestion = !logIsWarmup && editingLogIndex == null && !ex.untilFailure && !(ex.duration > 0)
+  const suggestion = !dropChain && !logIsWarmup && editingLogIndex == null && !ex.untilFailure && !(ex.duration > 0)
     ? suggestNextSet({ targetReps: ex.reps, targetSets: ex.sets, step: weightStep, plannedWeight: ex.weight || 0, todaySets: workingLogs, lastSets: lastSessionInfo?.setLogs || [] })
     : null;
   const showSuggestion = suggestion && suggestion.reason !== 'From your plan';
   const suggestionApplied = showSuggestion && +logWeightVal === suggestion.weight && +logRepsVal === suggestion.reps;
   const loggerUnit = ex.weightUnit || 'kg';
+  const logButtonLabel = nextDrop ? `Log ${+logWeightVal || 0} · next ${nextDrop.weight} ${loggerUnit}`
+    : midSuperset ? `Log ${superset.tag} · then ${ssPartnersBehind[0].tag}`
+    : superset ? `Log ${superset.tag} · then rest`
+    : dropChain ? `Log ${+logWeightVal || 0} · then rest`
+    : `Log Set ${nextSetNumber}`;
   const setLogFormEl = (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', padding: 12, borderRadius: 'var(--r-lg)', background: 'var(--bg2)', boxShadow: logIsWarmup ? 'inset 0 0 0 1.5px var(--yellow)' : logIsDropSet ? 'inset 0 0 0 1.5px var(--accent)' : 'none' }}>
       {logIsWarmup ? (
@@ -1617,7 +1654,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
           onClick={() => { tick(); confirmSetLog(); }}
           disabled={setLogsMutation.isPending}
           style={{ flex: 1, height: 56, borderRadius: 'var(--r-lg)', border: 'none', background: logIsWarmup ? 'var(--yellow)' : 'var(--accent)', color: 'var(--on-accent)', fontWeight: 700, fontSize: 18, letterSpacing: '0.06em', textTransform: 'uppercase', cursor: 'pointer', opacity: setLogsMutation.isPending ? 0.7 : 1 }}
-        >{setLogsMutation.isPending ? 'Saving…' : editingLogIndex != null ? 'Save' : logIsWarmup ? `Log warm-up ${warmupLogs.length + 1}` : `Log Set ${nextSetNumber}`}</button>
+        >{setLogsMutation.isPending ? 'Saving…' : editingLogIndex != null ? 'Save' : logIsWarmup ? `Log warm-up ${warmupLogs.length + 1}` : logButtonLabel}</button>
       </div>
     </div>
   );
@@ -1897,6 +1934,8 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
     // Index of each working set within effectiveSetLogs (warm-ups interleave), for editing.
     const workingIdx = effectiveSetLogs.map((st, i) => (st.isWarmup ? null : i)).filter((i) => i != null);
     const inWarmup = warmupPending || (logIsWarmup && editingLogIndex == null);
+    // Last session's chain, cut into rounds.
+    const lastChainRounds = dropChain ? Array.from({ length: Math.ceil(lastSets.length / chainLen) }, (_, r) => lastSets.slice(r * chainLen, (r + 1) * chainLen)) : [];
     const showWarmupDots = warmupRamp.length > 0 && (ex.weight || 0) > 0 && (!warmupSkipped || warmupLogs.length > 0);
     const unit = ex.weightUnit || 'kg';
     const fmtSet = (s) => (s ? `${s.weight > 0 ? `${s.weight} × ` : ''}${s.reps}` : '—');
@@ -1915,9 +1954,15 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
         <section aria-label="Current exercise" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 16px 8px', display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-              <span style={{ ...labelStyle, color: ex.category === 'warmup' || inWarmup ? 'var(--yellow)' : 'var(--text2)' }}>
-                {ex.category === 'warmup' || inWarmup ? 'Warm-up · ' : ''}{focusPosition ? `Exercise ${focusPosition.index} of ${focusPosition.total}` : ''}
-              </span>
+              {superset && !inWarmup ? (
+                <span style={{ ...labelStyle, color: 'var(--blue)' }}>
+                  Superset {superset.group} · round {Math.min(superset.round, superset.rounds)} of {superset.rounds}
+                </span>
+              ) : (
+                <span style={{ ...labelStyle, color: ex.category === 'warmup' || inWarmup ? 'var(--yellow)' : 'var(--text2)' }}>
+                  {ex.category === 'warmup' || inWarmup ? 'Warm-up · ' : ''}{focusPosition ? `Exercise ${focusPosition.index} of ${focusPosition.total}` : ''}
+                </span>
+              )}
               {prInfo && (
                 <span style={{ ...labelStyle, color: 'var(--red)', display: 'inline-flex', alignItems: 'center', gap: 4 }} title={`Previous best ${prInfo.prevWeight}${prInfo.prevUnit}`}>
                   <Trophy size={13} aria-hidden="true" /> PR {prInfo.diff || ''}
@@ -1933,11 +1978,14 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
                 {showWarmupDots && warmupRamp.map((_, i) => (
                   <span key={`w${i}`} style={{ width: inWarmup && i === warmupLogs.length ? 24 : 8, height: 8, borderRadius: 4, background: 'var(--yellow)', opacity: i < warmupLogs.length || (inWarmup && i === warmupLogs.length) ? 1 : 0.35 }} />
                 ))}
-                {Array.from({ length: Math.max(targetSets, workingLogs.length) }, (_, i) => (
-                  <span key={i} style={{ width: 24, height: 8, borderRadius: 4, background: i < workingLogs.length ? 'var(--green)' : i === workingLogs.length && !inWarmup ? 'var(--accent)' : 'var(--bg4)' }} />
+                {Array.from({ length: Math.max(targetSets, doneUnits) }, (_, i) => (
+                  <span key={i} style={{ width: 24, height: 8, borderRadius: 4, background: i < doneUnits ? 'var(--green)' : i === doneUnits && !inWarmup ? 'var(--accent)' : 'var(--bg4)' }} />
                 ))}
                 <span style={{ fontSize: 'var(--fs-md)', fontWeight: 600, color: 'var(--text2)', marginLeft: 4 }}>
-                  {inWarmup ? `Warm-up ${warmupLogs.length + 1} of ${warmupRamp.length}` : targetSetsReached ? 'Target sets done' : `Set ${nextSetNumber} of ${targetSets}`}
+                  {inWarmup ? `Warm-up ${warmupLogs.length + 1} of ${warmupRamp.length}`
+                    : targetSetsReached ? (dropChain ? 'All rounds done' : 'Target sets done')
+                    : dropChain ? `Round ${doneUnits + 1} of ${targetSets}`
+                    : `Set ${nextSetNumber} of ${targetSets}`}
                 </span>
               </div>
             )}
@@ -1973,7 +2021,61 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
           )}
           {notesEditorEl}
 
-          {!inWarmup && !(ex.duration > 0) && rowCount > 0 && (
+          {superset && !inWarmup && (
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${superset.members.length}, minmax(0, 1fr))`, gap: 8 }}>
+              {superset.members.map((m) => {
+                const now = m._id === rawEx._id;
+                return (
+                  <div key={m._id} style={{ borderRadius: 'var(--r-lg)', padding: '10px 12px', background: now ? 'rgba(var(--blue-rgb), 0.14)' : 'var(--bg2)', boxShadow: now ? 'inset 0 0 0 1.5px var(--blue)' : 'none', display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+                    <span style={{ fontSize: 'var(--fs-sm)', fontWeight: 700, letterSpacing: '0.1em', color: now ? 'var(--blue)' : 'var(--text2)' }}>{m.tag}{now ? ' · NOW' : m.finished ? ' · DONE' : ''}</span>
+                    <span style={{ fontSize: 15, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.name}</span>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text2)' }}>{Math.min(m.units, superset.rounds)} / {superset.rounds}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {!inWarmup && dropChain && (
+            <div style={{ background: 'var(--bg2)', borderRadius: 'var(--r-lg)', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={labelStyle}>{targetSetsReached ? 'Drop chain' : `Round ${doneUnits + 1}`}</span>
+                <span style={labelStyle}>{ex.dropNoRest !== false ? 'No rest between drops' : 'Drop set'}</span>
+              </div>
+              {!targetSetsReached && (
+                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${chainLen}, minmax(0, 1fr))`, gap: 6 }}>
+                  {dropChain.map((d, i) => {
+                    const done = i < dropStep ? workingLogs[doneUnits * chainLen + i] : null;
+                    const now = i === dropStep;
+                    return (
+                      <div key={i} style={{ borderRadius: 12, padding: '10px 6px', textAlign: 'center', background: now ? 'var(--accent)' : 'var(--bg3)', color: now ? 'var(--on-accent)' : done ? 'var(--text2)' : 'var(--text)', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                          {done && <Check size={12} strokeWidth={3} aria-hidden="true" />}{done ? 'DONE' : now ? 'NOW' : i === 0 ? 'TOP' : `DROP ${i}`}
+                        </span>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 17 }}>{done ? done.weight : d.weight}</span>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, opacity: 0.8 }}>× {done ? done.reps : d.reps}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {Array.from({ length: Math.max(doneUnits, lastChainRounds.length) }, (_, r) => {
+                const sets = workingLogs.slice(r * chainLen, (r + 1) * chainLen);
+                const fmtRound = (arr) => (arr && arr.length ? arr.map((x) => x.weight).join('→') + ` ×${arr[0].reps}` : '—');
+                return (
+                  <div key={r} style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--font-mono)', fontSize: 15 }}>
+                    {r < doneUnits ? (
+                      <button type="button" onClick={() => !readOnly && openSetLogger(workingIdx[r * chainLen], sets[0])} aria-label={`Edit round ${r + 1}`} style={{ background: 'none', border: 'none', padding: '4px 0', color: 'var(--text)', fontFamily: 'inherit', fontSize: 'inherit', cursor: 'pointer' }}>{r + 1} · {fmtRound(sets)}</button>
+                    ) : <span style={{ color: 'var(--text3)' }}>{r + 1} · —</span>}
+                    <span style={{ color: 'var(--text2)' }}>{fmtRound(lastChainRounds[r])}</span>
+                  </div>
+                );
+              })}
+              <span style={{ fontSize: 13, color: 'var(--text2)' }}>Weights in {unit}{lastChainRounds.length ? ' · right: last time' : ''}</span>
+            </div>
+          )}
+
+          {!inWarmup && !dropChain && !(ex.duration > 0) && rowCount > 0 && (
             <div style={{ background: 'var(--bg2)', borderRadius: 'var(--r-lg)', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={labelStyle}>This time</span>
@@ -3123,11 +3225,11 @@ function FocusWorkout({ title, elapsedSeconds, steps, currentId, onMinimize, onF
                 style={{ minHeight: 56, borderRadius: 'var(--r-lg)', border: 'none', background: isCurrent ? 'var(--bg3)' : 'none', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 12, padding: '0 12px', textAlign: 'left', cursor: canJump ? 'pointer' : 'default' }}
               >
                 <span aria-hidden="true" style={{ width: 28, height: 28, borderRadius: 14, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-mono)', fontSize: 12, background: st.status === 'done' ? 'var(--green)' : 'transparent', boxShadow: st.status === 'done' ? 'none' : `inset 0 0 0 2px ${isCurrent ? 'var(--accent)' : 'var(--iron)'}`, color: st.status === 'done' ? 'var(--on-accent)' : 'var(--text2)' }}>
-                  {st.status === 'done' ? <Check size={14} strokeWidth={3} /> : st.status === 'skipped' ? <Ban size={13} /> : i + 1}
+                  {st.status === 'done' ? <Check size={14} strokeWidth={3} /> : st.status === 'skipped' ? <Ban size={13} /> : st.tag ? <span style={{ color: 'var(--blue)' }}>{st.tag}</span> : i + 1}
                 </span>
                 <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
                   <span style={{ fontSize: 17, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: st.status === 'todo' ? 'var(--text)' : 'var(--text2)', textDecoration: st.status === 'skipped' ? 'line-through' : 'none' }}>{st.name}</span>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text2)' }}>{st.detail}</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text2)' }}>{st.tag && <span style={{ color: 'var(--blue)' }}>Superset {st.tag} · </span>}{st.detail}</span>
                 </span>
                 {isCurrent && <span style={{ fontSize: 'var(--fs-sm)', fontWeight: 700, letterSpacing: '0.12em' }}>NOW</span>}
               </button>
@@ -3431,6 +3533,22 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
   let cooldowns = displayExercises.filter((e) => (e.category || 'workout') === 'cooldown');
 
   const showHero = isScreen && !isCompleted;
+  // Working sets (or whole drop-chain rounds) logged today on an exercise.
+  const unitsDone = (e) => {
+    const n = (matchesDay(e.todaySetLogsDate, dateStr) ? (e.todaySetLogs || []) : []).filter((x) => !x.isWarmup).length;
+    const chain = dropChainOf(e);
+    return chain ? Math.floor(n / chain.length) : n;
+  };
+  const supersetInfo = (ex) => {
+    const members = supersetMembers(ex, displayExercises);
+    if (!members.length) return null;
+    const info = members.map((m, i) => ({
+      _id: m._id, name: m.name, tag: `${m.supersetGroup}${i + 1}`, units: unitsDone(m),
+      finished: (matchesDay(m.lastCheckedDate, dateStr) && m.checked) || (matchesDay(m.lastSkippedDate, dateStr) && m.skipped),
+    }));
+    const me = info.find((m) => m._id === ex._id);
+    return { group: ex.supersetGroup, tag: me.tag, members: info, rounds: Math.max(...members.map((m) => m.sets || 0)), round: Math.min(...info.filter((m) => !m.finished).map((m) => m.units).concat(me.units)) + 1 };
+  };
   let heroEx = null;
   if (showHero) {
     const ordered = [...warmups, ...workouts, ...cooldowns];
@@ -3446,6 +3564,13 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
     heroEx = (heroOverrideId && ordered.find((e) => e._id === heroOverrideId && isUnchecked(e)))
       || ordered.find(isUnchecked)
       || null;
+    // Supersets alternate: whichever unfinished member is furthest behind
+    // goes next (ties keep the current one), so A1 → A2 → A1 …
+    if (heroEx && supersetMembers(heroEx, displayExercises).length) {
+      const behind = supersetMembers(heroEx, displayExercises).filter(isUnchecked);
+      const least = Math.min(...behind.map(unitsDone));
+      if (unitsDone(heroEx) > least) heroEx = behind.find((e) => unitsDone(e) === least);
+    }
     if (heroEx) {
       warmups = warmups.filter((e) => e !== heroEx);
       workouts = workouts.filter((e) => e !== heroEx);
@@ -3464,7 +3589,10 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
     const skipped = matchesDay(e.lastSkippedDate, dateStr) && e.skipped;
     const unit = e.weightUnit || 'kg';
     const detail = e.duration > 0 ? `${e.sets} × ${e.duration}${e.durationUnit || 'sec'}` : `${e.sets} × ${e.untilFailure ? 'failure' : e.reps}${e.weight > 0 ? ` · ${e.weight} ${unit}` : ''}`;
-    return { id: e._id, name: e.name, detail, status: done ? 'done' : skipped ? 'skipped' : 'todo' };
+    const chain = dropChainOf(e);
+    const detail2 = chain ? `${e.sets} rounds · ${chain.map((d) => d.weight).join('→')} ${unit}` : detail;
+    const ss = supersetInfo(e);
+    return { id: e._id, name: e.name, detail: detail2, tag: ss?.tag, status: done ? 'done' : skipped ? 'skipped' : 'todo' };
   });
   const restRemaining = activeRestRec ? Math.ceil((activeRestRec.restEndsAt - sessionNow) / 1000) : 0;
   const adjustRest = (deltaMs) => {
@@ -3485,7 +3613,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
       {heroEx && (
         <div style={{ minHeight: 64, borderRadius: 'var(--r-lg)', background: 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '0 16px' }}>
           <span style={{ fontSize: 'var(--fs-sm)', fontWeight: 700, color: 'var(--text2)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>Up next</span>
-          <span style={{ fontSize: 17, fontWeight: 600, textAlign: 'right', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{heroEx.duration > 0 ? heroEx.name : `Set ${(matchesDay(heroEx.todaySetLogsDate, dateStr) ? (heroEx.todaySetLogs || []).length : 0) + 1} · ${heroEx.name}`}</span>
+          <span style={{ fontSize: 17, fontWeight: 600, textAlign: 'right', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{heroEx.duration > 0 ? heroEx.name : `${dropChainOf(heroEx) ? 'Round' : 'Set'} ${unitsDone(heroEx) + 1} · ${heroEx.name}`}</span>
         </div>
       )}
       <span style={{ fontSize: 'var(--fs-md)', color: 'var(--text2)', textAlign: 'center' }}>The logger comes back when rest ends</span>
@@ -3517,7 +3645,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
         </div>
       )}
       {heroEx ? (
-        <ExerciseRow variant="hero" key={heroEx._id} ex={heroEx} index={displayExercises.indexOf(heroEx)} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} dateStr={dateStr} logs={logs} onShowToast={onShowToast} localOnly={heroEx.isLastWeekWorkout} />
+        <ExerciseRow variant="hero" key={heroEx._id} ex={heroEx} index={displayExercises.indexOf(heroEx)} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} dateStr={dateStr} logs={logs} onShowToast={onShowToast} localOnly={heroEx.isLastWeekWorkout} superset={supersetInfo(heroEx)} />
       ) : (
         <div style={{ padding: '24px 16px', textAlign: 'center', borderRadius: 14, border: '1.5px solid var(--accent)', background: 'var(--bg2)' }}>
           <div style={{ display: 'flex', justifyContent: 'center', color: 'var(--accent)', marginBottom: 6 }}><PartyPopper size={22} /></div>
@@ -3921,7 +4049,7 @@ function DayCard({ day, splitId, splitDays, splitName, isToday, defaultOpen, dat
           onAddExercise={() => setShowAddModal(true)}
         >
           {heroEx ? (
-            <ExerciseRow variant="focus" key={heroEx._id} ex={heroEx} index={displayExercises.indexOf(heroEx)} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} dateStr={dateStr} logs={logs} onShowToast={onShowToast} localOnly={heroEx.isLastWeekWorkout} focusPosition={focusPosition} restSlot={restSlotEl} />
+            <ExerciseRow variant="focus" key={heroEx._id} ex={heroEx} index={displayExercises.indexOf(heroEx)} splitId={splitId} dayId={day._id} splitDays={splitDays} onToggle={handleToggle} readOnly={readOnly} isCompleted={isCompleted} dateStr={dateStr} logs={logs} onShowToast={onShowToast} localOnly={heroEx.isLastWeekWorkout} focusPosition={focusPosition} restSlot={restSlotEl} superset={supersetInfo(heroEx)} />
           ) : (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 16, padding: '16px 16px calc(16px + var(--safe-bottom))', textAlign: 'center' }}>
               <PartyPopper size={36} style={{ alignSelf: 'center', color: 'var(--green)' }} aria-hidden="true" />
