@@ -134,6 +134,7 @@ function PickerPill({ label, selected, disabled, onClick, small }) {
 
 /* ─── Modals ─── */
 function TextModal({ title, initial = '', placeholder, onConfirm, onClose }) {
+  useBackClose(true, onClose);
   const [value, setValue] = useState(initial);
   function submit(e) { e.preventDefault(); if (!value.trim()) return; onConfirm(value.trim()); }
   return createPortal(
@@ -154,6 +155,7 @@ function TextModal({ title, initial = '', placeholder, onConfirm, onClose }) {
 }
 
 function RenameHistoryModal({ oldName, newName, logCount, onRename, onSkip }) {
+  useBackClose(true, onSkip);
   return createPortal(
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onSkip()}>
       <div className="modal">
@@ -266,6 +268,7 @@ function WeightSyncModal({
   oldCategory, newCategory,
   otherDays, otherSplits = [], onSync, onSkip, onExclude
 }) {
+  useBackClose(true, onSkip);
   const oldWInNewUnit = convertWeight(oldWeight ?? 0, oldUnit || 'kg', newUnit || 'kg');
   const delta = (newWeight ?? 0) - oldWInNewUnit;
   const weightChanged = Math.abs(delta) >= 0.01;
@@ -370,6 +373,7 @@ function WeightSyncModal({
 }
 
 function EditDayModal({ initialName = '', initialTag = '', onConfirm, onClose }) {
+  useBackClose(true, onClose);
   const [name, setName] = useState(initialName);
   const [selectedTag, setSelectedTag] = useState(TAG_OPTIONS.includes(initialTag) ? initialTag : null);
   const [customTag, setCustomTag] = useState(TAG_OPTIONS.includes(initialTag) ? '' : initialTag);
@@ -446,6 +450,7 @@ function EditDayModal({ initialName = '', initialTag = '', onConfirm, onClose })
 }
 
 function AddDayModal({ existingDays = [], onConfirm, onClose }) {
+  useBackClose(true, onClose);
   const [selectedDay, setSelectedDay] = useState(null);
   const [customName, setCustomName] = useState('');
   const [selectedTag, setSelectedTag] = useState(null);
@@ -555,6 +560,7 @@ function AddDayModal({ existingDays = [], onConfirm, onClose }) {
 }
 
 function AddExerciseModal({ splitDays, onConfirm, onClose }) {
+  useBackClose(true, onClose);
   const { storage, storageKey } = useStorage();
   const [form, setForm] = useState({ name: '', sets: 3, reps: 10, weight: 0, weightUnit: 'kg', muscleTargets: [], untilFailure: false, imageUrl: '', placeholderUsed: false, category: 'workout', exerciseType: 'compound', restSeconds: 0, warmupRamp: [], duration: 0, durationUnit: 'sec' });
   const [isDuration, setIsDuration] = useState(false);
@@ -921,6 +927,7 @@ function AddExerciseModal({ splitDays, onConfirm, onClose }) {
 }
 
 function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
+  useBackClose(true, onClose);
   const { storage, storageKey } = useStorage();
   const [form, setForm] = useState({ name: '', sets: 3, reps: 10, weight: 0, weightUnit: 'kg', muscleTargets: [], untilFailure: false, duration: 0, durationUnit: 'sec' });
   const [isDuration, setIsDuration] = useState(false);
@@ -1232,6 +1239,7 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
 
 /* ─── Edit Exercise Modal ─── */
 function EditExerciseModal({ ex, splitId, dayId, splitDays, onConfirm, onClose, onUpdate }) {
+  useBackClose(true, onClose);
   const { storage, storageKey } = useStorage();
   const [form, setForm] = useState({
     name: ex.name,
@@ -1812,6 +1820,7 @@ function EditExerciseModal({ ex, splitId, dayId, splitDays, onConfirm, onClose, 
 
 /* ─── Day picker (used for "move exercise to day" and "swap day with") ─── */
 function DayPickerModal({ title, days, excludeDayId, onConfirm, onClose }) {
+  useBackClose(true, onClose);
   const options = days.filter((d) => d._id !== excludeDayId);
   return (
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>

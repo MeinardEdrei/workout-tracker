@@ -2,6 +2,7 @@ import { useState, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, Dumbbell, Copy, Download, Share2, X } from 'lucide-react';
 import { localDateStr } from '../utils/localDate';
+import { useBackClose } from '../hooks/useBackClose';
 
 const DAYS_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -81,6 +82,7 @@ function getVolumeComparison(volumeKg) {
 }
 
 export default function StatsShareModal({ logs, onClose }) {
+  useBackClose(true, onClose);
   const [format, setFormat] = useState('1:1'); // '1:1' or '9:16'
   const [background, setBackground] = useState('dark'); // 'dark', 'sunset', 'ocean', 'transparent'
   const [accent, setAccent] = useState('lime'); // 'lime', 'coral', 'cyan', 'white'

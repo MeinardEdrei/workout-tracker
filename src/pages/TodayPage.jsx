@@ -164,6 +164,7 @@ function getExercisePRs(logs, currentDateStr = '') {
 }
 
 function ExerciseHistoryModal({ exName, logs, onClose }) {
+  useBackClose(true, onClose);
   const history = useMemo(() => {
     const key = (exName || '').trim().toLowerCase();
     const records = [];
@@ -274,6 +275,7 @@ function WeightSyncModal({
   oldCategory, newCategory,
   otherDays, otherSplits = [], onSync, onSkip, onExclude
 }) {
+  useBackClose(true, onSkip);
   const oldWInNewUnit = convertWeight(oldWeight ?? 0, oldUnit || 'kg', newUnit || 'kg');
   const delta = (newWeight ?? 0) - oldWInNewUnit;
   const weightChanged = Math.abs(delta) >= 0.01;
@@ -495,6 +497,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesVal, setNotesVal] = useState(ex.notes || '');
   const [showActionsMenu, setShowActionsMenu] = useState(false);
+  useBackClose(showActionsMenu, () => setShowActionsMenu(false));
   const [menuAnchor, setMenuAnchor] = useState({ top: 0, right: 0 });
   const menuBtnRef = useRef(null);
   const [loggingSet, setLoggingSet] = useState(false);
@@ -2352,6 +2355,7 @@ function ExerciseRow({ ex: rawEx, index, splitId, dayId, splitDays, onToggle, re
 
 /* ─── Finish Workout Modal with Session Duration Adjustment ─── */
 function FinishWorkoutModal({ message, initialDurationSeconds, onConfirm, onClose }) {
+  useBackClose(true, onClose);
   const [durationMins, setDurationMins] = useState(() => Math.max(1, Math.round((initialDurationSeconds || 0) / 60) || 45));
 
   return createPortal(
@@ -2405,6 +2409,7 @@ function FinishWorkoutModal({ message, initialDurationSeconds, onConfirm, onClos
 }
 
 function AddExerciseFromOtherDaysModal({ splitDays, logs, onConfirm, onClose }) {
+  useBackClose(true, onClose);
   const [activeTab, setActiveTab] = useState('split'); // 'split' or 'custom'
   const [form, setForm] = useState({ name: '', sets: 3, reps: 10, weight: 0, weightUnit: 'kg', category: 'workout', duration: 0, durationUnit: 'sec', untilFailure: false, muscleTargets: [] });
   const [suggestions, setSuggestions] = useState([]);
@@ -2762,6 +2767,7 @@ function AddExerciseFromOtherDaysModal({ splitDays, logs, onConfirm, onClose }) 
 }
 
 function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
+  useBackClose(true, onClose);
   const { storage, storageKey } = useStorage();
   const [form, setForm] = useState({ name: '', sets: 3, reps: 10, weight: 0, weightUnit: 'kg', notes: '', muscleTargets: [], untilFailure: false });
   const [suggestions, setSuggestions] = useState([]);

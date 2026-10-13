@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Dumbbell, X } from 'lucide-react';
+import { useBackClose } from '../hooks/useBackClose';
 
 function Lightbox({ imageUrl, name, onClose }) {
+  useBackClose(true, onClose);
   return (
     <div
       onClick={onClose}

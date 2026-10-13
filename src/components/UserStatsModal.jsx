@@ -2,8 +2,10 @@ import { useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { isOnline, formatPresence } from '../utils/presence';
 import { Calendar, X } from 'lucide-react';
+import { useBackClose } from '../hooks/useBackClose';
 
 export default function UserStatsModal({ user, filter, onClose }) {
+  useBackClose(true, onClose);
   const workoutCount = user.workoutCount || 0;
   const totalVolume = user.totalVolume || 0;
   const volLabel = totalVolume >= 1000 ? `${(totalVolume / 1000).toFixed(1)}k kg` : `${totalVolume} kg`;

@@ -28,6 +28,7 @@ function InlineSpinner() {
   );
 }
 function SplitModal({ title, initial = '', onConfirm, onClose }) {
+  useBackClose(true, onClose);
   const [value, setValue] = useState(initial);
   function submit(e) { e.preventDefault(); if (!value.trim()) return; onConfirm(value.trim()); }
   return (
@@ -89,6 +90,7 @@ function generateDaySkeleton(daysPerWeek, styleKey) {
 }
 
 function NewSplitModal({ onConfirm, onClose, onBrowse }) {
+  useBackClose(true, onClose);
   const [name, setName] = useState('');
   const [daysPerWeek, setDaysPerWeek] = useState(null); // null = not chosen, 0 = "I'll set up days myself"
   const [style, setStyle] = useState(null);
@@ -279,6 +281,7 @@ function VersionDiff({
 }
 
 function SplitCompareModal({ splits, initialLeftId, onClose }) {
+  useBackClose(true, onClose);
   const activeSplit = splits.find((s) => s.isActive);
   const defaultRight = (activeSplit && activeSplit._id !== initialLeftId)
     ? activeSplit._id
@@ -336,6 +339,7 @@ function SplitCompareModal({ splits, initialLeftId, onClose }) {
 }
 
 function SplitHistoryModal({ split, onRevert, isReverting, onClose }) {
+  useBackClose(true, onClose);
   const { storage } = useStorage();
   const [expandedId, setExpandedId] = useState(null);
   const { data: versions, isLoading } = useQuery({
@@ -414,6 +418,7 @@ export default function SplitsPage() {
   useBackClose(browsing, () => setBrowsing(false));
   useBackClose(viewingRanking, () => setViewingRanking(false));
   const [showUserMenu, setShowUserMenu] = useState(false);
+  useBackClose(showUserMenu, () => setShowUserMenu(false));
   const [menuOpenId, setMenuOpenId] = useState(null);
   const [copyChoiceOpen, setCopyChoiceOpen] = useState(false);
 
@@ -427,6 +432,7 @@ export default function SplitsPage() {
   const [historyModal, setHistoryModal] = useState(null);
   const [compareModal, setCompareModal] = useState(false);
   const [copyHistoryModal, setCopyHistoryModal] = useState(null);
+  useBackClose(!!copyHistoryModal, () => setCopyHistoryModal(null));
   const importInputRef = useRef(null);
   const [toast, setToast] = useState(null);
   const signInTimer = useRef(null);

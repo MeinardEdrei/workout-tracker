@@ -12,6 +12,7 @@ import ConfirmModal from '../components/ConfirmModal';
 import { SkeletonCards } from '../components/Skeleton';
 import { localDateStr } from '../utils/localDate';
 import { workingSets } from '../utils/sets';
+import { useBackClose } from '../hooks/useBackClose';
 
 const LOGS_STALE = 2 * 60 * 1000;
 const DOW_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
@@ -981,6 +982,7 @@ function SectionLabel({ children }) {
 }
 
 function BackupModal({ logs, splits, storage, queryClient, onClose }) {
+  useBackClose(true, onClose);
   const [importing, setImporting] = useState(false);
   const [msg, setMsg] = useState(null);
   const fileRef = useRef(null);
@@ -1148,6 +1150,7 @@ function BackupModal({ logs, splits, storage, queryClient, onClose }) {
 }
 
 function ManageExercisesModal({ logs, storage, storageKey, queryClient, onClose }) {
+  useBackClose(true, onClose);
   const [mergeTarget, setMergeTarget] = useState(null); // { a: stat, b: stat }
   const [survivor, setSurvivor] = useState(null);
   const [busy, setBusy] = useState(false);

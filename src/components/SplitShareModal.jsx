@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import SplitShareCard from './SplitShareCard';
 import { Download, Share, X } from 'lucide-react';
+import { useBackClose } from '../hooks/useBackClose';
 
 function toFilename(splitName) {
   return splitName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') + '-split.png';
@@ -17,6 +18,7 @@ function Spinner() {
 }
 
 export default function SplitShareModal({ split, onClose }) {
+  useBackClose(true, onClose);
   const cardRef = useRef(null);
   const [phase, setPhase] = useState('generating'); // 'generating' | 'preview' | 'error'
   const [previewUrl, setPreviewUrl] = useState(null);
