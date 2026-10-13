@@ -1175,8 +1175,8 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
           </div>
 
           <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-            <button type="button" className={`btn ${!isDuration ? 'btn-accent' : ''}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => { setIsDuration(false); setForm(f => ({ ...f, duration: 0 })); }}>Reps-based</button>
-            <button type="button" className={`btn ${isDuration ? 'btn-accent' : ''}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => { setIsDuration(true); setForm(f => ({ ...f, reps: 0, untilFailure: false })); }}>Duration-based</button>
+            <button type="button" className={`btn ${!isDuration ? 'btn-accent' : 'btn-ghost'}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => { setIsDuration(false); setForm(f => ({ ...f, duration: 0 })); }}>Reps-based</button>
+            <button type="button" className={`btn ${isDuration ? 'btn-accent' : 'btn-ghost'}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => { setIsDuration(true); setForm(f => ({ ...f, reps: 0, untilFailure: false })); }}>Duration-based</button>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: isDuration ? '1fr 1.5fr 1fr' : '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
@@ -1208,8 +1208,8 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
 
           {!isDuration && (
             <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-              <button type="button" className={`btn ${!form.untilFailure ? 'btn-accent' : ''}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setForm(f => ({ ...f, untilFailure: false }))}>Specific reps</button>
-              <button type="button" className={`btn ${form.untilFailure ? 'btn-accent' : ''}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setForm(f => ({ ...f, untilFailure: true }))}>Until failure</button>
+              <button type="button" className={`btn ${!form.untilFailure ? 'btn-accent' : 'btn-ghost'}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setForm(f => ({ ...f, untilFailure: false }))}>Specific reps</button>
+              <button type="button" className={`btn ${form.untilFailure ? 'btn-accent' : 'btn-ghost'}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setForm(f => ({ ...f, untilFailure: true }))}>Until failure</button>
             </div>
           )}
 
@@ -1566,8 +1566,8 @@ function EditExerciseModal({ ex, splitId, dayId, splitDays, onConfirm, onClose, 
           </div>
 
           <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-            <button type="button" className={`btn ${!isDuration ? 'btn-accent' : ''}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => { setIsDuration(false); setForm(f => ({ ...f, duration: 0 })); }}>Reps-based</button>
-            <button type="button" className={`btn ${isDuration ? 'btn-accent' : ''}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => { setIsDuration(true); setForm(f => ({ ...f, reps: 0, untilFailure: false })); }}>Duration-based</button>
+            <button type="button" className={`btn ${!isDuration ? 'btn-accent' : 'btn-ghost'}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => { setIsDuration(false); setForm(f => ({ ...f, duration: 0 })); }}>Reps-based</button>
+            <button type="button" className={`btn ${isDuration ? 'btn-accent' : 'btn-ghost'}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => { setIsDuration(true); setForm(f => ({ ...f, reps: 0, untilFailure: false })); }}>Duration-based</button>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: isDuration ? '1fr 1.5fr 1fr' : '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
@@ -1599,8 +1599,8 @@ function EditExerciseModal({ ex, splitId, dayId, splitDays, onConfirm, onClose, 
 
           {!isDuration && (
             <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-              <button type="button" className={`btn ${!form.untilFailure ? 'btn-accent' : ''}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setForm(f => ({ ...f, untilFailure: false }))}>Specific reps</button>
-              <button type="button" className={`btn ${form.untilFailure ? 'btn-accent' : ''}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setForm(f => ({ ...f, untilFailure: true }))}>Until failure</button>
+              <button type="button" className={`btn ${!form.untilFailure ? 'btn-accent' : 'btn-ghost'}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setForm(f => ({ ...f, untilFailure: false }))}>Specific reps</button>
+              <button type="button" className={`btn ${form.untilFailure ? 'btn-accent' : 'btn-ghost'}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setForm(f => ({ ...f, untilFailure: true }))}>Until failure</button>
             </div>
           )}
 

@@ -2999,8 +2999,8 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
           </div>
 
           <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-            <button type="button" className={`btn ${!form.untilFailure ? 'btn-accent' : ''}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setForm(f => ({ ...f, untilFailure: false }))}>Specific reps</button>
-            <button type="button" className={`btn ${form.untilFailure ? 'btn-accent' : ''}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setForm(f => ({ ...f, untilFailure: true }))}>Until failure</button>
+            <button type="button" className={`btn ${!form.untilFailure ? 'btn-accent' : 'btn-ghost'}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setForm(f => ({ ...f, untilFailure: false }))}>Specific reps</button>
+            <button type="button" className={`btn ${form.untilFailure ? 'btn-accent' : 'btn-ghost'}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setForm(f => ({ ...f, untilFailure: true }))}>Until failure</button>
           </div>
 
           <select className="select" style={{ width: '100%', marginBottom: 12 }} value={form.weightUnit} onChange={(e) => setForm(f => ({ ...f, weightUnit: e.target.value }))}>
@@ -3020,8 +3020,8 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
           </div>
 
           <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
-            <button type="button" className={`btn ${!isPermanent ? 'btn-accent' : ''}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setIsPermanent(false)}>Just for today</button>
-            <button type="button" className={`btn ${isPermanent ? 'btn-accent' : ''}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setIsPermanent(true)}>Change permanently</button>
+            <button type="button" className={`btn ${!isPermanent ? 'btn-accent' : 'btn-ghost'}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setIsPermanent(false)}>Just for today</button>
+            <button type="button" className={`btn ${isPermanent ? 'btn-accent' : 'btn-ghost'}`} style={{ flex: 1, fontSize: 11, padding: '6px 0' }} onClick={() => setIsPermanent(true)}>Change permanently</button>
           </div>
           {!isPermanent && (
             <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: -10, marginBottom: 12 }}>
