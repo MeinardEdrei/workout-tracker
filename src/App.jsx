@@ -7,7 +7,7 @@ import '@ncdai/react-wheel-picker/style.css';
 import './styles/wheelPicker.css';
 import { useAuth } from './context/AuthContext';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
-import { syncOfflineQueue } from './storage/offlineSyncStorage';
+import { syncOfflineQueue, pendingQueueCount } from './storage/offlineSyncStorage';
 import InvitePage from './pages/InvitePage';
 import TodayPage from './pages/TodayPage';
 import SplitsPage from './pages/SplitsPage';
@@ -531,22 +531,55 @@ export default function App() {
   const { loading, isAdmin, isLoggedIn } = useAuth();
   const [syncState, setSyncState] = useState(null);
 
+  // Replay changes saved on the device. navigator.onLine can say "online" on
+  // gym wifi that isn't really working, so keep retrying quietly while
+  // anything is pending: on a timer, when the app comes back to the
+  // foreground, and shortly after a new change is queued.
+  const syncNoticeShown = useRef(false);
   useEffect(() => {
-    if (isOnline && isLoggedIn) {
+    if (!isOnline || !isLoggedIn) return undefined;
+    let cancelled = false;
+    const run = (quiet) => {
+      if (cancelled || pendingQueueCount() === 0) return;
       syncOfflineQueue(({ status, count }) => {
+        if (cancelled) return;
         if (status === 'syncing') {
-          setSyncState({ status: 'syncing', count });
+          if (!quiet) setSyncState({ status: 'syncing', count });
         } else if (status === 'success') {
+          syncNoticeShown.current = false;
           setSyncState({ status: 'success' });
           queryClient.invalidateQueries();
           setWasOffline(false);
           setTimeout(() => setSyncState(null), 3000);
         } else if (status === 'error') {
+          if (quiet) { setSyncState(null); return; }
           setSyncState({ status: 'error' });
           setTimeout(() => setSyncState(null), 3000);
         }
       });
-    }
+    };
+    run(false);
+    const timer = setInterval(() => run(true), 20000);
+    let soon = null;
+    const onQueued = () => {
+      if (!syncNoticeShown.current) {
+        syncNoticeShown.current = true;
+        setSyncState({ status: 'queued' });
+        setTimeout(() => setSyncState((cur) => (cur?.status === 'queued' ? null : cur)), 3500);
+      }
+      clearTimeout(soon);
+      soon = setTimeout(() => run(true), 5000);
+    };
+    const onVisible = () => { if (document.visibilityState === 'visible') run(true); };
+    window.addEventListener('wt_queue_change', onQueued);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      clearTimeout(soon);
+      window.removeEventListener('wt_queue_change', onQueued);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [isOnline, isLoggedIn, queryClient, setWasOffline]);
 
   const [tab, setTab] = useState(() => {
@@ -631,6 +664,10 @@ export default function App() {
       {/* Sync Status Toast */}
       {syncState?.status === 'syncing' && (
         <Toast tone="loading">Syncing {syncState.count} offline changes…</Toast>
+      )}
+
+      {syncState?.status === 'queued' && (
+        <Toast tone="info">Weak connection — saved on your phone, will sync.</Toast>
       )}
 
       {syncState?.status === 'success' && (

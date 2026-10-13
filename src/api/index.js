@@ -32,7 +32,9 @@ async function req(method, path, body) {
       localStorage.removeItem('wt_token');
       window.dispatchEvent(new Event('auth:logout'));
     }
-    throw new Error(err.error || 'Request failed');
+    const e = new Error(err.error || 'Request failed');
+    e.status = res.status;
+    throw e;
   }
   return res.json();
 }
