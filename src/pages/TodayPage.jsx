@@ -4338,14 +4338,14 @@ export default function TodayPage() {
           (day.exercises || []).forEach((e) => {
             const swap = e.todaySwapDate === dateStr ? e.todaySwap : null;
             if (swap) {
-              storage.updateExercise(splitId, day._id, e._id, {
+              storage.updateExercise(activeSplit._id, day._id, e._id, {
                 lastSwapName: swap.name,
                 lastSwapImageUrl: swap.imageUrl || '',
                 lastSwapMuscleTargets: swap.muscleTargets || [],
                 lastSwapDate: dateStr,
               }).catch(() => {});
             } else if (e.lastSwapName) {
-              storage.updateExercise(splitId, day._id, e._id, {
+              storage.updateExercise(activeSplit._id, day._id, e._id, {
                 lastSwapName: '',
                 lastSwapImageUrl: '',
                 lastSwapMuscleTargets: [],
