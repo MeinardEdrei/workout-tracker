@@ -29,6 +29,7 @@ import { useBackClose } from '../hooks/useBackClose';
 import { SkeletonCards } from '../components/Skeleton';
 import { workingSets } from '../utils/sets';
 import { dropChainOf, supersetTag } from '../utils/setStyle';
+import { searchExerciseLibrary } from '../utils/exerciseLibrary';
 
 /* ─── Constants ─── */
 const STANDARD_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday', 'Rest'];
@@ -612,7 +613,7 @@ function AddExerciseModal({ splitDays, onConfirm, onClose }) {
         const userMatches = pastExercises.filter(e => 
           e.name.toLowerCase().includes(q.toLowerCase())
         );
-        const dbMatches = await api.suggestExercises(q);
+        const dbMatches = await searchExerciseLibrary(q);
         const combined = [...userMatches];
         dbMatches.forEach(db => {
           const dbName = typeof db === 'string' ? db : db.name;
@@ -620,6 +621,7 @@ function AddExerciseModal({ splitDays, onConfirm, onClose }) {
           if (!combined.some(c => c.name.toLowerCase() === dbName.toLowerCase())) {
             combined.push({
               name: dbName,
+              muscleTargets: typeof db === 'string' ? [] : (db.muscleTargets || []),
               imageUrl: dbImg,
               isCustom: false
             });
@@ -988,7 +990,7 @@ function SwapExerciseModal({ splitDays, currentExName, onConfirm, onClose }) {
         const userMatches = pastExercises.filter(e => 
           e.name.toLowerCase().includes(q.toLowerCase())
         );
-        const dbMatches = await api.suggestExercises(q);
+        const dbMatches = await searchExerciseLibrary(q);
         const combined = [...userMatches];
         dbMatches.forEach(db => {
           const dbName = typeof db === 'string' ? db : db.name;
@@ -1399,6 +1401,7 @@ function EditExerciseModal({ ex, splitId, dayId, splitDays, onConfirm, onClose, 
           const dbImg = typeof db === 'string' ? null : db.imageUrl;
           if (!combined.some(c => c.name.toLowerCase() === dbName.toLowerCase())) {
             combined.push({
+              muscleTargets: typeof db === 'string' ? [] : (db.muscleTargets || []),
               name: dbName,
               imageUrl: dbImg,
               isCustom: false

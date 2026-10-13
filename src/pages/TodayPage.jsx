@@ -28,6 +28,7 @@ import { SkeletonCards } from '../components/Skeleton';
 import { localDateStr } from '../utils/localDate';
 import { workingSets } from '../utils/sets';
 import { dropChainOf, supersetMembers } from '../utils/setStyle';
+import { searchExerciseLibrary } from '../utils/exerciseLibrary';
 
 // Keyboard activation for tap-to-edit text that isn't a <button> (so it can
 // keep flowing inline): Enter / Space behave like a tap.
@@ -2452,7 +2453,7 @@ function AddExerciseFromOtherDaysModal({ splitDays, logs, onConfirm, onClose }) 
         const userMatches = pastExercises.filter(e => 
           e.name.toLowerCase().includes(q.toLowerCase())
         );
-        const dbMatches = await api.suggestExercises(q);
+        const dbMatches = await searchExerciseLibrary(q);
         const combined = [...userMatches];
         dbMatches.forEach(db => {
           const dbName = typeof db === 'string' ? db : db.name;
@@ -2460,6 +2461,7 @@ function AddExerciseFromOtherDaysModal({ splitDays, logs, onConfirm, onClose }) 
           if (!combined.some(c => c.name.toLowerCase() === dbName.toLowerCase())) {
             combined.push({
               name: dbName,
+              muscleTargets: typeof db === 'string' ? [] : (db.muscleTargets || []),
               imageUrl: dbImg,
               isCustom: false
             });

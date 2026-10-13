@@ -583,10 +583,8 @@ export const fetchExerciseImage = (exerciseName) => {
   return Promise.resolve({ success: false, usePlaceholder: true });
 };
 
-export const suggestExercises = (q) => {
-  if (navigator.onLine) return apiStorage.suggestExercises(q);
-  return Promise.resolve([]);
-};
+// Name suggestions come from the bundled library on the device.
+export { searchExerciseLibrary as suggestExercises } from '../utils/exerciseLibrary';
 
 export async function uploadExerciseImage(splitId, dayId, exId, imageData) {
   const userId = getUserId();
