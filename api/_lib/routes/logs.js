@@ -8,7 +8,7 @@ router.use(requireAuth);
 // POST /api/logs
 router.post('/', async (req, res) => {
   try {
-    const { date, splitName, dayName, dayTag, exercises, skipped, durationSeconds } = req.body;
+    const { date, splitName, dayName, dayTag, exercises, skipped, durationSeconds, notes } = req.body;
 
     // Check if a log for this date and user already exists
     const existingLog = await WorkoutLog.findOne({ userId: req.userId, date });
@@ -31,11 +31,12 @@ router.post('/', async (req, res) => {
       existingLog.totalVolume = totalVolume;
       existingLog.skipped = !!skipped;
       if (durationSeconds !== undefined) existingLog.durationSeconds = durationSeconds;
+      if (notes !== undefined) existingLog.notes = String(notes).slice(0, 2000);
       await existingLog.save();
       return res.status(200).json(existingLog);
     }
 
-    const log = new WorkoutLog({ date, splitName, dayName, dayTag, exercises, totalVolume, skipped: !!skipped, durationSeconds: durationSeconds || 0, userId: req.userId });
+    const log = new WorkoutLog({ date, splitName, dayName, dayTag, exercises, totalVolume, skipped: !!skipped, durationSeconds: durationSeconds || 0, notes: String(notes || '').slice(0, 2000), userId: req.userId });
     await log.save();
     res.status(201).json(log);
   } catch (err) {

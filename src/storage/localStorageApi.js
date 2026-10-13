@@ -586,27 +586,31 @@ export function moveExercise(splitId, dayId, exId, targetDayId) {
 
 export function saveLog(data) {
   const logs = readLogs();
-  const totalVolume = Math.round((data.exercises || []).reduce(
-    (sum, ex) => {
-      const w = ex.weight || 0;
-      const weightInKg = (ex.weightUnit === 'lbs') ? (w / 2.20462) : w;
-      return sum + (ex.sets || 0) * (ex.reps || 0) * weightInKg;
-    }, 0
-  ));
+  // Same rules as the server: real per-set work when logged (warm-ups
+  // excluded), else the flat sets × reps × weight estimate.
+  const toKg = (w, unit) => (unit === 'lbs' ? w / 2.20462 : w);
+  const totalVolume = Math.round((data.exercises || []).reduce((sum, ex) => {
+    if (ex.setLogs?.length) {
+      return sum + ex.setLogs.filter((l) => !l.isWarmup).reduce((s, l) => s + (l.reps || 0) * toKg(l.weight || ex.weight || 0, ex.weightUnit), 0);
+    }
+    return sum + (ex.sets || 0) * (ex.reps || 0) * toKg(ex.weight || 0, ex.weightUnit);
+  }, 0));
+  // One log per date, like the server: finishing again replaces it.
+  const existing = logs.find((l) => l.date === data.date);
   const log = {
-    _id: uid(),
+    _id: existing?._id || uid(),
     date: data.date,
-    splitName: data.splitName || '',
-    dayName: data.dayName || '',
-    dayTag: data.dayTag || '',
+    splitName: data.splitName || existing?.splitName || '',
+    dayName: data.dayName || existing?.dayName || '',
+    dayTag: data.dayTag || existing?.dayTag || '',
     exercises: data.exercises || [],
     totalVolume,
     skipped: !!data.skipped,
-    durationSeconds: data.durationSeconds || 0,
-    createdAt: new Date().toISOString(),
+    durationSeconds: data.durationSeconds !== undefined ? (data.durationSeconds || 0) : (existing?.durationSeconds || 0),
+    notes: data.notes !== undefined ? String(data.notes).slice(0, 2000) : (existing?.notes || ''),
+    createdAt: existing?.createdAt || new Date().toISOString(),
   };
-  logs.unshift(log);
-  writeLogs(logs);
+  writeLogs(existing ? logs.map((l) => (l === existing ? log : l)) : [log, ...logs]);
   return Promise.resolve(log);
 }
 
